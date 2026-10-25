@@ -29,9 +29,14 @@ def load(p: Path) -> list[dict]:
     return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()] if p.exists() else []
 
 
-def test_recs(bench: str, method: str) -> dict[str, dict]:
-    recs = [r for r in load(M / f"{method}_{bench}.jsonl") if r.get("phase") == "test"]
-    return {r["task_id"]: r for r in recs}  # latest record per task
+def credit_error(r: dict) -> bool:
+    """HTTP 402 (the API key ran out of credit): not an episode outcome, so the episode is left out."""
+    return "HTTP 402" in (r.get("error") or "")
+
+
+def test_recs(bench: str, method: str, path: Path | None = None) -> dict[str, dict]:
+    recs = [r for r in load(path or M / f"{method}_{bench}.jsonl") if r.get("phase") == "test"]
+    return {r["task_id"]: r for r in recs if not credit_error(r)}  # latest record per task
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -112,8 +117,29 @@ def bench_section(bench: str) -> list[str]:
                  f"{(usd / k if k else float('nan')):.5f} | {err} | {sc.get(m, 0.0):.3f} | {evo_cost(bench, m):.3f} |")
     L.append("")
     L += extra_metrics(bench, ids, data)
+    L += h0_replicas(bench, ids, h0)
     L += evolution(bench)
     return L
+
+
+# B1 runs whose final harness was behaviourally H0 (port bugs, see docs/baseline_fidelity.md): a second H0 sample
+REPLICAS = {"alfworld": M / "aborted_argvalue" / "b1_alfworld.jsonl",
+            "browsecomp_plus": M / "aborted_unselected" / "b1_browsecomp_plus.jsonl",
+            "appworld": M / "aborted_unselected" / "b1_appworld.jsonl"}
+
+
+def h0_replicas(bench: str, ids: list[str], h0: dict) -> list[str]:
+    p = REPLICAS.get(bench)
+    rep_ = test_recs(bench, "b1", p) if p and p.exists() else {}
+    both = [t for t in ids if t in rep_ and t in h0]
+    if not both:
+        return []
+    a = sum(h0[t]["success"] for t in both)
+    b = sum(rep_[t]["success"] for t in both)
+    w = sum(1 for t in both if rep_[t]["success"] and not h0[t]["success"])
+    lo = sum(1 for t in both if h0[t]["success"] and not rep_[t]["success"])
+    return [f"Run-to-run noise: a second run of a behaviourally identical harness (`{p.relative_to(ROOT)}`) on the same "
+            f"{len(both)} tasks: {pct(b / len(both))} vs H0 {pct(a / len(both))} ({w} tasks flip to pass, {lo} to fail).", ""]
 
 
 def extra_metrics(bench: str, ids: list[str], data: dict) -> list[str]:
@@ -170,8 +196,13 @@ def evolution(bench: str) -> list[str]:
         L.append(f"- H0 val: {pct(sum(r['success'] for r in h0_val) / len(h0_val))} ({len(h0_val)} tasks)")
     for m in ("b1", "b2", "b3"):
         p = M / "runs" / m / bench / "log.json"
-        if not p.exists():
-            L.append(f"- {m}: no log")
+        if not p.exists():  # run stopped before log.json: val scores per candidate from the records
+            by = defaultdict(list)
+            for r in load(M / f"{m}_{bench}.jsonl"):
+                if r.get("phase") == "val" and not credit_error(r):
+                    by[r.get("candidate") or r.get("round")].append(r["success"])
+            L.append(f"- {m}: (no log.json, run stopped early) val per candidate: "
+                     + ", ".join(f"{k}: {pct(sum(v) / len(v))} ({len(v)})" for k, v in by.items()))
             continue
         lg = json.loads(p.read_text())
         rounds = []

@@ -150,6 +150,7 @@ Không vendor: `online_evo.py` (điều phối cửa sổ), `k_roll.py`, `eviden
 - **`review_verdict` không có `accept_partial`:** giữ nguyên như mã gốc (chưa được bật).
 - **Thăng hạng có so reward.** Mã gốc thăng hạng chỉ theo cổng (smoke, action gate, niche-dedup, review, sanity crash) và nói rõ là KHÔNG so reward. Ở đây thêm `C.better` trên val (luật chọn chung của giao thức), nên một làn qua mọi cổng vẫn có thể bị giữ lại nếu val không cao hơn.
 - **Một module mỗi lineage → tất cả slot mỗi vòng.** Mã gốc chạy mỗi lineage với một `--locked-module`, rồi mới tích hợp chéo module. Ở đây mỗi vòng điều tra cả 5 slot, và composer chọn trên mọi slot.
+- **Giao thức memory không khớp runtime H0.** Prompt của B2 mô tả `memory.update(...)`, nhưng H0 không bao giờ gọi hàm này và mỗi episode dựng harness mới, nên biến thể memory dựa trên `update` không có tác dụng (lần MEDIUM: `memory/token_recall` được thăng hạng trên AppWorld nhưng `recall()` luôn rỗng). Chưa sửa prompt của B2.
 - **Thiếu action gate và niche-dedup gate.** Chưa port; hai cổng này của mã gốc không chạy.
 - **`history_pass_lookup=None`** khi gọi `route_batch`: router không dùng lịch sử pass của các cửa sổ trước (smoke chỉ có một cửa sổ).
 - **Efficiency investigator luôn chạy** với tác vụ pass-lãng-phí. Mã gốc chỉ chạy nó khi không tìm thấy culprit.
