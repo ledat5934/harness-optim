@@ -39,7 +39,7 @@ SMOKE = {"name": "smoke", "n_train": 5, "n_val": 3, "n_test": 3, "n_check": 2, "
          "k": 3}  # K same-harness rolls per train task (ModularRSI router default k=3)
 # Medium run (1 seed): 5 rounds, 50 train tasks x K rolls, 30 val tasks, and a fixed 100-task test subset per
 # benchmark read from benchmarks/<bench>/test100.json (scripts/make_test_subsets.py). Results go to results/medium/.
-MEDIUM = {"name": "medium", "n_train": 50, "n_val": 30, "n_test": 100, "n_check": 2, "rounds": 5, "workers": 3,
+MEDIUM = {"name": "medium", "n_train": 50, "n_val": 30, "n_test": 100, "n_check": 2, "rounds": 5, "workers": 4,
           "k": 3, "test_file": "test100.json"}
 PROTOCOLS = {"smoke": SMOKE, "medium": MEDIUM}
 
