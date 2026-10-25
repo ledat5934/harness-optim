@@ -73,3 +73,16 @@ Agent trivial (`benchmarks/trivial_agent.py`) được cố tình tối giản: 
 
 ## Vệ sinh dữ liệu
 `data/`, `third_party/`, `results/trajectories/` và `.env` đều nằm trong git-ignore. Quỹ đạo chứa các câu hỏi BrowseComp đã giải mã (canary: "should never appear as plain text online"), nên chúng được giữ cục bộ. Kết quả đã commit chỉ chứa id, số liệu và lỗi.
+
+## Giao thức MEDIUM (1 seed, tập test 100 tác vụ)
+`baselines/common.py::MEDIUM`: 5 vòng tiến hóa, 50 tác vụ train × 3 roll, 30 tác vụ val, 2 tác vụ kiểm tra mỗi vòng. Kết quả ghi vào `results/medium/`; chạy bằng `bash scripts/medium_chain.sh <bench>` (H0 train ×3, val, test, rồi B1, B2, B3).
+
+Tập test cố định ở `benchmarks/<bench>/test100.json`, tạo bằng `scripts/make_test_subsets.py` (seed `20261025`, chỉ dùng id):
+
+| benchmark | lấy từ | cách chọn | số tác vụ |
+|---|---|---|---|
+| ALFWorld | `valid_unseen` (134) | phân tầng theo 6 loại tác vụ, tỉ lệ (13/18/23/16/17/13) | 100 |
+| AppWorld | `test_normal` (168 = 56 kịch bản × 3) | 33 kịch bản trọn vẹn, để SGC tính được | 99 |
+| BrowseComp-Plus | phần held-out (sau 80 câu `dev80`) | ngẫu nhiên đơn giản | 100 |
+
+BrowseComp-Plus cần giải mã cả 6 shard (`prepare_subset --all`); thứ tự giữ nguyên nên 20 câu đầu trùng với tập smoke. Train/val của MEDIUM lấy từ 80 câu đầu (`dev80`: 50 train + 30 val).

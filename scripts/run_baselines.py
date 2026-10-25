@@ -31,9 +31,9 @@ from baselines import common as C  # noqa: E402
 
 
 def load_shared(bench: str, cfg: dict = C.SMOKE, allow_stale: bool = False) -> dict:
-    p = C.ROOT / "results" / f"h0_{bench}.jsonl"
+    p = C.OUT / f"h0_{bench}.jsonl"
     recs = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
-    tasks = C.protocol_tasks(bench)
+    tasks = C.protocol_tasks(bench, C.PROTOCOLS[cfg["name"]])
     # smaller val/test (debug): prefixes of the protocol lists, so the shared H0 val records still match
     tasks["val"] = (tasks["val"][0], tasks["val"][1][: cfg["n_val"]])
     tasks["test"] = (tasks["test"][0], tasks["test"][1][: cfg["n_test"]])
@@ -68,8 +68,11 @@ def main():
     ap.add_argument("--debug", action="store_true", help="full LLM logging + verbose steps, output in results/debug/")
     for k in ("n_check", "n_val", "n_test", "workers"):
         ap.add_argument("--" + k.replace("_", "-"), type=int)
+    ap.add_argument("--protocol", default="smoke", choices=sorted(C.PROTOCOLS))
     args = ap.parse_args()
-    cfg = dict(C.SMOKE)
+    base_cfg = C.PROTOCOLS[args.protocol]
+    C.use_protocol(base_cfg)
+    cfg = dict(base_cfg)
     if args.debug:
         cfg.update(n_check=1, n_val=1, n_test=1, workers=1)
     for k in ("n_check", "n_val", "n_test", "workers"):
@@ -87,8 +90,8 @@ def main():
         bc.TRAJ_DIR, bc.VERBOSE = dbg / "trajectories", True
         C.OUT, C.RUNS = dbg, dbg / "runs"
         print(f"[debug] output -> {dbg}  cfg={cfg}")
-    elif cfg != C.SMOKE:
-        raise SystemExit("--n-*/--workers overrides need --debug (they would mix into the committed smoke results)")
+    elif cfg != base_cfg:
+        raise SystemExit("--n-*/--workers overrides need --debug (they would mix into the committed results)")
     llm_mod.budget_banner(f"run_baselines[{args.bench}/{args.method}]")
     shared = load_shared(args.bench, cfg, allow_stale=args.debug)
     print(f"shared H0: train records={len(shared['h0_train'])} (pass {sum(r['success'] for r in shared['h0_train'])}), "
@@ -105,7 +108,7 @@ def main():
             import show_debug
             print(f"[debug] transcript -> {show_debug.write(dbg)}")
     spent = llm_mod.get_spend()["total_usd"] - spend0
-    summ = {"bench": args.bench, "method": args.method, "test_success": res["log"]["test"]["success"],
+    summ = {"protocol": args.protocol, "bench": args.bench, "method": args.method, "test_success": res["log"]["test"]["success"],
             "n_test": res["log"]["test"]["n"], "method_total_usd": round(spent, 6), "wall_s": round(time.time() - t0, 1),
             "rounds": [{k: v for k, v in r.items() if k in ("round", "result", "val", "selected_slots", "accepted",
                                                             "canary", "hypothesis", "gate")} for r in res["log"]["rounds"]],

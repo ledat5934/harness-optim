@@ -35,8 +35,27 @@ OUT = ROOT / "results"          # per-method result jsonl files; redirected by r
 RUNS = OUT / "runs"
 
 # ---------------------------------------------------------------- protocol
-SMOKE = {"n_train": 5, "n_val": 3, "n_test": 3, "n_check": 2, "rounds": 1, "workers": 3,
+SMOKE = {"name": "smoke", "n_train": 5, "n_val": 3, "n_test": 3, "n_check": 2, "rounds": 1, "workers": 3,
          "k": 3}  # K same-harness rolls per train task (ModularRSI router default k=3)
+# Medium run (1 seed): 5 rounds, 50 train tasks x K rolls, 30 val tasks, and a fixed 100-task test subset per
+# benchmark read from benchmarks/<bench>/test100.json (scripts/make_test_subsets.py). Results go to results/medium/.
+MEDIUM = {"name": "medium", "n_train": 50, "n_val": 30, "n_test": 100, "n_check": 2, "rounds": 5, "workers": 3,
+          "k": 3, "test_file": "test100.json"}
+PROTOCOLS = {"smoke": SMOKE, "medium": MEDIUM}
+
+
+def use_protocol(cfg: dict) -> None:
+    """Point the result directories at the protocol's own folder (smoke keeps results/, the others results/<name>/)."""
+    global OUT, RUNS
+    OUT = ROOT / "results" if cfg["name"] == "smoke" else ROOT / "results" / cfg["name"]
+    RUNS = OUT / "runs"
+    OUT.mkdir(parents=True, exist_ok=True)
+
+
+def test_subset(bench: str, cfg: dict) -> tuple[str, list[str]]:
+    """(split, ids) of the fixed test subset file of a protocol."""
+    d = json.loads((ROOT / "benchmarks" / bench / cfg["test_file"]).read_text(encoding="utf-8"))
+    return d["split"], list(d["ids"])
 
 # Test splits per benchmark. ALFWorld: unseen (valid_unseen). AppWorld: test_normal (no inspection, only
 # aggregate success is recorded). BrowseComp-Plus: the held-out part of our decrypted subset.
@@ -51,7 +70,17 @@ def protocol_tasks(bench: str, cfg: dict = SMOKE) -> dict[str, tuple[str, list[s
     """Deterministic task ids for train/val/test. Returns {phase: (split, [ids])}."""
     ad = adapter(bench)
     s = SPLITS[bench]
-    tr = ad.list_tasks(s["train"])
+    if bench == "browsecomp_plus" and cfg["n_train"] + cfg["n_val"] > 10:
+        tr = ad.list_tasks("dev80")  # the first 10 queries of dev80 are the smoke dev split
+    else:
+        tr = ad.list_tasks(s["train"])
+    tasks = _protocol_tasks(bench, cfg, ad, s, tr)
+    if cfg.get("test_file"):
+        tasks["test"] = test_subset(bench, cfg)
+    return tasks
+
+
+def _protocol_tasks(bench: str, cfg: dict, ad, s: dict, tr: list[str]) -> dict[str, tuple[str, list[str]]]:
     if bench == "alfworld":
         # interleave the 6 ALFWorld task types (deterministic) so train/val/test cover different types
         pool = _interleave_types(tr)
@@ -63,9 +92,9 @@ def protocol_tasks(bench: str, cfg: dict = SMOKE) -> dict[str, tuple[str, list[s
         val = ad.list_tasks(s["val"])[: cfg["n_val"]]
         test = ad.list_tasks(s["test"])[: cfg["n_test"]]   # ids only; contents never inspected
         return {"train": (s["train"], train), "val": (s["val"], val), "test": (s["test"], test)}
-    # browsecomp_plus: dev = first 10 of the subset -> 5 train + 3 val; test = held-out ids
+    # browsecomp_plus: dev = first 10 of the subset -> 5 train + 3 val (medium: dev80 -> 50 + 30); test = held-out ids
     train, val = tr[: cfg["n_train"]], tr[cfg["n_train"]: cfg["n_train"] + cfg["n_val"]]
-    test = ad.list_tasks(s["test"])[: cfg["n_test"]]
+    test = [] if cfg.get("test_file") else ad.list_tasks(s["test"])[: cfg["n_test"]]
     return {"train": (s["train"], train), "val": (s["train"], val), "test": (s["test"], test)}
 
 

@@ -28,6 +28,7 @@ SNIPPET_CHARS = 2000
 DOC_CHARS = 12000
 MAX_STEPS = 25
 N_DEV = 10
+N_DEV_MEDIUM = 80
 
 # Official search-agent prompt (search_agent/prompts.py, MIT), adapted to a finish tool.
 GUIDANCE = (
@@ -142,8 +143,11 @@ def _subset() -> list[dict]:
 
 
 def list_tasks(split: str = "dev") -> list[str]:
+    """dev/test: the smoke partition (first 10 / the rest). dev80/heldout: the medium partition (first 80 queries for
+    train+val / the rest, from which the 100-task test subset is drawn). Both need subset.jsonl in dataset order."""
     ids = [r["query_id"] for r in _subset()]
-    return {"dev": ids[:N_DEV], "test": ids[N_DEV:], "subset": ids}[split]
+    return {"dev": ids[:N_DEV], "test": ids[N_DEV:], "dev80": ids[:N_DEV_MEDIUM], "heldout": ids[N_DEV_MEDIUM:],
+            "subset": ids}[split]
 
 
 class BCPEnv:

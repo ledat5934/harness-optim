@@ -2,6 +2,7 @@
 
   python scripts/run_h0.py --bench alfworld --phase train --roll 1
 Phases: train (5 tasks; K rolls give the shared contrastive evidence), val (3), test (3).
+--protocol medium: the MEDIUM task lists (50 train, 30 val, test100.json), results in results/medium/.
 Results -> results/h0_<bench>.jsonl (label: method=h0, phase, roll). These runs are shared by all baselines:
 same seed, same tasks, executed once.
 """
@@ -24,15 +25,18 @@ def main():
     ap.add_argument("--phase", required=True, choices=["train", "val", "test"])
     ap.add_argument("--roll", type=int, default=1)
     ap.add_argument("--workers", type=int, default=3)
+    ap.add_argument("--protocol", default="smoke", choices=sorted(C.PROTOCOLS))
     args = ap.parse_args()
-    llm_mod.budget_banner(f"run_h0[{args.bench}/{args.phase}/roll{args.roll}]")
-    tasks = C.protocol_tasks(args.bench)
+    cfg = C.PROTOCOLS[args.protocol]
+    C.use_protocol(cfg)
+    llm_mod.budget_banner(f"run_h0[{args.protocol}:{args.bench}/{args.phase}/roll{args.roll}]")
+    tasks = C.protocol_tasks(args.bench, cfg)
     (C.RUNS / "protocol").mkdir(parents=True, exist_ok=True)
     (C.RUNS / "protocol" / f"{args.bench}.json").write_text(json.dumps(tasks, indent=1))
     split, ids = tasks[args.phase]
     print(f"{args.bench} {args.phase}: split={split} n={len(ids)}")
     recs = C.evaluate(args.bench, split, ids, C.H0_ROOT, llm_mod.LLM(), f"h0_{args.bench}_{args.phase}_r{args.roll}",
-                      C.ROOT / "results" / f"h0_{args.bench}.jsonl", workers=args.workers,
+                      C.OUT / f"h0_{args.bench}.jsonl", workers=args.workers,
                       label={"method": "h0", "phase": args.phase, "roll": args.roll,
                              "h0_hash": C.tree_hash(C.H0_ROOT)})
     n = len(recs)
