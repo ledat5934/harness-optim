@@ -73,6 +73,7 @@ Nguồn: `third_party/meta-harness/reference_examples/terminal_bench_2/`.
 - Validate: `C.static_gate` (import, registry, toy run). Smoke: `C.evaluate` trên `cfg["n_check"]` tác vụ train, lỗi bị tính là crash.
 - Điểm số: `compute_pass_rates({task: [reward]})`, với reward = 1 nếu thành công. Đây là mỗi tác vụ một roll trên tập val.
 - `summarize_trial_metrics` nhận `trial_metrics_of(recs)`: `cost_usd` = chi phí, `n_turns` = số bước, `n_input_tokens` = tổng token (xem (c)).
+- **Khôi phục token `<arg_value>` trong reply của proposer** (`proposer_io.restore_special_tokens`, dùng chung cho B1 và B2): model không xuất được chuỗi `<arg_value>` (token gọi tool của chính nó), mà trả về `">`. Mỗi bản chép `tool_policy/default.py` của H0 vì thế mất token và hỏng regex (`unterminated string literal`). Trong lần chạy MEDIUM đầu tiên, 3/5 vòng B1 trên ALFWorld bị loại ở cổng tĩnh vì lỗi này; B1 được chạy lại sau khi sửa (bản ghi cũ ở `results/medium/aborted_argvalue/`). Chỉ khôi phục ngay sau `</arg_key>` hoặc trong `<arg_key>/`, nơi `">` không thể là ý định của model. Đây là sửa lớp truyền tin, không đổi thuật toán.
 
 ### (c) Sai lệch còn lại
 - **Proposer không có hệ thống tệp.** Meta-Harness cho Claude Code đọc tệp bằng công cụ. Ở đây mọi tệp được render vào prompt:

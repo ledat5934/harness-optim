@@ -321,6 +321,18 @@ def test_b1_analyze_prompt_shows_code_and_tasks():
     assert "TASK: put the apple" in C.summarize_trajectory(p, task_chars=B1.TASK_CHARS)
     assert "TASK:" not in C.summarize_trajectory(p)  # B2/B3 default unchanged
 
+
+def test_reply_files_restores_lost_arg_value_token():
+    from baselines.proposer_io import reply_files, restore_special_tokens
+    h0 = (C.H0_ROOT / "variants" / "tool_policy" / "default.py").read_text(encoding="utf-8")
+    assert restore_special_tokens(h0) == h0
+    lost = h0.replace("<arg_value>", '">')  # what the model emits for its own tool-call token
+    assert restore_special_tokens(lost) == h0
+    for ok in ('href="x">', 'x = "<a>">', 'd["k"]>1'):
+        assert restore_special_tokens(ok) == ok
+    reply = SimpleNamespace(content="### FILE: variants/tool_policy/default.py\n```python\n" + lost + "```\n")
+    assert reply_files(reply)["variants/tool_policy/default.py"] == h0
+
 def test_chatshim_forwards_reference_kwargs():
     from baselines.b3_memo import ChatShim
 

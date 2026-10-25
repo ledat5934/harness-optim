@@ -82,7 +82,18 @@ def reply_files(resp) -> dict[str, str]:
     text = resp.content or ""
     if "</think>" in text:
         text = text.rsplit("</think>", 1)[1]
-    return parse_files(text)
+    return parse_files(restore_special_tokens(text))
+
+
+# The model cannot emit the literal `<arg_value>` (its own tool-call token): it comes back as `">`. H0's tool_policy
+# parses GLM-style `<arg_key>k</arg_key><arg_value>v</arg_value>` text, so every copy of that file lost the token and
+# broke the regex (unterminated string literal). Restored only right after `</arg_key>` (optionally a literal or
+# real `\s*`) or in `<arg_key>/`, where `">` cannot be meant.
+_ARG_VALUE_LOST = re.compile(r'(</arg_key>(?:\\s\*|\s*)|<arg_key>/)">')
+
+
+def restore_special_tokens(text: str) -> str:
+    return _ARG_VALUE_LOST.sub(r"\1<arg_value>", text)
 
 
 def gate_hint(log: str) -> str:
