@@ -24,9 +24,16 @@ stage() {  # run each "name|args" in parallel, fail if any fails
   return $rc
 }
 H="scripts/run_h0.py --protocol medium --bench $B --workers 4"
+if [ "${SKIP_H0:-0}" != 1 ]; then
 echo "== $(date +%T) H0 $B"
 stage "h0_train1|$H --phase train --roll 1" "h0_train2|$H --phase train --roll 2" "h0_train3|$H --phase train --roll 3" \
       "h0_val|$H --phase val" "h0_test|$H --phase test" || exit 1
+fi
+# infra errors (e.g. HTTP 429 after all retries) in the shared H0 records: redo those tasks before the baselines
+echo "== $(date +%T) H0 redo-errors $B"
+stage "h0_redo_train1|$H --phase train --roll 1 --redo-errors" "h0_redo_train2|$H --phase train --roll 2 --redo-errors" \
+      "h0_redo_train3|$H --phase train --roll 3 --redo-errors" "h0_redo_val|$H --phase val --redo-errors" \
+      "h0_redo_test|$H --phase test --redo-errors" || exit 1
 echo "== $(date +%T) baselines $B"
 M="scripts/run_baselines.py --protocol medium --bench $B"
 stage "b1|$M --method b1" "b2|$M --method b2" "b3|$M --method b3" || exit 1

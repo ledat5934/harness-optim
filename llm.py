@@ -163,7 +163,9 @@ class LLM:
         if not self.api_key:
             raise LLMError("OPENROUTER_API_KEY not set (put it in .env)")
         self.timeout = timeout
-        self.max_retries = max_retries
+        # rate limits (HTTP 429) under many parallel processes outlast 5 retries (~30 s); LLM_MAX_RETRIES raises
+        # the count (backoff 1, 2, 4, ... capped at 60 s, so 8 retries wait about 3 minutes in total)
+        self.max_retries = int(os.environ.get("LLM_MAX_RETRIES", max_retries))
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._sem = threading.BoundedSemaphore(concurrency or int(os.environ.get("LLM_CONCURRENCY", "4")))

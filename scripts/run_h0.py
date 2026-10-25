@@ -26,6 +26,8 @@ def main():
     ap.add_argument("--roll", type=int, default=1)
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--protocol", default="smoke", choices=sorted(C.PROTOCOLS))
+    ap.add_argument("--redo-errors", action="store_true",
+                    help="re-run only the tasks of this phase/roll whose latest record has an infra error")
     args = ap.parse_args()
     cfg = C.PROTOCOLS[args.protocol]
     C.use_protocol(cfg)
@@ -34,6 +36,17 @@ def main():
     (C.RUNS / "protocol").mkdir(parents=True, exist_ok=True)
     (C.RUNS / "protocol" / f"{args.bench}.json").write_text(json.dumps(tasks, indent=1))
     split, ids = tasks[args.phase]
+    if args.redo_errors:
+        p = C.OUT / f"h0_{args.bench}.jsonl"
+        latest = {}
+        for line in p.read_text(encoding="utf-8").splitlines() if p.exists() else []:
+            r = json.loads(line)
+            if r.get("phase") == args.phase and r.get("roll", 1) == args.roll:
+                latest[r["task_id"]] = r
+        ids = [t for t in ids if latest.get(t, {}).get("error")]
+        if not ids:
+            print(f"{args.bench} {args.phase} roll{args.roll}: no infra-error records to redo")
+            return
     print(f"{args.bench} {args.phase}: split={split} n={len(ids)}")
     recs = C.evaluate(args.bench, split, ids, C.H0_ROOT, llm_mod.LLM(), f"h0_{args.bench}_{args.phase}_r{args.roll}",
                       C.OUT / f"h0_{args.bench}.jsonl", workers=args.workers,
