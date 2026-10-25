@@ -219,7 +219,7 @@ class LLM:
                     r = self._session.post(f"{self.base_url}/chat/completions", json=body, headers=headers,
                                            timeout=self.timeout)
                     latency = time.time() - t0
-                    if r.status_code in (408, 429, 500, 502, 503, 504):
+                    if r.status_code in (408, 429, 500, 502, 503, 504, 520, 522, 524):  # 52x: provider-side (Cloudflare) errors
                         last_err = f"HTTP {r.status_code}: {r.text[:300]}"
                         raise _Retry()
                     if r.status_code != 200:
