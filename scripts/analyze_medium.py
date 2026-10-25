@@ -7,7 +7,8 @@ Per benchmark and method (H0, B1, B2, B3), on the fixed test100 subset:
   tokens, USD per episode, USD per success; infra-error episodes (counted as failures, listed separately);
   ALFWorld success per task type; AppWorld TGC, SGC and the mean fraction of unit tests passed;
   BrowseComp-Plus accuracy, mean search/get_document calls, no-answer rate.
-Search cost per method = spend by tag b1:*/b2:*/b3:* minus the smoke run's (the committed results/spend.json).
+Proposer cost per method = spend by tag b1:*/b2:*/b3:* minus the smoke run's (the committed results/spend.json);
+evolution-episode cost = the method's non-test rollouts (H0's row: the shared train+val evidence).
 Evolution trace per method from results/medium/runs/<method>/<bench>/log.json.
 """
 from __future__ import annotations
@@ -72,6 +73,11 @@ def search_cost(bench: str) -> dict[str, float]:
     return dict(out)
 
 
+def evo_cost(bench: str, method: str) -> float:
+    """Episode cost of the search itself (smoke/canary/val rollouts; for H0 its train+val evidence, shared by all)."""
+    return sum(r["cost"] for r in load(M / f"{method}_{bench}.jsonl") if r.get("phase") != "test")
+
+
 def pct(x: float) -> str:
     return f"{100 * x:.1f}%"
 
@@ -81,13 +87,13 @@ def bench_section(bench: str) -> list[str]:
     data = {m: test_recs(bench, m) for m in METHODS}
     sc = search_cost(bench)
     L = [f"## {bench}", "", f"Test subset: {len(ids)} tasks (`benchmarks/{bench}/test100.json`).", "",
-         "| method | test episodes | success | 95% CI | vs H0 (win/loss) | McNemar p | tokens/ep | $/ep | $/success | infra errors | search $ |",
-         "|---|---|---|---|---|---|---|---|---|---|---|"]
+         "| method | test episodes | success | 95% CI | vs H0 (win/loss) | McNemar p | tokens/ep | $/ep | $/success | infra errors | proposer $ | evolution episodes $ |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     h0 = data["h0"]
     for m in METHODS:
         d = data[m]
         if not d:
-            L.append(f"| {m} | 0 | – | – | – | – | – | – | – | – | – |")
+            L.append(f"| {m} | 0 | – | – | – | – | – | – | – | – | – | – |")
             continue
         rs = [d[t] for t in ids if t in d]
         n, k = len(rs), sum(1 for r in rs if r["success"])
@@ -103,7 +109,7 @@ def bench_section(bench: str) -> list[str]:
             lo_ = sum(1 for t in both if h0[t]["success"] and not d[t]["success"])
             vs, p = f"+{w} / −{lo_}", f"{mcnemar(w, lo_):.3f}"
         L.append(f"| {m} | {n} | {pct(k / n)} ({k}) | {pct(lo)}–{pct(hi)} | {vs} | {p} | {tok:,.0f} | {usd / n:.5f} | "
-                 f"{(usd / k if k else float('nan')):.5f} | {err} | {sc.get(m, 0.0):.3f} |")
+                 f"{(usd / k if k else float('nan')):.5f} | {err} | {sc.get(m, 0.0):.3f} | {evo_cost(bench, m):.3f} |")
     L.append("")
     L += extra_metrics(bench, ids, data)
     L += evolution(bench)
