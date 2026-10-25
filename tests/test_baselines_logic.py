@@ -232,6 +232,95 @@ def test_b1_trial_metrics_and_skill_text():
     assert "AgentHarness" not in B1.SKILL and "Terminal-Bench" not in B1.SKILL.replace("meta-harness-terminal-bench-2", "")
 
 
+
+def test_b3_canary_rules_are_the_reference_ones():
+    from baselines import b3_memo as B3
+    assert B3.CANARY_MAX_SUCCESS_DROP == -0.2
+
+    def r(tid, ok, error=None):
+        return {"task_id": tid, "success": ok, "error": error}
+    # H0: K=3 rolls per task; t1 passes 2/3 (succeeded), t2 0/3; t3's rolls are all infra errors (blocker)
+    ref = [r("t1", True), r("t1", True), r("t1", False), r("t2", False), r("t2", False), r("t2", False),
+           r("t3", False, "x"), r("t3", False, "y"), r("t3", False, "z")]
+    m = B3.canary_metrics(ref)
+    assert m["cases_learning"] == 2 and m["blockers"] == 1 and m["success_rate"] == 0.5
+    assert abs(m["mean_reward"] - 1 / 3) < 1e-9  # per-task mean, blockers excluded
+    # the canary loses t1 (1 roll each): reward delta -1/3 passes rule 1 (-0.34) but rule 3 rejects it
+    ok, why = B3.canary_check(B3.canary_metrics([r("t1", False), r("t2", False), r("t3", False, "e")]), m)
+    assert not ok and "success rate dropped" in why
+    # one more blocker than H0 is rejected; all blockers is rejected; equal is accepted
+    ok, why = B3.canary_check(B3.canary_metrics([r("t1", True), r("t2", False, "e"), r("t3", False, "e")]), m)
+    assert not ok and "blocker" in why
+    assert not B3.canary_check(B3.canary_metrics([r("t1", False, "e")]), m)[0]
+    assert B3.canary_check(B3.canary_metrics([r("t1", True), r("t2", False), r("t3", False, "e")]), m)[0]
+
+
+def test_b3_adaptation_is_clamped_and_falls_back():
+    from baselines import b3_memo as B3
+    import llm as llm_mod
+    ctl = B3.ConfigController(client=SimpleNamespace(), model=B3.MODEL, api_config=B3.API)
+    base = B3.base_config(ctl)
+    task = SimpleNamespace(task_id="t", instruction="do it")
+
+    def run(adapt_fn):
+        ctl.adapt_for_case = adapt_fn
+        alog: list = []
+        return B3.adapt_composer(ctl, B3.BM25ExperienceBank(), base, "alfworld", alog, True)(task, None, None), alog
+
+    def wild(bank, case, cfg):
+        c = cfg.clone()
+        c.D3.update(temperature=7.0, max_tokens="lots")
+        c.D5.update(history_keep=1)
+        return SimpleNamespace(config=c)
+    b, _ = run(wild)
+    assert b["agent_loop"]["config"] == {"temperature": 1.0, "max_tokens": 2048}  # clamped; non-number -> base
+    assert b["context_mgmt"]["config"]["keep_turns"] == 4
+
+    def boom(*a):
+        raise ValueError("bad json")
+    b, alog = run(boom)
+    assert b == B3.to_bundle(base) and "bad json" in alog[0]["error"]
+
+    def broke(*a):
+        try:
+            raise llm_mod.BudgetExceeded("MAX_USD exhausted")
+        except llm_mod.BudgetExceeded as e:
+            raise RuntimeError("controller call failed") from e  # as call_with_retries would wrap it
+    try:
+        run(broke)
+    except llm_mod.BudgetExceeded:
+        pass
+    else:
+        raise AssertionError("budget exhaustion must stop the run")
+
+
+def test_b3_ingest_skips_infra_errors():
+    from baselines import b3_memo as B3
+    ctl = B3.ConfigController(client=SimpleNamespace(), model=B3.MODEL, api_config=B3.API)
+    base = B3.base_config(ctl)
+    bank = B3.BM25ExperienceBank()
+    recs = [{**_b3_rec(f"s{i}", True, f"task {i}", i), "error": None} for i in range(2)]
+    recs.append({"task_id": "inf", "success": False, "steps": 0, "tokens": 0, "error": "RuntimeError: down",
+                 "trajectory_path": None})
+    B3.ingest(bank, recs, 0, base, base, "alfworld", client=None, distiller=None, log={})
+    assert sorted(e.case_id for e in bank.entries) == ["s0", "s1"]
+
+
+def test_b1_analyze_prompt_shows_code_and_tasks():
+    from baselines import b1_freeform as B1
+    assert "Read harness implementations" in B1.SKILL
+    root = TMP / "b1cand"
+    C.new_candidate(root, C.H0_ROOT)
+    f = root / "variants" / "memory" / "default.py"
+    f.write_text(f.read_text(encoding="utf-8") + "\n# CHANGED_LINE\n", encoding="utf-8")
+    code = B1._pool_code([{"name": "h0", "root": C.H0_ROOT}, {"name": "r1", "root": root}])
+    assert "### h0 (complete)" in code and "...[truncated]" not in code
+    assert "### r1 (diff vs h0)" in code and "+# CHANGED_LINE" in code
+    assert C.tree_text(C.H0_ROOT, None) == C.tree_text(C.H0_ROOT, 10**9)  # None: never truncated
+    p = traj("b1task", "t", "put the apple in the fridge")
+    assert "TASK: put the apple" in C.summarize_trajectory(p, task_chars=B1.TASK_CHARS)
+    assert "TASK:" not in C.summarize_trajectory(p)  # B2/B3 default unchanged
+
 def test_chatshim_forwards_reference_kwargs():
     from baselines.b3_memo import ChatShim
 

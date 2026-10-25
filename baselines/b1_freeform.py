@@ -16,6 +16,7 @@ proposer may pick any candidate in the pool (H0 and every validated candidate) a
 """
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from pathlib import Path
@@ -24,6 +25,7 @@ from baselines import common as C
 from baselines.proposer_io import apply_files, extract_json, field, gate_hint, reply_files
 
 MAX_TRAJ_IN_PROMPT = 24  # the reference shows every candidate's jobs; bounded here to keep the prompt size fixed
+TASK_CHARS = 1500  # task instruction shown at the top of each trajectory (the reference trace starts with it)
 
 # ---------------------------------------------------------------- reference functions (copied, paths as arguments)
 
@@ -217,7 +219,8 @@ You should:
    - `evolution_summary.jsonl` - what's been tried, what worked/didn't, plus `rollout_metrics` (shown in the prompt)
    - the candidate pool: every validated candidate, with its validation score. Pick ONE of them as the parent.
 2. **Deep-read failed AND successful trajectories.** Most important step. They are shown in the prompt.
-3. Return:
+3. Read harness implementations: H0's slot files in full and every pool candidate as a diff against H0 (shown in the prompt)
+4. Return:
 
 ```
 STATE: <5-line summary: current scores, what's been tried, avg tokens/steps>
@@ -266,7 +269,8 @@ Output: `CANDIDATES: <name1>`
 #     H0 slot files, protocol split, our model; "CANDIDATE DESIGN": a single agents/<name>.py file -> a set of slot files
 #  4. Key methods of the Terminus2 subclass -> the five slot Protocols
 #  5. "CANNOT modify meta_harness.py or claude_wrapper.py" -> the H0 contract files
-#  6. Step 1/2: "Launch ONE Agent subagent" -> one model call each (no subagents); Step 1 adds PARENT (the pool choice)
+#  6. Step 1/2: "Launch ONE Agent subagent" -> one model call each (no subagents); Step 1 adds PARENT (the pool choice);
+#     Step 1.3 "Read agent implementations in `agents/*.py`" -> H0 in full plus each pool candidate as a diff vs H0
 #  7. Step 3 JSON: import_path -> parent; `agents/<name>.py` notes removed
 #  8. IMPORTANT NOTES: AgentHarness class name, async methods, litellm, prompt-template placeholders, 30KB limit removed;
 #     the slot-contract and no-tools notes added
@@ -300,9 +304,32 @@ def _pool_listing(pool: list[dict]) -> str:
                      else f"- {p['name']}: (reference seed)" for p in pool)
 
 
+def _pool_code(pool: list[dict]) -> str:
+    """Step 1.3 (read the agent implementations): H0's files in full, every other pool candidate as a unified diff
+    against H0, so the prompt grows with the size of the changes rather than with the pool."""
+    h0 = next(p for p in pool if p["name"] == "h0")
+    base = _files(h0["root"])
+    parts = [f"### h0 (complete)\n{C.tree_text(h0['root'], None)}"]
+    for p in pool:
+        if p["name"] == "h0":
+            continue
+        files = _files(p["root"])
+        diff = "".join("".join(difflib.unified_diff(base.get(f, "").splitlines(True), files.get(f, "").splitlines(True),
+                                                    f"h0/{f}", f"{p['name']}/{f}"))
+                       for f in sorted(set(base) | set(files)))
+        parts.append(f"### {p['name']} (diff vs h0)\n{diff or '(identical to h0)'}")
+    return "\n\n".join(parts)
+
+
+def _files(root: Path) -> dict[str, str]:
+    return {f.relative_to(root).as_posix(): f.read_text(encoding="utf-8")
+            for f in sorted(list((root / "variants").rglob("*.py")) + [p for p in (root / "bundle.json",
+                                                                                   root / "system_prompt.txt") if p.exists()])}
+
+
 def _traces(evidence: list[dict]) -> str:
     return "\n\n".join(f"--- TRAJECTORY ({'PASS' if e['success'] else 'FAIL'}) {e['trajectory_path']}\n"
-                       f"{C.summarize_trajectory(e['trajectory_path'], max_events=60, max_chars=600)}"
+                       f"{C.summarize_trajectory(e['trajectory_path'], max_events=60, max_chars=600, task_chars=TASK_CHARS)}"
                        for e in evidence)
 
 
@@ -317,6 +344,7 @@ def analyze(bench: str, ws: Path, pool: list[dict], frontier: dict, evidence: li
               f"## evolution_summary.jsonl\n{listing or '(empty)'}\n\n"
               f"## frontier_val.json\n{json.dumps(frontier, indent=1)}\n\n"
               f"## Candidate pool (choose ONE as PARENT)\n{_pool_listing(pool)}\n\n"
+              f"## Harness implementations (H0 complete, other candidates as diffs vs H0)\n{_pool_code(pool)}\n\n"
               f"## Trajectories (PASS/FAIL labels are the real outcomes)\n{_traces(evidence)}\n"
               + ANALYSIS_FORMAT)
     r = client.chat([{"role": "user", "content": prompt}], tag=f"b1:analyze:{bench}", max_tokens=6000,
@@ -339,7 +367,7 @@ def analyze(bench: str, ws: Path, pool: list[dict], frontier: dict, evidence: li
 
 def implement(bench: str, cand_dir: Path, parent_root: Path, cand: dict, client, round_i: int) -> dict:
     """Step 2: one call that writes the candidate's files, then the static gate, one repair call on failure."""
-    parent_tree = C.tree_text(parent_root, 20000)
+    parent_tree = C.tree_text(parent_root, None)  # uncut: H0 alone is ~19k chars
     base = (f"## Candidate\nname={cand['name']}\nHYPOTHESIS: {cand.get('hypothesis', '')}\n"
             f"CHANGES: {cand.get('changes', '')}\n\n## PARENT files (complete)\n{parent_tree}\n" + IMPLEMENT_FORMAT)
     prompt, meta = base, {"gate": "not run"}

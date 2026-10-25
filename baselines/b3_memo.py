@@ -49,6 +49,7 @@ TEST_TIME_CASE_ADAPTATION = True  # per-case adapt_for_case at val/test; False =
 _SETTINGS = HarnessSettings()   # config/runtime.py defaults
 CANARY_MIN_REWARD_DELTA = _SETTINGS.controller_canary_min_reward_delta      # -0.34
 CANARY_MAX_BLOCKER_INCREASE = _SETTINGS.controller_canary_max_blocker_increase  # 0
+CANARY_MAX_SUCCESS_DROP = -0.2  # reference _evaluate_candidate_with_canary: success_delta < -0.2 and reward_delta <= 0
 DIMS = ("D1", "D2", "D3", "D4", "D5", "D6")
 
 # Transport for the vendored code: the reference calls an OpenAI client with the endpoint below, which we replace by
@@ -136,12 +137,27 @@ def to_bundle(cfg: HarnessConfig) -> dict:
     }
 
 
-def clamp(cfg: HarnessConfig) -> HarnessConfig:
+_H0_NUMBERS = {("D3", "temperature"): 0.0, ("D3", "max_tokens"): 2048, ("D5", "history_keep"): 30}
+
+
+def _num(cfg: HarnessConfig, dim: str, key: str, fallback: HarnessConfig | None) -> float:
+    """The value as a finite number; else the fallback config's value; else H0's default."""
+    for c in (cfg, fallback):
+        try:
+            v = float(getattr(c, dim)[key])
+            if math.isfinite(v):
+                return v
+        except (AttributeError, KeyError, TypeError, ValueError):
+            pass
+    return float(_H0_NUMBERS[(dim, key)])
+
+
+def clamp(cfg: HarnessConfig, fallback: HarnessConfig | None = None) -> HarnessConfig:
     """Range guards on the numbers H0 can apply (the reference does not clamp; this keeps a bad proposal from
-    breaking the harness)."""
-    cfg.D3["temperature"] = min(1.0, max(0.0, float(cfg.D3["temperature"])))
-    cfg.D3["max_tokens"] = int(min(4096, max(256, int(cfg.D3["max_tokens"]))))
-    cfg.D5["history_keep"] = int(min(60, max(4, int(cfg.D5["history_keep"]))))
+    breaking the harness). A value that is not a number falls back to `fallback` (the base config), then to H0."""
+    cfg.D3["temperature"] = min(1.0, max(0.0, _num(cfg, "D3", "temperature", fallback)))
+    cfg.D3["max_tokens"] = int(min(4096, max(256, int(_num(cfg, "D3", "max_tokens", fallback)))))
+    cfg.D5["history_keep"] = int(min(60, max(4, int(_num(cfg, "D5", "history_keep", fallback)))))
     return cfg
 
 
@@ -228,8 +244,10 @@ def diagnose(client, bench: str, failed: list[tuple[PerCaseEntry, dict]]) -> dic
 def ingest(bank: BM25ExperienceBank, recs: list[dict], iteration: int, cfg: HarnessConfig, prev: HarnessConfig,
            bench: str, client, distiller: LLMDistiller, log: dict) -> None:
     """Diagnose the failed episodes, add them to the bank, and distill when the reference trigger fires: a case reached
-    the consecutive-failure threshold (add_entry returns True) or should_distill(EVERY_N_ENTRIES)."""
-    failed = [rec for rec in recs if not rec["success"] and not rec.get("error")]
+    the consecutive-failure threshold (add_entry returns True) or should_distill(EVERY_N_ENTRIES).
+    Infra-error episodes are external blockers and never enter the bank (reference _filter_learning_results)."""
+    recs = [rec for rec in recs if not rec.get("error")]
+    failed = [rec for rec in recs if not rec["success"]]
     diag = {}
     if failed:
         pairs = [(to_entry(r, iteration, cfg, prev, bench), r) for r in failed]
@@ -262,7 +280,7 @@ class ConfigController(LLMController):
                   "general (never mention specific tasks, ids or answers).\n"
                   + LC._CONFIG_ONLY_DOC)
         updates = self._call_llm_for_config(prompt)
-        nxt = clamp(self.stabilize_config(self._build_harness_config(updates, base)))
+        nxt = clamp(self.stabilize_config(self._build_harness_config(updates, base)), fallback=base)
         rationale = str(updates.get("rationale", ""))[:300] if isinstance(updates, dict) else ""
         return nxt, rationale
 
@@ -286,6 +304,18 @@ class ExperienceMemory:
         return None  # frozen during val/test; bank updates happen in the training loop
 
 
+def _budget_error(exc: BaseException) -> BaseException | None:
+    """The BudgetExceeded in an exception chain (call_with_retries may wrap it in a RuntimeError), else None."""
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        if type(cur).__name__ == "BudgetExceeded":
+            return cur
+        seen.add(id(cur))
+        cur = cur.__cause__ or cur.__context__
+    return None
+
+
 def adapt_composer(ctl: ConfigController, bank: BM25ExperienceBank, base_cfg: HarnessConfig, bench: str, log: list,
                    adapt: bool):
     def composer(task, reg, base_bundle):
@@ -293,14 +323,54 @@ def adapt_composer(ctl: ConfigController, bank: BM25ExperienceBank, base_cfg: Ha
             return to_bundle(base_cfg)
         case = BenchmarkCase(case_id=task.task_id, prompt=task.instruction, expected_output="",
                              features=case_features(task.instruction, bench))
-        cfg = ctl.adapt_for_case(bank, case, base_cfg).config  # reference: one call, dimensions changed only with evidence
+        try:
+            # reference: one call, dimensions changed only with evidence; clamped like the global proposals
+            cfg = clamp(ctl.adapt_for_case(bank, case, base_cfg).config, fallback=base_cfg)
+        except Exception as e:
+            budget = _budget_error(e)
+            if budget is not None:
+                raise budget  # budget exhaustion stops the whole run (benchmarks/common.run_with_env)
+            log.append({"task": task.task_id, "error": f"{type(e).__name__}: {e}"[:300], "delta": {}})
+            return to_bundle(base_cfg)  # adaptation failed: the searched global config, unadapted
         log.append({"task": task.task_id, "delta": cfg.delta_from(base_cfg)})
         return to_bundle(cfg)
     return composer
 
 
-def _mean_success(recs: list[dict]) -> float:
-    return sum(1 for r in recs if r["success"]) / max(1, len(recs))
+def canary_metrics(recs: list[dict]) -> dict[str, float]:
+    """Reference _result_metrics, per task: a task whose rolls all hit an infra error is an external blocker; the
+    others score the mean reward of their non-error rolls (H0 has K rolls per task, the canary one) and count as
+    succeeded at reward >= 0.5. Rates are over the learnable (non-blocker) tasks."""
+    by: dict[str, list[dict]] = {}
+    for r in recs:
+        by.setdefault(r["task_id"], []).append(r)
+    rewards = []
+    for rolls in by.values():
+        ok = [r for r in rolls if not r.get("error")]
+        if ok:
+            rewards.append(sum(1.0 for r in ok if r["success"]) / len(ok))
+    n = len(rewards)
+    return {"cases_total": float(len(by)), "cases_learning": float(n),
+            "cases_succeeded": float(sum(1 for x in rewards if x >= 0.5)),
+            "mean_reward": sum(rewards) / max(n, 1),
+            "success_rate": sum(1 for x in rewards if x >= 0.5) / max(n, 1),
+            "blockers": float(len(by) - n)}
+
+
+def canary_check(metrics: dict[str, float], baseline: dict[str, float]) -> tuple[bool, str]:
+    """Reference _evaluate_candidate_with_canary: the three rejection rules in the reference order."""
+    if metrics["cases_learning"] <= 0:
+        return False, "no learnable canary cases (all external blockers)"
+    reward_delta = metrics["mean_reward"] - baseline["mean_reward"]
+    blocker_increase = metrics["blockers"] - baseline["blockers"]
+    success_delta = metrics["success_rate"] - baseline["success_rate"]
+    if reward_delta < CANARY_MIN_REWARD_DELTA:
+        return False, f"reward delta {reward_delta:.3f} < threshold {CANARY_MIN_REWARD_DELTA:.3f}"
+    if blocker_increase > CANARY_MAX_BLOCKER_INCREASE:
+        return False, f"blocker increase {blocker_increase:.0f} > threshold {CANARY_MAX_BLOCKER_INCREASE}"
+    if success_delta < CANARY_MAX_SUCCESS_DROP and reward_delta <= 0.0:
+        return False, f"success rate dropped too much ({success_delta:.3f}) without reward gain"
+    return True, "accepted by canary gate"
 
 
 # ---------------------------------------------------------------- run
@@ -334,11 +404,12 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke", adapt
                          memory=ExperienceMemory(bank, bench), workers=cfg["workers"],
                          label={"method": "b3", "phase": "canary", "round": ri})
         ref = [r for r in shared["h0_train"] if r["task_id"] in set(canary_ids)]  # H0, all K rolls on the same tasks
-        delta = C.score(can) - _mean_success(ref)
-        blockers = sum(1 for r in can if r["error"]) - sum(1 for r in ref if r["error"])
-        rd["canary"] = {"reward_delta": delta, "blocker_increase": blockers, "errors": [r["error"] for r in can if r["error"]]}
-        ingest(bank, can, ri, new_cfg, inc_cfg, bench, client, distiller, log)
-        if delta < CANARY_MIN_REWARD_DELTA or blockers > CANARY_MAX_BLOCKER_INCREASE:
+        can_m, ref_m = canary_metrics(can), canary_metrics(ref)
+        accepted, reason = canary_check(can_m, ref_m)
+        rd["canary"] = {"metrics": can_m, "baseline": ref_m, "reason": reason,
+                        "errors": [r["error"] for r in can if r["error"]]}
+        # canary rollouts are NOT ingested: the reference bank only receives full-train results
+        if not accepted:
             rd["result"] = "rejected by canary"
             log["rounds"].append(rd)
             continue

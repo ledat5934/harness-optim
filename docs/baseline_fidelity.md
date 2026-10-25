@@ -61,7 +61,7 @@ Nguồn: `third_party/meta-harness/reference_examples/terminal_bench_2/`.
 4. "CANDIDATE DESIGN": một file `agents/<name>.py` → tập file slot;
 5. "Key methods" của Terminus2 → năm Protocol slot;
 6. "CANNOT modify meta_harness.py, claude_wrapper.py" → hợp đồng file H0;
-7. Bước 1 và 2: "Launch ONE Agent subagent" → một lệnh gọi mô hình cho mỗi bước; Bước 1 thêm `PARENT:` (chọn cha trong pool);
+7. Bước 1 và 2: "Launch ONE Agent subagent" → một lệnh gọi mô hình cho mỗi bước; Bước 1 thêm `PARENT:` (chọn cha trong pool); Bước 1.3 "Read agent implementations in `agents/*.py`" → đọc mã H0 đầy đủ và từng ứng viên trong pool dưới dạng diff so với H0;
 8. JSON Bước 3: `import_path` → `parent`; ghi chú về `agents/<name>.py` được bỏ;
 9. IMPORTANT NOTES: tên lớp `AgentHarness`, phương thức async, litellm, placeholder của template prompt, giới hạn 30 KB bị bỏ; thêm ghi chú về hợp đồng slot và việc không có tool.
 
@@ -75,7 +75,10 @@ Nguồn: `third_party/meta-harness/reference_examples/terminal_bench_2/`.
 - `summarize_trial_metrics` nhận `trial_metrics_of(recs)`: `cost_usd` = chi phí, `n_turns` = số bước, `n_input_tokens` = tổng token (xem (c)).
 
 ### (c) Sai lệch còn lại
-- **Proposer không có hệ thống tệp.** Meta-Harness cho Claude Code đọc tệp bằng công cụ. Ở đây mọi tệp (mã cha, mã các ứng viên khác, quỹ đạo, frontier, tóm tắt) được render vào prompt, có giới hạn: tối đa `MAX_TRAJ_IN_PROMPT = 24` quỹ đạo, mỗi quỹ đạo tối đa 60 sự kiện.
+- **Proposer không có hệ thống tệp.** Meta-Harness cho Claude Code đọc tệp bằng công cụ. Ở đây mọi tệp được render vào prompt:
+  - Bước phân tích thấy mã của mọi ứng viên (`_pool_code`): H0 đầy đủ, mỗi ứng viên khác là unified diff so với H0 (Bước 1.3 của SKILL.md).
+  - Bước triển khai thấy toàn bộ mã cha, không cắt (`tree_text(root, None)`; riêng H0 đã 18 776 ký tự, giới hạn cũ 20 000 ký tự cắt mất mã của ứng viên lớn hơn).
+  - **Quỹ đạo vẫn là bản tóm tắt, không phải trace gốc** (sai lệch chính còn lại của B1): tối đa `MAX_TRAJ_IN_PROMPT = 24` quỹ đạo, mỗi quỹ đạo 60 sự kiện cuối, mỗi sự kiện 600 ký tự. Đầu mỗi quỹ đạo có chỉ dẫn tác vụ (`TASK_CHARS = 1500` ký tự, `summarize_trajectory(task_chars=...)`); B2/B3 giữ mặc định 0.
 - **Hai bước, hai lệnh gọi.** Bước 1+3 (phân tích, chọn cha, ghi `pending_eval.json`) là một lệnh gọi. Bước 2 (triển khai) là lệnh gọi thứ hai. Meta-Harness dùng hai subagent có công cụ.
 - **Chọn cha trong pool.** Proposer có thể chọn bất kỳ ứng viên nào đã qua validate (H0 và `candidates/r*`). Nếu tên cha không hợp lệ, dùng `cand.parent` hoặc H0.
 - **Một ứng viên mỗi vòng**, và một vòng (`SMOKE`). Bài báo dùng nhiều vòng trên 89 tác vụ × 2 lần thử.
@@ -124,7 +127,7 @@ Không vendor: `online_evo.py` (điều phối cửa sổ), `k_roll.py`, `eviden
 - **Cổng làn** (bước 6): `static_gate` của biến thể mới, reviewer (`b2:review`), `reject_class="implementation"` kèm `repair_brief` được sửa một lần trong cùng vòng. Routing không nằm trong cổng: sau reviewer, `routing_diagnosis` chạy routing probe một lần; nếu composer không chọn biến thể ở tác vụ train nào, `description` của biến thể được viết lại đúng một lần (`b2:describe:<bench>`) rồi probe lại. Cả hai kết quả ghi vào `detail["routing"]`, và làn không bị loại vì kết quả đó.
 - **Hợp nhất** (bước 7): làn đầu được copy lên cây ứng viên. Làn thứ hai: `rebase_onto` lên cây đó; nếu `gates_after_rebase` không cho dùng lại review thì chạy lại review; luôn chạy lại `static_gate` trên cây đã rebase (routing không chạy lại vì chỉ là chẩn đoán). Chỉ khi cả hai qua, cây ứng viên mới được thay bằng cây đã rebase.
 - **Xác nhận** (bước 8): `find_regressions` chạy trên các roll validation. Hồi quy được ghi vào `confirm_regressions` và chặn thăng hạng.
-- **Thăng hạng cuối:** luật chung `C.better` quyết định. Điều kiện bổ sung là không có hồi quy từ xác nhận.
+- **Thăng hạng cuối:** luật chung `C.better` trên val, cộng điều kiện không có hồi quy từ xác nhận (đây là sai lệch thuật toán, xem (c)).
 - **Đóng đề xuất:** làn được thăng hạng → `promoted`. Làn không qua cổng → `rejected_proposal` nếu reviewer báo `proposal`, còn lại `rejected_implementation`.
 - **Lệnh gọi LLM:** tag `b2:<kind>:<bench>`, với kind ∈ `investigate`, `efficiency`, `route`, `same`, `implement`, `review`, `describe`, `composer`.
 
@@ -143,6 +146,12 @@ Không vendor: `online_evo.py` (điều phối cửa sổ), `k_roll.py`, `eviden
 - **Không có helper subset** (`tool_helper`), vì H0 không có helper.
 - **Prompt riêng:** `IMPLEMENT`, `FIX`, `REPAIR`, `PROTO`, `SAME_PROMPT` là của chúng tôi. Prompt composer và prompt điều tra là bản cắt của mã gốc.
 - **`review_verdict` không có `accept_partial`:** giữ nguyên như mã gốc (chưa được bật).
+- **Thăng hạng có so reward.** Mã gốc thăng hạng chỉ theo cổng (smoke, action gate, niche-dedup, review, sanity crash) và nói rõ là KHÔNG so reward. Ở đây thêm `C.better` trên val (luật chọn chung của giao thức), nên một làn qua mọi cổng vẫn có thể bị giữ lại nếu val không cao hơn.
+- **Một module mỗi lineage → tất cả slot mỗi vòng.** Mã gốc chạy mỗi lineage với một `--locked-module`, rồi mới tích hợp chéo module. Ở đây mỗi vòng điều tra cả 5 slot, và composer chọn trên mọi slot.
+- **Thiếu action gate và niche-dedup gate.** Chưa port; hai cổng này của mã gốc không chạy.
+- **`history_pass_lookup=None`** khi gọi `route_batch`: router không dùng lịch sử pass của các cửa sổ trước (smoke chỉ có một cửa sổ).
+- **Efficiency investigator luôn chạy** với tác vụ pass-lãng-phí. Mã gốc chỉ chạy nó khi không tìm thấy culprit.
+- **Prompt composer vẫn ghi "terminal coding agent"** (văn bản gốc của `_llm_pick`), chưa đổi theo benchmark.
 
 ---
 
@@ -174,10 +183,10 @@ Các phần được giữ nguyên trong bước chạy: ngân hàng hai lớp (
 - **Embedding → BM25** (`BM25ExperienceBank`): ghi đè hai hàm `_embed_text` và `_cosine_similarity`. Điểm là BM25 của truy vấn trên tài liệu, chia cho tự điểm của truy vấn, nên nằm trong [0, 1] như cosine thay thế. Corpus là chỉ dẫn các mục trong ngân hàng. `_case_similarity` và `retrieve_similar_cases_for_case` không đổi (cùng cách cộng điểm đặc trưng và top-k).
 - **Đóng băng:** `add_entry` ghi đè để ném `RuntimeError` khi `frozen`; `bank.save` trước lần kiểm thử; kiểm tra số mục không đổi sau lần kiểm thử.
 - **Ánh xạ D1–D6** (bảng dưới). `base_config` lấy `stabilize_config(make_minimal_config())`, sau đó **xóa chuỗi chiến lược** (H0 không có) và đặt lại các số đã ánh xạ về giá trị H0 (`temperature=0.0`, `max_tokens=2048`, `history_keep=30`). Nếu không, `make_minimal_config` đặt `max_tokens=256` và `history_keep=0`, và `stabilize_config` thêm chuỗi chiến lược: đều làm đổi H0.
-- **Canary:** tham chiếu là H0 trên cùng các tác vụ, lấy trung bình trên cả K=3 roll. Ngưỡng là `CANARY_MIN_REWARD_DELTA` và `CANARY_MAX_BLOCKER_INCREASE` từ `HarnessSettings`.
-- **Blocker:** số episode có trường `error` (lỗi hạ tầng). Tương đương tương đối với "external blocker" của MemoHarness.
-- **Bằng chứng train:** toàn bộ K=3 roll mỗi tác vụ được đưa vào ngân hàng (iteration 0), không còn chỉ roll cuối.
-- **Test-time adaptation:** cờ `TEST_TIME_CASE_ADAPTATION = True` (mặc định). Khi bật, mỗi tác vụ val và test gọi `adapt_for_case`; khi tắt, dùng cấu hình toàn cục đã chọn.
+- **Canary** (`canary_metrics`, `canary_check`): port của `_result_metrics` và `_evaluate_candidate_with_canary` (`harbor/loop.py`). Số liệu tính theo tác vụ: H0 có K=3 roll mỗi tác vụ, canary có 1, nên reward của một tác vụ là trung bình các roll không lỗi, và tác vụ "thành công" khi reward ≥ 0,5. Blocker bị loại khỏi reward và success rate. Ba luật từ chối theo đúng thứ tự gốc: `reward_delta < -0.34`; `blocker_increase > 0`; `success_delta < -0.2` và `reward_delta <= 0` (`CANARY_MAX_SUCCESS_DROP`). Với reward 0/1, luật thứ ba là luật chặt nhất: ngưỡng thực tế là -0,2, không phải -0,34. Không có tác vụ học được nào (toàn blocker) → từ chối.
+- **Blocker:** tác vụ mà mọi roll đều có trường `error` (lỗi hạ tầng), tương ứng "external blocker" của MemoHarness.
+- **Bằng chứng train:** toàn bộ K=3 roll mỗi tác vụ được đưa vào ngân hàng (iteration 0), không còn chỉ roll cuối. Episode lỗi hạ tầng không vào ngân hàng (`_filter_learning_results`). Rollout canary cũng không vào ngân hàng: mã gốc chỉ nạp kết quả chạy toàn bộ train.
+- **Test-time adaptation:** cờ `TEST_TIME_CASE_ADAPTATION = True` (mặc định). Khi bật, mỗi tác vụ val và test gọi `adapt_for_case`; khi tắt, dùng cấu hình toàn cục đã chọn. Cấu hình thích nghi được `clamp` như đề xuất toàn cục; giá trị không phải số lấy từ cấu hình gốc. Nếu `adapt_for_case` lỗi, tác vụ chạy với cấu hình toàn cục (lỗi ghi vào `adaptations`). Riêng `BudgetExceeded`, kể cả khi bị `call_with_retries` bọc trong `RuntimeError`, vẫn được ném ra để dừng cả lần chạy.
 
 **Bảng ánh xạ D1–D6 → H0.** Chỉ các núm H0 có thể biểu diễn được áp dụng; các khóa còn lại của schema gốc vẫn nằm trong cấu hình (để controller thấy trong prompt) nhưng không tác động gì.
 
@@ -204,11 +213,12 @@ Các phần được giữ nguyên trong bước chạy: ngân hàng hai lớp (
 - **Chỉ một phần khóa D được áp dụng** (bảng trên). Phần lớn tiềm năng cấu hình của MemoHarness (tool, luồng, xác thực đầu ra) không có tương ứng trong H0.
 - **Chẩn đoán:** trong MemoHarness, `primary_dim` do quy tắc của `harbor/loop.py::_classify_trial_failure` xác định từ ngoại lệ của Harbor (rule-based, không có prompt LLM). Chúng tôi không có ngoại lệ Harbor, nên dùng một lệnh gọi LLM với văn bản chiều `_DIMENSIONS_DOC` của mã gốc. Mặc định khi thất bại là `D4`, khi thành công là `D1` (cùng quy tắc mặc định của mã gốc).
 - **Đặc trưng ca được suy ra tối thiểu:** `input_length`, `complexity_estimate` (độ dài chỉ dẫn / 2000), `domain` = tên benchmark, `requires_external_knowledge` = (benchmark là BrowseComp-Plus). Mã gốc có đặc trưng do LLM gán cho từng ca; không có bước đó ở đây.
-- **Canary:** `cfg["n_check"]` tác vụ thay vì 6 của MemoHarness (giữ kích thước giao thức chung). Kiểm tra là điểm trung bình của ứng viên so với H0 trên cùng tác vụ (trung bình K roll).
+- **Canary:** `cfg["n_check"]` tác vụ thay vì 6 của MemoHarness (giữ kích thước giao thức chung). Tham chiếu luôn là H0 (mã gốc dùng kết quả train của harness hiện hành trong vòng đó).
+- **Chọn harness trên val.** Mã gốc chọn harness tốt nhất theo reward của các vòng chạy train, không có val. Ở đây dùng luật chung `C.better` trên val.
+- **Ngân hàng chỉ có iteration 0 khi `rounds > 1`.** Mã gốc chạy lại toàn bộ train mỗi vòng và nạp kết quả; ở đây chỉ có rollout H0 ban đầu (canary không được nạp), nên các vòng sau không có bằng chứng mới.
 - **Quy mô:** một vòng tìm kiếm (bài báo: 10 vòng).
 - **Mẫu toàn cục bị thay thế, không cộng dồn:** `distill` của mã gốc thêm vào `bank.global_patterns`; ở đây danh sách được thay bằng kết quả mới nhất, cắt còn `max_patterns=3`. Lý do: giữ bộ nhớ không vượt 3 mẫu trong suốt các vòng.
 - **Lỗi của distiller:** `call_with_retries` của mã gốc bao lỗi thành `RuntimeError`, nên ngân sách hết sẽ dừng cả lần chạy. Đây là hành vi mong muốn, nhưng khác với các baseline khác (vốn ném `BudgetExceeded`).
-- **Không truyền `temperature`:** `llm.py` quyết định nhiệt độ, nên giá trị 0.2 và 0.0 của mã gốc không được dùng.
 - **Trường `ExperienceMemory`** (memory slot) là phần thêm vào của chúng tôi, không thuộc schema D1–D6. Được bật ở mọi ứng viên.
 - **Cấu hình được clamp sau `_build_harness_config`:** mã gốc không giới hạn khoảng giá trị; chúng tôi giới hạn các số H0 áp dụng được, để một đề xuất hỏng không phá harness.
 
@@ -234,12 +244,12 @@ Quy tắc:
 
 | baseline | dòng logic đã chạy | trong đó được copy | tỉ lệ (đã chạy) | tỉ lệ (theo file) |
 |---|---|---|---|---|
-| B1 Meta-Harness | 68 | 37 | 54,4 % | 31,8 % (98 / 308) |
+| B1 Meta-Harness | 82 | 38 | 46,3 % | 30,2 % (99 / 328) |
 | B2 ModularRSI | 1194 | 910 | 76,2 % | 84,5 % (3368 / 3984) |
-| B3 MemoHarness | 599 | 500 | 83,5 % | 90,1 % (2312 / 2565) |
+| B3 MemoHarness | 663 | 501 | 75,6 % | 88,3 % (2312 / 2619) |
 
 Cách đọc:
-- Với mẫu đã chạy, mỗi file vendor được copy gần như trọn vẹn (100 % từng file, vì là copy nguyên văn). Thứ kéo tỉ lệ xuống là mã tự viết có chạy trong test: `baselines/b2_modular.py` (252 dòng đã chạy, 0 copy), `vendor/modularrsi/prompts.py` (32 dòng, 0 copy) và `baselines/b3_memo.py` (99 dòng, 0 copy).
+- Với mẫu đã chạy, mỗi file vendor được copy gần như trọn vẹn (100 % từng file, vì là copy nguyên văn). Thứ kéo tỉ lệ xuống là mã tự viết có chạy trong test: `baselines/b2_modular.py` (252 dòng đã chạy, 0 copy), `vendor/modularrsi/prompts.py` (32 dòng, 0 copy) và `baselines/b3_memo.py` (162 dòng, 0 copy). B1 và B3 giảm so với lần đo trước vì các sửa lỗi canary, thích nghi và prompt phân tích là mã tự viết.
 - B2 và B3 theo file cao chủ yếu vì vendor cả file. Ví dụ `trajectory_analysis.py` có 1248 dòng logic, phần lớn không chạy trong test.
 - B1 là file do chúng tôi viết, chỉ copy hai hàm và `SKILL.md`. Tỉ lệ đã chạy chỉ tính phần Python; `SKILL.md` chỉ có trong số theo file.
 - B1 được đối chiếu với hai ví dụ tham chiếu (`terminal_bench_2`, `text_classification`); báo cáo dùng kết quả của `terminal_bench_2`, cao hơn theo dòng đã chạy.

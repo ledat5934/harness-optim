@@ -104,14 +104,14 @@ def new_candidate(dest: Path, parent: Path = H0_ROOT, meta: dict | None = None) 
     return dest
 
 
-def tree_text(root: Path, max_chars: int = 60000) -> str:
-    """All source of a harness root as one text blob (for proposers)."""
+def tree_text(root: Path, max_chars: int | None = 60000) -> str:
+    """All source of a harness root as one text blob (for proposers). max_chars=None: never truncated."""
     parts = []
     for f in sorted(list((root / "variants").rglob("*.py")) + [p for p in (root / "bundle.json",
                                                                           root / "system_prompt.txt") if p.exists()]):
         parts.append(f"### FILE: {f.relative_to(root).as_posix()}\n{f.read_text(encoding='utf-8')}")
     s = "\n\n".join(parts)
-    return s if len(s) <= max_chars else s[:max_chars] + "\n...[truncated]"
+    return s if max_chars is None or len(s) <= max_chars else s[:max_chars] + "\n...[truncated]"
 
 
 def tree_hash(root: Path) -> str:
@@ -204,9 +204,11 @@ def traj_stats(path: str) -> dict:
     return {"steps": len(cmds), "repeat_ratio": rep / len(cmds) if cmds else 0.0}
 
 
-def summarize_trajectory(path: str, max_events: int = 40, max_chars: int = 400, show_outcome: bool = True) -> str:
+def summarize_trajectory(path: str, max_events: int = 40, max_chars: int = 400, show_outcome: bool = True,
+                         task_chars: int = 0) -> str:
     """Digest of one trajectory for proposers: last events, errors, tool observations. show_outcome=False hides
-    the pass/fail verdict (reward-blind review, ModularRSI review gate)."""
+    the pass/fail verdict (reward-blind review, ModularRSI review gate). task_chars > 0 adds the first task_chars
+    characters of the task instruction (B1; B2/B3 keep the default 0)."""
     try:
         d = json.loads(Path(path).read_text(encoding="utf-8"))
     except Exception as e:
@@ -215,6 +217,9 @@ def summarize_trajectory(path: str, max_events: int = 40, max_chars: int = 400, 
     outcome = f"success={d.get('success')} " if show_outcome else ""
     lines = [f"task={d.get('task_id')} {outcome}steps={d.get('steps')} "
              f"tokens={d.get('tokens')} stopped={(d.get('outcome') or {}).get('stopped') if isinstance(d.get('outcome'), dict) else d.get('outcome')} error={d.get('error')}"]
+    task_ev = next((e for e in ev if e["type"] == "task"), None)
+    if task_chars > 0 and task_ev:
+        lines.append(f"TASK: {str(task_ev.get('instruction', ''))[:task_chars]}")
     first_user = next((e for e in ev if e["type"] == "harness"), None)
     if first_user:
         lines.append(f"bundle={json.dumps(first_user.get('bundle'))[:300]}")
