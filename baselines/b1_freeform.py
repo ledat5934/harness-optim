@@ -197,6 +197,8 @@ Slot protocols (the contract to keep):
 
 Each candidate is a set of files in its own directory: edited `variants/<slot>/default.py` files and/or new `variants/<slot>/<name>.py` files, optionally `system_prompt.txt`. Each new variant file must register itself with a `register(reg)` function, and its name must be snake_case.
 
+**A new variant only runs if `bundle.json` selects it** (e.g. `{"agent_loop": "my_variant"}`; slots you leave out keep `default`). Otherwise edit `variants/<slot>/default.py` directly. Each episode builds a fresh harness and `memory.update` is never called by the harness, so nothing persists across episodes.
+
 ### What you can and cannot modify
 
 - **CAN**: edit the files of your candidate freely; add new variant files.
@@ -274,7 +276,11 @@ Output: `CANDIDATES: <name1>`
 #  7. Step 3 JSON: import_path -> parent; `agents/<name>.py` notes removed
 #  8. IMPORTANT NOTES: AgentHarness class name, async methods, litellm, prompt-template placeholders, 30KB limit removed;
 #     the slot-contract and no-tools notes added
-SKILL_CHANGES = 8
+#  9. CANDIDATE DESIGN: how a new variant is selected (bundle.json) and that memory does not persist across episodes.
+#     In the reference a candidate IS the new agent file (pending_eval import_path), so it always runs; in H0 a new
+#     variant file is inert unless bundle.json selects it, which the first MEDIUM pass showed (B1's final harness on
+#     BrowseComp-Plus and AppWorld was behaviourally H0).
+SKILL_CHANGES = 9
 
 ANALYSIS_FORMAT = """
 ## Output for Step 1 and Step 3 (plain text, then one JSON block)
@@ -295,6 +301,8 @@ Output the COMPLETE content of every file you change, one block each:
 <complete file>
 ```
 (You may also emit `### FILE: system_prompt.txt` with a ```text block.)
+A NEW variant file runs only if you also emit `### FILE: bundle.json` (a ```json block) selecting it, e.g.
+{"agent_loop": "my_variant"}; or put the change in `variants/<slot>/default.py`.
 Output nothing else that the harness would need."""
 
 
@@ -383,11 +391,36 @@ def implement(bench: str, cand_dir: Path, parent_root: Path, cand: dict, client,
             prompt = base + "\n\nYour previous answer contained no valid ### FILE blocks. Output the files now."
             continue
         ok, log = C.static_gate(cand_dir)  # validate: import, registry, offline toy run (baselines/common.static_gate)
+        unused = unselected_variants(cand_dir, written) if ok else []
+        if unused:  # loads fine but the new code would never run: same repair path as a gate failure
+            ok, log = False, (f"new variant(s) {unused} are not selected by bundle.json, so they would never run. "
+                              "Emit `### FILE: bundle.json` selecting them, or move the change into default.py.")
         meta["gate"] = "ok" if ok else log[-600:]
         if ok:
             return {"ok": True, **meta}
         prompt = base + f"\n\nYour previous candidate FAILED validation:\n{log[-1200:]}{gate_hint(log)}\nFix it and output complete files."
     return {"ok": False, **meta}
+
+
+_REGISTER = re.compile(r"""reg\.register\(\s*["'](\w+)["']\s*,\s*["'](\w+)["']""")
+
+
+def unselected_variants(cand_dir: Path, written: list[str]) -> list[str]:
+    """New (non-default) variants among the written files that bundle.json does not select: they would never run.
+    An unreadable bundle.json counts as selecting nothing (h0.compose falls back to the default bundle)."""
+    try:
+        raw = json.loads((cand_dir / "bundle.json").read_text(encoding="utf-8")) if (cand_dir / "bundle.json").exists() else {}
+        sel = {slot: (spec if isinstance(spec, str) else spec.get("name")) for slot, spec in raw.items()}
+    except Exception:
+        sel = {}
+    out = []
+    for rel in written:
+        if not rel.endswith(".py") or rel.endswith("/default.py"):
+            continue
+        for slot, name in _REGISTER.findall((cand_dir / rel).read_text(encoding="utf-8")):
+            if name != "default" and sel.get(slot) != name:
+                out.append(f"{slot}/{name}")
+    return out
 
 
 def _reward(r: dict) -> float:

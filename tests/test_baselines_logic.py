@@ -333,6 +333,19 @@ def test_reply_files_restores_lost_arg_value_token():
     reply = SimpleNamespace(content="### FILE: variants/tool_policy/default.py\n```python\n" + lost + "```\n")
     assert reply_files(reply)["variants/tool_policy/default.py"] == h0
 
+
+def test_b1_flags_new_variants_that_bundle_does_not_select():
+    from baselines import b1_freeform as B1
+    root = TMP / "b1sel"
+    C.new_candidate(root, C.H0_ROOT)
+    f = root / "variants" / "agent_loop" / "loop_x.py"
+    f.write_text('def register(reg):\n    reg.register("agent_loop", "loop_x", lambda c: None, "x")\n', encoding="utf-8")
+    assert B1.unselected_variants(root, ["variants/agent_loop/loop_x.py"]) == ["agent_loop/loop_x"]
+    (root / "bundle.json").write_text('{"agent_loop": {"name": "loop_x"}}', encoding="utf-8")
+    assert B1.unselected_variants(root, ["variants/agent_loop/loop_x.py"]) == []
+    assert B1.unselected_variants(root, ["variants/memory/default.py"]) == []
+    assert "bundle.json" in B1.IMPLEMENT_FORMAT and "only runs if `bundle.json` selects it" in B1.SKILL
+
 def test_chatshim_forwards_reference_kwargs():
     from baselines.b3_memo import ChatShim
 
