@@ -1,0 +1,110 @@
+# Vendored from IQuestLab/ModularRSI (commit b5c72c3), src/harbor/agents/terminus_2_modular/self_evo/routing_probe.py
+# License: CC BY-NC 4.0 (ModularRSI original contributions): research use only, attribution: Wu et al. 2026, arXiv 2609.14857.
+# Changes: import path rewritten; the functions that need Harbor (archive, composer, task cache) are removed here and replaced in baselines/b2_modular.py. Algorithm code is unchanged.
+"""Measure whether normal composer routing would select a candidate.
+
+The result is diagnostic rather than a promotion gate: an unselected candidate
+may have a weak description rather than a weak implementation.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Awaitable, Callable
+
+_logger = logging.getLogger(__name__)
+
+VERDICT_PROVEN = "routing_proven"
+VERDICT_UNPROVEN = "routing_unproven"
+VERDICT_SKIPPED = "routing_skipped"
+
+_REMEDY = (
+    "No intended task selected this variant. Before concluding the variant is "
+    "useless, rewrite its DESCRIPTION and re-probe: a description that names a "
+    "task family, or states a runtime property instead of a selection criterion, "
+    "gets benched regardless of what the code does."
+)
+
+
+@dataclass
+class RoutingProbeResult:
+    verdict: str
+    target_variant: str = ""
+    picked_by: list[str] = field(default_factory=list)
+    picks: dict[str, str] = field(default_factory=dict)
+    errors: int = 0
+    reason: str = ""
+    remedy: str = ""
+
+
+async def probe_routing(
+    *,
+    target_variant: str,
+    tasks: list[str],
+    instructions: dict[str, str],
+    choose: Callable[[str], Awaitable[str | None]],
+    concurrency: int = 2,
+) -> RoutingProbeResult:
+    """Ask the composer, per intended task, which variant it would select."""
+    usable = [(t, instructions[t]) for t in tasks if instructions.get(t)]
+    if not usable:
+        return RoutingProbeResult(
+            verdict=VERDICT_SKIPPED,
+            target_variant=target_variant,
+            reason=(
+                "no intended tasks"
+                if not tasks
+                else "no cached instruction for any intended task"
+            ),
+        )
+
+    sem = asyncio.Semaphore(max(1, concurrency))
+    picks: dict[str, str] = {}
+    errors = 0
+
+    async def _one(task: str, instruction: str) -> None:
+        nonlocal errors
+        async with sem:
+            try:
+                picked = await choose(instruction)
+            except Exception as exc:
+                errors += 1
+                _logger.warning("routing probe failed for %s: %s", task, exc)
+                return
+        if picked:
+            picks[task] = picked
+
+    await asyncio.gather(*(_one(t, i) for t, i in usable))
+
+    if not picks:
+        # every call failed — that is a fact about the endpoint, not the variant
+        return RoutingProbeResult(
+            verdict=VERDICT_SKIPPED,
+            target_variant=target_variant,
+            errors=errors,
+            reason="no task produced a composer choice",
+        )
+
+    picked_by = [t for t, _ in usable if picks.get(t) == target_variant]
+    if picked_by:
+        return RoutingProbeResult(
+            verdict=VERDICT_PROVEN,
+            target_variant=target_variant,
+            picked_by=picked_by,
+            picks=picks,
+            errors=errors,
+            reason=f"{len(picked_by)}/{len(usable)} intended task(s) selected it",
+        )
+    return RoutingProbeResult(
+        verdict=VERDICT_UNPROVEN,
+        target_variant=target_variant,
+        picks=picks,
+        errors=errors,
+        reason=f"0/{len(usable)} intended task(s) selected it",
+        remedy=_REMEDY,
+    )
+
+
