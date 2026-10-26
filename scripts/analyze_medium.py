@@ -212,17 +212,27 @@ def evolution(bench: str) -> list[str]:
                 s += f" (val {pct(r['val'])})"
             if m == "b3" and isinstance(r.get("canary"), dict):
                 s += f" [canary: {r['canary'].get('reason', '')}]"
+            if r.get("train") is not None:  # B3: the iteration's train run (harness used, mean reward)
+                s += f" -> train run of {r.get('harness')}: {pct(r['train'])}"
+            if m == "b2" and r.get("accepted"):
+                s += f" {r['accepted']}"
             rounds.append(s)
         final = lg.get("final")
         if isinstance(final, dict):
-            final = final.get("global", final)
+            final = (f"{final.get('global')} (iteration {final.get('iteration')}, train {pct(final['train'])})"
+                     if final.get("train") is not None else final.get("global", final))
+        if m == "b3" and lg.get("iterations"):
+            h0_tr = lg["iterations"].get("0") or lg["iterations"].get(0)
+            if h0_tr:
+                L.append(f"- b3 iteration 0 (H0, K rolls) train reward: {pct(h0_tr['train_reward'])}")
         L.append(f"- {m}: " + "; ".join(rounds) + f" -> final: {final}")
     return L + [""]
 
 
 def main():
     out = ["# MEDIUM run: results", "",
-           "1 seed; 5 evolution rounds; 50 train tasks x 3 rolls; 30 val tasks; fixed 100-task test subsets. "
+           "1 seed; 5 evolution rounds; 50 train tasks x 3 rolls; 30 val tasks (B1 only; B2 promotes on gates, B3 "
+           "selects on train runs, as in their references); fixed 100-task test subsets. "
            "Model `inclusionai/ling-3.0-flash` for agent, proposers and the BrowseComp-Plus judge. "
            "Infra-error episodes count as failures. McNemar: exact, two-sided, on tasks where exactly one of the two "
            "methods succeeded.", ""]

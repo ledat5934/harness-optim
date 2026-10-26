@@ -69,7 +69,7 @@ REVIEW = _tidy(REVIEW)
 def composer_prompt(task: str, catalog: str) -> str:
     """Same wording as llm_dynamic._llm_pick, minus the helper block; example uses H0 slot names."""
     return (
-        "You assemble the module bundle for a terminal coding agent about to "
+        "You assemble the module bundle for an LLM agent about to "
         "attempt the task below. For EACH module type listed, pick the SINGLE "
         "implementation whose description best fits THIS task. Match the variant "
         "to what the task actually needs; when in doubt prefer the default. "

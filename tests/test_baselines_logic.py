@@ -127,7 +127,7 @@ def test_vendored_prompts_are_clean():
                 "{fail_block}", "{evidence_field}"):
         assert key in P.CONTRAST_INVESTIGATION, key
     assert "{diff_text}" in P.REVIEW and "{intent}" in P.REVIEW and "{trial_summaries}" in P.REVIEW
-    assert "terminal coding agent" in P.composer_prompt("t", "c")
+    assert "module bundle for an LLM agent" in P.composer_prompt("t", "c")  # reference wording minus "terminal coding"
     assert TA._module_lens("verification")["covers"]  # lens lookup used by the investigator
 
 

@@ -128,8 +128,9 @@ Không vendor: `online_evo.py` (điều phối cửa sổ), `k_roll.py`, `eviden
 - **Phán đoán cùng can thiệp** (`Judge.same_intervention`): mỗi đề xuất đang mở của cùng module là một lời gọi `b2:same:<bench>`. Không so sánh chéo module.
 - **Cổng làn** (bước 6): `static_gate` của biến thể mới, reviewer (`b2:review`), `reject_class="implementation"` kèm `repair_brief` được sửa một lần trong cùng vòng. Routing không nằm trong cổng: sau reviewer, `routing_diagnosis` chạy routing probe một lần; nếu composer không chọn biến thể ở tác vụ train nào, `description` của biến thể được viết lại đúng một lần (`b2:describe:<bench>`) rồi probe lại. Cả hai kết quả ghi vào `detail["routing"]`, và làn không bị loại vì kết quả đó.
 - **Hợp nhất** (bước 7): làn đầu được copy lên cây ứng viên. Làn thứ hai: `rebase_onto` lên cây đó; nếu `gates_after_rebase` không cho dùng lại review thì chạy lại review; luôn chạy lại `static_gate` trên cây đã rebase (routing không chạy lại vì chỉ là chẩn đoán). Chỉ khi cả hai qua, cây ứng viên mới được thay bằng cây đã rebase.
-- **Xác nhận** (bước 8): `find_regressions` chạy trên các roll validation. Hồi quy được ghi vào `confirm_regressions` và chặn thăng hạng.
-- **Thăng hạng cuối:** luật chung `C.better` trên val, cộng điều kiện không có hồi quy từ xác nhận (đây là sai lệch thuật toán, xem (c)).
+- **Niche-dedup gate** (bước 6, sau static gate và trước reviewer như `online_evo._gate_and_promote`): `niche_reject` dùng `niche.niche_key` đã vendor trên registry H0. Biến thể mới phải khai báo `niche` và không được trùng ô niche của biến thể khác cùng slot (implementer của ta không khai báo SUPERSEDES, nên trùng là bị loại). Prompt implementer liệt kê các ô niche hiện có.
+- **Thăng hạng** (bước 8): như mã gốc, chỉ theo cổng: smoke/static gate, niche-dedup, reviewer, sanity crash check (`n_check` tác vụ train, biến thể được ghim). Không so reward, không có val.
+- **Cửa sổ và bằng chứng** (bước 9): cửa sổ 1 dùng bằng chứng H0 chung (K=3 roll trên 50 tác vụ train). Mỗi cửa sổ sau học từ K=3 roll của **thư viện hiện tại** (composer chọn biến thể theo tác vụ) trên một lô `n_val // K` tác vụ train mới, luân phiên qua tập train. Ngân sách mỗi vòng giữ nguyên (`n_check + n_val` episode).
 - **Đóng đề xuất:** làn được thăng hạng → `promoted`. Làn không qua cổng → `rejected_proposal` nếu reviewer báo `proposal`, còn lại `rejected_implementation`.
 - **Lệnh gọi LLM:** tag `b2:<kind>:<bench>`, với kind ∈ `investigate`, `efficiency`, `route`, `same`, `implement`, `review`, `describe`, `composer`.
 
@@ -142,88 +143,71 @@ Không vendor: `online_evo.py` (điều phối cửa sổ), `k_roll.py`, `eviden
 - **Implementer luôn tạo biến thể mới (file sibling), kể cả với `modify`.** Thư viện chỉ được cộng thêm; `default.py` không bị sửa. Bản gốc sửa tệp tại chỗ với `modify`.
 - **Sửa lần 2 xảy ra trong cùng vòng.** Bản gốc thử lại làn ở cửa sổ sau (`retry=True`, `repair_brief`).
 - **Brief của implementer là bản viết lại.** `_brief_text` lấy nội dung của brief gốc (đề xuất và mọi finding hỗ trợ, kể cả finding không đọc được từ sổ). Phần hướng dẫn công cụ của brief gốc bị bỏ.
-- **Xác nhận gần như không kích hoạt ở smoke.** Mỗi tác vụ validation chỉ có một roll, nên không tác vụ nào có cả biến thể lẫn default; `paired_delta` trả `None`. Hàm vẫn được gọi và ghi kết quả.
-- **Chẩn đoán tối đa `MAX_DIAG=4` tác vụ mỗi vòng.**
-- **Efficiency investigator vẫn không tham gia chọn làn** (như cũ).
+- **Không chạy `confirm` (thống kê hồi quy ghép cặp).** Thăng hạng không còn dựa trên val, nên không có roll ghép cặp để xác nhận.
+- **Chẩn đoán tối đa `MAX_DIAG=10` tác vụ mỗi vòng** (mã gốc điều tra cả lô).
+- **Efficiency investigator không tham gia chọn làn** (như cũ).
 - **Không có helper subset** (`tool_helper`), vì H0 không có helper.
 - **Prompt riêng:** `IMPLEMENT`, `FIX`, `REPAIR`, `PROTO`, `SAME_PROMPT` là của chúng tôi. Prompt composer và prompt điều tra là bản cắt của mã gốc.
 - **`review_verdict` không có `accept_partial`:** giữ nguyên như mã gốc (chưa được bật).
-- **Thăng hạng có so reward.** Mã gốc thăng hạng chỉ theo cổng (smoke, action gate, niche-dedup, review, sanity crash) và nói rõ là KHÔNG so reward. Ở đây thêm `C.better` trên val (luật chọn chung của giao thức), nên một làn qua mọi cổng vẫn có thể bị giữ lại nếu val không cao hơn.
 - **Một module mỗi lineage → tất cả slot mỗi vòng.** Mã gốc chạy mỗi lineage với một `--locked-module`, rồi mới tích hợp chéo module. Ở đây mỗi vòng điều tra cả 5 slot, và composer chọn trên mọi slot.
-- **Giao thức memory không khớp runtime H0.** Prompt của B2 mô tả `memory.update(...)`, nhưng H0 không bao giờ gọi hàm này và mỗi episode dựng harness mới, nên biến thể memory dựa trên `update` không có tác dụng (lần MEDIUM: `memory/token_recall` được thăng hạng trên AppWorld nhưng `recall()` luôn rỗng). Chưa sửa prompt của B2.
-- **Thiếu action gate và niche-dedup gate.** Chưa port; hai cổng này của mã gốc không chạy.
-- **`history_pass_lookup=None`** khi gọi `route_batch`: router không dùng lịch sử pass của các cửa sổ trước (smoke chỉ có một cửa sổ).
-- **Efficiency investigator luôn chạy** với tác vụ pass-lãng-phí. Mã gốc chỉ chạy nó khi không tìm thấy culprit.
-- **Prompt composer vẫn ghi "terminal coding agent"** (văn bản gốc của `_llm_pick`), chưa đổi theo benchmark.
+- **Giao thức memory:** prompt `PROTO` nay ghi rõ mỗi episode dựng harness mới và `update()` không bao giờ được gọi (lần MEDIUM đầu, `memory/token_recall` được thăng hạng nhưng vô tác dụng vì điều này).
+- **Không có action gate.** Implementer của ta luôn thêm biến thể mới (kể cả với `modify`), nên kiểm tra `check_action` của mã gốc (modify phải sửa đúng mục tiêu) không áp dụng được.
+- **`history_pass_lookup=None`** khi gọi `route_batch`: router không dùng lịch sử pass của các cửa sổ trước.
+- **Efficiency investigator chỉ chạy khi không có culprit** (như mã gốc).
+- **Prompt composer:** "terminal coding agent" đổi thành "LLM agent"; phần còn lại là văn bản của `_llm_pick`.
 
 ---
 
 ## B3. MemoHarness (`baselines/b3_memo.py`, vendored tại `baselines/vendor/memoharness/`)
 
 ### (a) Mã gốc được tái sử dụng
-Nguồn: `third_party/MemoHarness/src/memoharness/`. Repo không có LICENSE; sao chép theo cho phép `<ngày / hình thức cấp phép>`.
+Nguồn: `third_party/MemoHarness/src/memoharness/` (commit `4c3da18`). Repo không có LICENSE; sao chép theo cho phép `<ngày / hình thức cấp phép>`.
 
-| file vendored | nguồn | thay đổi |
+| file vendored | nguồn | dùng gì |
 |---|---|---|
-| `vendor/memoharness/core/models.py` | `core/models.py` | copy nguyên văn: `PerCaseEntry`, `CaseFeatures`, `CaseStats`, `HarnessConfig` (`clone`, `delta_from`, `as_dict`), `Diagnosis`, `DiagnosticSignal`, `Trajectory`, `BenchmarkCase`, `GlobalPattern`, `make_minimal_config` |
-| `vendor/memoharness/bank/experience.py` | `bank/experience.py` | copy nguyên văn: `ExperienceBank` gồm `add_entry`, `should_distill`, `mark_distill_done`, `_check_consecutive_failure_trigger`, `retrieve_similar_cases_for_case`, `_case_similarity`, `save`, `load` |
-| `vendor/memoharness/llm/distiller.py` | `llm/distiller.py` | copy nguyên văn: `LLMDistiller.distill`, `_build_prompt`, `_parse_patterns`, `_SYSTEM_PROMPT`. Phần truyền tin (`_call_llm`) không đổi, nhưng client được thay bằng `ChatShim` (xem (b)) |
-| `vendor/memoharness/llm/retry.py` | `llm/retry.py` | copy nguyên văn: `call_with_retries` |
-| `vendor/memoharness/controllers/llm_controller.py` | `controllers/llm_controller.py` | copy nguyên văn: `LLMController` gồm `adapt_for_case`, `stabilize_config`, `_call_llm_for_config`, `_parse_config_response`, `_build_harness_config`, `_build_bank_summary`, `_build_change_outcome_signals`, `_build_case_summary`; các hằng `_CONFIG_ONLY_DOC`, `_DIMENSIONS_DOC`, `_DIMENSION_ACTION_PLAYBOOK_DOC` |
-| `vendor/memoharness/config/runtime.py` | `config/runtime.py` | copy nguyên văn. Lấy `HarnessSettings`: `controller_canary_min_reward_delta = -0.34`, `controller_canary_max_blocker_increase = 0` |
+| `core/models.py` | `core/models.py` | nguyên văn: `PerCaseEntry`, `CaseFeatures`, `HarnessConfig`, `Diagnosis`, `GlobalPattern`, `make_minimal_config` ... |
+| `bank/experience.py` | `bank/experience.py` | nguyên văn: `ExperienceBank` (`add_entry`, `should_distill`, `distill_global_patterns_llm`, `retrieve_similar_cases_for_case`); chỉ thay cặp embedding bằng BM25 |
+| `llm/distiller.py`, `llm/retry.py` | cùng tên | nguyên văn: `LLMDistiller` (client thay bằng `ChatShim`) |
+| `controllers/llm_controller.py` | cùng tên | nguyên văn: `LLMController` làm helper (`stabilize_config`, `_parse_config_response`, `_build_case_summary`, `_CONFIG_ONLY_DOC`, `_DIMENSIONS_DOC`) |
+| `controllers/local_cli.py` | cùng tên | nguyên văn: `ClaudeCodeController`/`CodexController`: `adapt_for_case` (prompt thích nghi của controller Codex), `_build_iteration_bank_summary`, `_build_task_history_matrix`, `_build_recent_failure_excerpt`, `_build_iteration_signal_summary`, `_run_direct_edit_harness_with_retry`, `_build_direct_edit_retry_prompt` |
+| `controllers/codex_bundle.py` | cùng tên | nguyên văn: `CodexBundleController` (`decide_next_harness`, `_build_iteration_bundle_prompt` gồm "Hard Constraints On What You May Write" và ngân sách bundle 9000 ký tự, `_load_live_harness_state`, snapshot/restore) |
+| `runtime/codex_bundle.py` | cùng tên | nguyên văn: bố cục bundle (`AGENTS.override.md`, `policy.json`, `.memoharness/playbook.md`, `.memoharness/memory.md`), `refresh_codex_bundle_support_docs`, render memory/playbook từ mẫu chưng cất |
+| `config/runtime.py` | cùng tên | nguyên văn: ngưỡng canary `-0.34`, `0` |
 
-Các file `__init__.py` của gói vendored chỉ là dòng ghi chú, không copy vì bản gốc re-export mã Harbor (`controllers/__init__.py` import `codex_bundle`).
-
-Các phần được giữ nguyên trong bước chạy: ngân hàng hai lớp (mục theo ca + mẫu toàn cục), trigger chưng cất theo `should_distill(every_n_entries=5)` và theo `min_consecutive_failures=3` (kích hoạt ngay khi `add_entry` trả về `True`), tối đa `max_patterns=3`, `adapt_for_case` (một lệnh gọi, chỉ đổi cấu hình khi bằng chứng ca tương tự đủ), `stabilize_config`, `delta_from`, `_CONFIG_ONLY_DOC`.
+Pipeline giữ đúng `harbor/loop.py::run()` với controller duy nhất mã gốc cho phép (`controller="codex"`):
+1. Mỗi vòng, harness hiện tại chạy trên tập train; kết quả (bỏ blocker) vào ngân hàng; trigger chưng cất (`add_entry` trả `True` khi một ca thất bại 3 lần liên tiếp, hoặc `should_distill(5)`); mẫu được **nối thêm** (`distill_global_patterns_llm`) và `memory.md`/`playbook.md`/`policy.json` của bundle sống được render lại (`refresh_codex_bundle_support_docs`).
+2. Controller viết lại bundle từ bằng chứng (prompt `_build_iteration_bundle_prompt` của mã gốc), có cổng công bố và tối đa 3 lần thử lại.
+3. Canary so với kết quả của harness hiện tại trên cùng tác vụ (ba luật của `_evaluate_candidate_with_canary`); không qua thì khôi phục bundle (`restore_codex_bundle`).
+4. Chọn harness: vòng có reward train trung bình cao nhất, hòa thì ít token hơn ("correctness-first selection" của README). Không có val.
+5. Lúc test: ngân hàng đóng băng; mỗi ca gọi `adapt_for_case` (chỉ đổi cấu hình D1–D6, dựa trên ca tương tự), rồi bundle được render với cấu hình đã thích nghi (`_apply_eval_config`).
 
 ### (b) Sửa hạ tầng
-- **Truyền tin:** `ChatShim` cung cấp giao diện `chat.completions.create(...)` mà mã gốc gọi, và chuyển sang `client.chat` của `llm.py` với `fallback_no_reasoning=True`. Tag: `b3:controller:<bench>`, `b3:distill:<bench>`, `b3:diagnose:<bench>`.
-  - Bốn từ khoá mà các chỗ gọi gốc truyền là `model`, `messages`, `temperature`, `max_completion_tokens`. `temperature` được chuyển tiếp (controller dùng 0.2, distiller 0.0). `max_completion_tokens` đổi thành `max_tokens`. `model` bị bỏ qua vì `llm.py` chọn model.
-  - Từ khoá khác (ví dụ `response_format`, `seed`, `top_p`) làm `TypeError` thay vì bị bỏ im lặng. Trước lần sửa này `temperature` bị bỏ, nên controller chạy ở 0.0; test `test_chatshim_forwards_reference_kwargs` chốt hành vi này.
-  - Đối tượng trả về chỉ có `choices[0].message.content`, đủ cho mọi chỗ đọc của mã gốc. Không có `usage` hay `finish_reason`.
-  - Nhánh `client.responses` (Responses API) của `distiller.py` không được dùng: `_should_use_responses_api` trả `False` vì `api_base` không phải host của OpenAI, nên chỉ đường Chat Completions chạy.
-- **`ApiModelConfig`** dùng `api_base` của OpenRouter và `connection_retry_limit=0`, để `_should_use_responses_api` chọn Chat Completions và để việc thử lại nằm ở `llm.py`.
-- **Embedding → BM25** (`BM25ExperienceBank`): ghi đè hai hàm `_embed_text` và `_cosine_similarity`. Điểm là BM25 của truy vấn trên tài liệu, chia cho tự điểm của truy vấn, nên nằm trong [0, 1] như cosine thay thế. Corpus là chỉ dẫn các mục trong ngân hàng. `_case_similarity` và `retrieve_similar_cases_for_case` không đổi (cùng cách cộng điểm đặc trưng và top-k).
-- **Đóng băng:** `add_entry` ghi đè để ném `RuntimeError` khi `frozen`; `bank.save` trước lần kiểm thử; kiểm tra số mục không đổi sau lần kiểm thử.
-- **Ánh xạ D1–D6** (bảng dưới). `base_config` lấy `stabilize_config(make_minimal_config())`, sau đó **xóa chuỗi chiến lược** (H0 không có) và đặt lại các số đã ánh xạ về giá trị H0 (`temperature=0.0`, `max_tokens=2048`, `history_keep=30`). Nếu không, `make_minimal_config` đặt `max_tokens=256` và `history_keep=0`, và `stabilize_config` thêm chuỗi chiến lược: đều làm đổi H0.
-- **Canary** (`canary_metrics`, `canary_check`): port của `_result_metrics` và `_evaluate_candidate_with_canary` (`harbor/loop.py`). Số liệu tính theo tác vụ: H0 có K=3 roll mỗi tác vụ, canary có 1, nên reward của một tác vụ là trung bình các roll không lỗi, và tác vụ "thành công" khi reward ≥ 0,5. Blocker bị loại khỏi reward và success rate. Ba luật từ chối theo đúng thứ tự gốc: `reward_delta < -0.34`; `blocker_increase > 0`; `success_delta < -0.2` và `reward_delta <= 0` (`CANARY_MAX_SUCCESS_DROP`). Với reward 0/1, luật thứ ba là luật chặt nhất: ngưỡng thực tế là -0,2, không phải -0,34. Không có tác vụ học được nào (toàn blocker) → từ chối.
-- **Blocker:** tác vụ mà mọi roll đều có trường `error` (lỗi hạ tầng), tương ứng "external blocker" của MemoHarness.
-- **Bằng chứng train:** toàn bộ K=3 roll mỗi tác vụ được đưa vào ngân hàng (iteration 0), không còn chỉ roll cuối. Episode lỗi hạ tầng không vào ngân hàng (`_filter_learning_results`). Rollout canary cũng không vào ngân hàng: mã gốc chỉ nạp kết quả chạy toàn bộ train.
-- **Test-time adaptation:** cờ `TEST_TIME_CASE_ADAPTATION = True` (mặc định). Khi bật, mỗi tác vụ val và test gọi `adapt_for_case`; khi tắt, dùng cấu hình toàn cục đã chọn. Cấu hình thích nghi được `clamp` như đề xuất toàn cục; giá trị không phải số lấy từ cấu hình gốc. Nếu `adapt_for_case` lỗi, tác vụ chạy với cấu hình toàn cục (lỗi ghi vào `adaptations`). Riêng `BudgetExceeded`, kể cả khi bị `call_with_retries` bọc trong `RuntimeError`, vẫn được ném ra để dừng cả lần chạy.
-
-**Bảng ánh xạ D1–D6 → H0.** Chỉ các núm H0 có thể biểu diễn được áp dụng; các khóa còn lại của schema gốc vẫn nằm trong cấu hình (để controller thấy trong prompt) nhưng không tác động gì.
-
-| khóa (schema gốc) | nghĩa trong MemoHarness | tác động lên H0 |
-|---|---|---|
-| `D1.strategy` | văn bản chiến lược lắp ráp ngữ cảnh | `context_mgmt.extra_system` (gộp chung với các chiến lược khác) |
-| `D2.strategy` | văn bản chiến lược tương tác tool | `context_mgmt.extra_system` |
-| `D2.tool_access`, `tool_protocol`, `retrieval_mode`, `top_k` | bề mặt tool của Harbor | không áp dụng: H0 có tool cố định |
-| `D3.temperature` | nhiệt độ sinh | `agent_loop.temperature` (giới hạn [0, 1]) |
-| `D3.max_tokens` | giới hạn token mỗi lệnh gọi | `agent_loop.max_tokens` (giới hạn [256, 4096]) |
-| `D3.top_p`, `candidate_count` | | không áp dụng |
-| `D4.strategy` | văn bản điều phối | `context_mgmt.extra_system` |
-| `D4.workflow`, `stop_rule` | luồng agent của Harbor | không áp dụng: vòng lặp H0 cố định |
-| `D5.history_keep` | số lượt gần nhất giữ trong ngữ cảnh | `context_mgmt.keep_turns` (giới hạn [4, 60]) |
-| `D5.memory_policy` | | không áp dụng |
-| `D5.strategy` | văn bản quản lý bộ nhớ | `context_mgmt.extra_system` |
-| `D6.strategy` | văn bản xử lý đầu ra | `context_mgmt.extra_system` |
-| `D6.postprocess`, `validator`, `fallback` | | không áp dụng |
-| slot `memory` | (không nằm trong schema) | `ExperienceMemory`: luôn bật; truy hồi mẫu toàn cục và ca thất bại tương tự |
+- **Truyền tin của controller** (`BundleController`, kế thừa `CodexBundleController`): thay Codex CLI (`_run_controller_command`) bằng một lệnh gọi `client.chat` (tag `b3:controller:<bench>`, thích nghi: `b3:adapt:<bench>`). Controller không có tool, nên các tệp bundle được đưa nguyên văn vào prompt (`_on_disk_state_doc`) và model trả về các khối `### FILE:` cho tệp nó viết lại; các khối này được ghi vào bundle trước khi loader gốc đọc lại. Các đoạn prompt mô tả workspace CLI được thay: `_project_brief_doc` (bundle cho agent ReAct trên benchmark, và **chỉ `D3.temperature`, `D3.max_tokens`, `D5.history_keep` đổi tham số chạy thật**), `_controller_command_scope_doc` (không có tool, định dạng FILE), `_bundle_inspection_doc`, `_targeted_supporting_evidence_doc`, `_direct_edit_finish_doc` (cổng công bố do bên gọi chạy).
+- **Cổng công bố** (`publish_gate`): các kiểm tra mà "Required Finish State" của mã gốc yêu cầu Codex tự chạy (policy.json là JSON hợp lệ có `config` với D1–D6, AGENTS.override.md không rỗng, ngân sách 9000 ký tự) do bên gọi chạy; trượt → `BundleInvalid` → prompt thử lại của mã gốc.
+- **Bundle → H0:** bốn tệp bundle được chèn vào system prompt (`context_mgmt.extra_system`), như agent Codex đọc chúng từ workspace. `D3.temperature`, `D3.max_tokens`, `D5.history_keep` ánh xạ sang `agent_loop.temperature`, `agent_loop.max_tokens`, `context_mgmt.keep_turns` (giới hạn [0,1], [256,4096], [4,60]).
+- **Cấu hình gốc mô tả H0:** `base_config` đặt các số về giá trị của H0 và các khóa mô tả về đúng H0 (`tool_access=benchmark_tools`, `workflow=react_loop`, `stop_rule=env_done_or_accepted_finish_or_max_steps`, `memory_policy=sliding_window`, `validator=verifier_slot`) thay vì mặc định của Harbor (bash, `stop_rule=immediate`), vốn khiến chẩn đoán và chưng cất "sửa" các núm không tồn tại.
+- **Embedding → BM25** (`BM25ExperienceBank`), **ChatShim** cho distiller, **đóng băng** ngân hàng trước test: như trước.
+- **Canary** (`canary_metrics`, `canary_check`): số liệu theo tác vụ (trung bình các roll không lỗi; thành công khi ≥ 0,5), blocker bị loại khỏi reward; ba luật theo thứ tự gốc. Tham chiếu là kết quả của harness hiện tại trên cùng tác vụ canary (H0: cả K roll).
+- **Ngân sách:** mỗi vòng `n_check` episode canary + `n_val` episode chạy train (30 tác vụ train đầu, mỗi tác vụ 1 roll), bằng ngân sách mỗi vòng của B1/B2.
+- **Chẩn đoán:** mỗi episode thất bại được một lệnh gọi LLM gán `primary_dim` và `analysis` (theo lô 10 ca; mã gốc dùng `diagnostics: "llm"`), mặc định D4/D1 như mã gốc.
 
 ### (c) Sai lệch còn lại
-- **Controller chỉ đổi bề mặt cấu hình D1–D6.** Controller duy nhất mà mã gốc cho phép (`HarnessSettings.controller` chỉ nhận `"codex"`) là `CodexBundleController`: Codex CLI sửa trực tiếp các tệp bundle (`AGENTS.override.md`, `policy.json`, `.memoharness/playbook.md`, `.memoharness/memory.md`) rồi chạy cổng kiểm tra. `LLMController` gốc thì sinh lại toàn bộ mã `HarnessImpl` (`decide_next_harness`, `generate_initial_harness`). `_CONFIG_ONLY_DOC` chỉ được mã gốc dùng trong `adapt_for_case` (thích nghi lúc test). Đây là sai lệch lớn nhất; lần chạy MEDIUM cho thấy hệ quả (`docs/medium_results.md`, mục B3). Ở đây `ConfigController.propose` chỉ dùng `_CONFIG_ONLY_DOC` và `_call_llm_for_config`. Phần còn lại của harness không đổi (H0 là cố định, hợp đồng slot được giữ).
-- **`ConfigController.propose` là mã tự viết.** `baselines/b3_memo.py` không copy hàm này. Hàm gốc tương ứng là `LLMController.decide_next_config` (`third_party/MemoHarness/src/memoharness/controllers/llm_controller.py:257`), và nó gọi `decide_next_harness` để sinh lại toàn bộ mã. `propose` tự ghép prompt cấu hình từ các khối văn bản gốc (`_DIMENSIONS_DOC`, `_DIMENSION_ACTION_PLAYBOOK_DOC`, `_CONFIG_ONLY_DOC`), rồi gọi `_call_llm_for_config` và `_build_harness_config` đã vendor. Vì `b3_memo.py` tính 0 dòng copy, dòng của `propose` không được tính vào tỉ lệ copy của B3, dù logic của nó dựa trên mã gốc.
-- **Chỉ một phần khóa D được áp dụng** (bảng trên). Phần lớn tiềm năng cấu hình của MemoHarness (tool, luồng, xác thực đầu ra) không có tương ứng trong H0.
-- **Chẩn đoán:** trong MemoHarness, `primary_dim` do quy tắc của `harbor/loop.py::_classify_trial_failure` xác định từ ngoại lệ của Harbor (rule-based, không có prompt LLM). Chúng tôi không có ngoại lệ Harbor, nên dùng một lệnh gọi LLM với văn bản chiều `_DIMENSIONS_DOC` của mã gốc. Mặc định khi thất bại là `D4`, khi thành công là `D1` (cùng quy tắc mặc định của mã gốc).
-- **Đặc trưng ca được suy ra tối thiểu:** `input_length`, `complexity_estimate` (độ dài chỉ dẫn / 2000), `domain` = tên benchmark, `requires_external_knowledge` = (benchmark là BrowseComp-Plus). Mã gốc có đặc trưng do LLM gán cho từng ca; không có bước đó ở đây.
-- **Canary:** `cfg["n_check"]` tác vụ thay vì 6 của MemoHarness (giữ kích thước giao thức chung). Tham chiếu luôn là H0 (mã gốc dùng kết quả train của harness hiện hành trong vòng đó).
-- **Chọn harness trên val.** Mã gốc chọn harness tốt nhất theo reward của các vòng chạy train, không có val. Ở đây dùng luật chung `C.better` trên val.
-- **Ngân hàng chỉ có iteration 0 khi `rounds > 1`.** Mã gốc chạy lại toàn bộ train mỗi vòng và nạp kết quả; ở đây chỉ có rollout H0 ban đầu (canary không được nạp), nên các vòng sau không có bằng chứng mới.
-- **Quy mô:** một vòng tìm kiếm (bài báo: 10 vòng).
-- **Mẫu toàn cục bị thay thế, không cộng dồn:** `distill` của mã gốc thêm vào `bank.global_patterns`; ở đây danh sách được thay bằng kết quả mới nhất, cắt còn `max_patterns=3`. Lý do: giữ bộ nhớ không vượt 3 mẫu trong suốt các vòng.
-- **Lỗi của distiller:** `call_with_retries` của mã gốc bao lỗi thành `RuntimeError`, nên ngân sách hết sẽ dừng cả lần chạy. Đây là hành vi mong muốn, nhưng khác với các baseline khác (vốn ném `BudgetExceeded`).
-- **Trường `ExperienceMemory`** (memory slot) là phần thêm vào của chúng tôi, không thuộc schema D1–D6. Được bật ở mọi ứng viên.
-- **Cấu hình được clamp sau `_build_harness_config`:** mã gốc không giới hạn khoảng giá trị; chúng tôi giới hạn các số H0 áp dụng được, để một đề xuất hỏng không phá harness.
+- **Controller một lượt, không tool.** Codex CLI trong mã gốc tự đọc tệp, chạy lệnh kiểm tra và sửa nhiều lượt; ở đây là một lệnh gọi (cộng tối đa 2 lần thử lại khi trượt cổng công bố).
+- **Agent không phải Codex.** Bundle điều khiển agent ReAct cố định của H0 qua system prompt; chỉ 3 tham số số có tác dụng runtime. Các khóa D1–D6 khác chỉ tác động qua văn bản.
+- **Tập train mỗi vòng là 30 tác vụ** (mã gốc: toàn bộ tập train), để giữ ngân sách chung; vòng 0 là bằng chứng H0 chung trên 50 tác vụ × 3 roll.
+- **Canary `n_check` = 2 tác vụ** (mã gốc: 6).
+- **Đặc trưng ca tối thiểu** (độ dài chỉ dẫn, domain = benchmark).
+- **Quy mô:** 5 vòng (bài báo: 10).
+- **Bản port trước đây (chỉ đổi cấu hình, chọn trên val)** được giữ ở `results/medium/b3_configonly/` để so sánh; xem `docs/medium_results.md`.
+
+**Bảng ánh xạ D1–D6 → H0** (giá trị có tác dụng runtime):
+
+| khóa | tác động lên H0 |
+|---|---|
+| `D3.temperature` | `agent_loop.temperature` (giới hạn [0, 1]) |
+| `D3.max_tokens` | `agent_loop.max_tokens` (giới hạn [256, 4096]) |
+| `D5.history_keep` | `context_mgmt.keep_turns` (giới hạn [4, 60]) |
+| mọi khóa khác, mọi `strategy`, AGENTS.override.md, playbook.md, memory.md | chỉ qua system prompt (`context_mgmt.extra_system`) |
 
 ---
 
