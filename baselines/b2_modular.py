@@ -302,9 +302,10 @@ class Judge:
         return False, "not reachable in B2: no retired H0 variant"
 
 
-def route_and_cluster(client, bench: str, ws: Path, step: str, recs: list[BL.FindingRecord], reg, rd: dict) -> None:
+def route_and_cluster(client, bench: str, ws: Path, step: str, recs: list[BL.FindingRecord], reg, rd: dict,
+                      lens_of: dict[str, str] | None = None) -> None:
     """Steps 3-4. Non-fixable culprits stay in the backlog (findings.jsonl) and are not routed."""
-    judge = Judge(client, bench, {r.finding_id: r.lens for r in recs})
+    judge = Judge(client, bench, lens_of if lens_of is not None else {r.finding_id: r.lens for r in recs})
     entries = _entries(reg)
     rows = []
     for rec in recs:
@@ -696,6 +697,7 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
     train_ids = tasks["train"][1]
     per_batch = max(1, cfg["n_val"] // cfg["k"])  # the shared per-round budget: n_val episodes = per_batch tasks x K
     batches: list[list[str]] = []
+    lens_of: dict[str, str] = {}  # finding id -> slot, over every round's backlog rows
 
     def next_evidence(ri: int) -> list[dict]:
         """Reference windows: the next window learns from K rolls of the CURRENT library on a fresh batch of train
@@ -753,11 +755,11 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
                    for s in SLOTS for f in findings.get(s, [])]
         recs = BL.ingest_step(ws, {"step": step, "findings": payload})
         rd["backlog_rows"] = len(recs)
-        lens_of = {r.finding_id: r.lens for r in recs}
+        lens_of.update({r.finding_id: r.lens for r in recs})  # cumulative: open proposals keep findings of earlier rounds
         reg = load_registry(inc_root)
 
         # step 4: route and cluster the fixable culprits into proposals
-        route_and_cluster(client, bench, ws, step, recs, reg, rd)
+        route_and_cluster(client, bench, ws, step, recs, reg, rd, lens_of)
         reflected = {r.task for r in recs if r.is_culprit and r.raw_finding.get("fixable_now")}
 
         # step 5: at most one proposal per lane
