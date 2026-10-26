@@ -1,6 +1,6 @@
 # Kết quả lần chạy MEDIUM: pipeline, số liệu và nhận xét từng baseline
 
-Ngày chạy: 2026-10-25 → 2026-10-26. Mã được chốt ở commit `82eaa0d`; trong lần chạy này không sửa gì thêm, chỉ chạy và ghi lại các lỗi phát hiện được (mục 5). Số liệu tính bằng `python scripts/analyze_medium.py` từ `results/medium/*.jsonl`; bảng đầy đủ ở `results/medium/analysis.md`. Model `inclusionai/ling-3.0-flash` được dùng cho agent, proposer và judge của BrowseComp-Plus. **Tổng chi phí: $TOTAL_USD** (gồm cả các lượt chạy đã hủy).
+Ngày chạy: 2026-10-25 → 2026-10-26. Mã được chốt ở commit `82eaa0d`; trong lần chạy này không sửa gì thêm, chỉ chạy và ghi lại các lỗi phát hiện được (mục 5). Số liệu tính bằng `python scripts/analyze_medium.py` từ `results/medium/*.jsonl`; bảng đầy đủ ở `results/medium/analysis.md`. Model `inclusionai/ling-3.0-flash` được dùng cho agent, proposer và judge của BrowseComp-Plus. **Tổng chi phí: $15,92** (gồm cả các lượt chạy đã hủy).
 
 **Giao thức MEDIUM:**
 - 1 seed, 5 vòng tiến hóa;
@@ -59,7 +59,7 @@ Cả ba baseline cùng xuất phát từ harness H0: 5 slot (`agent_loop`, `cont
 |---|---|---|---|---|
 | ALFWorld (100) | 73,0% | **86,0%** (+18/−5, p = 0,011) | 60,0% (+8/−21, p = 0,024) | 65,0% (+9/−17, p = 0,17) |
 | BrowseComp-Plus (100) | 17,0% | 21,0% (+8/−4, p = 0,39) ¹ | **23,0%** (+14/−8, p = 0,29) | 18,0% (+7/−6, p = 1,0) |
-| AppWorld TGC (99) | 6,1% | 6,1% (+2/−2, p = 1,0) | B2_AW | **8,1%** (+2/−0, p = 0,5) |
+| AppWorld TGC (99) | 6,1% | 6,1% (+2/−2, p = 1,0) | 2,0% (+0/−4, p = 0,13) | **8,1%** (+2/−0, p = 0,5) |
 
 ¹ Harness cuối của B1 trên BrowseComp-Plus có hành vi y hệt H0 (lỗi 1, mục 5). 21% chính là kết quả của một lần chạy lại H0: bản chạy lại H0 trong `aborted_unselected/` cũng đạt 21%.
 
@@ -69,7 +69,7 @@ Chi phí mỗi episode test (USD) và số token:
 |---|---|---|---|---|
 | ALFWorld | 0,00066 (62,6k) | **0,00054** (51,4k) | 0,00081 (69,2k) | 0,00111 (140,9k) |
 | BrowseComp-Plus | 0,00471 (526k) | **0,00437** (505k) | 0,00482 (481k) | 0,00699 (478k) |
-| AppWorld | 0,00198 (186k) | **0,00190** (185k) | B2_AW_COST | 0,00327 (275k) |
+| AppWorld | 0,00198 (186k) | **0,00190** (185k) | 0,00257 (218k) | 0,00327 (275k) |
 
 Chi phí tiến hóa (proposer + episode train/val/canary), tính bằng USD:
 
@@ -77,16 +77,16 @@ Chi phí tiến hóa (proposer + episode train/val/canary), tính bằng USD:
 |---|---|---|---|
 | ALFWorld | 0,05 + 0,15 | 0,14 + 0,08 | 0,07 + 0,14 |
 | BrowseComp-Plus | 0,08 + 0,42 | 0,21 + 0,56 | 0,12 + 0,75 |
-| AppWorld | 0,06 + 0,19 | B2_AW_EVO | 0,10 + 0,39 |
+| AppWorld | 0,06 + 0,19 | 0,18 + 0,28 | 0,10 + 0,39 |
 
 **AppWorld chi tiết:**
 
 | | H0 | B1 | B2 | B3 |
 |---|---|---|---|---|
-| TGC | 6,1% | 6,1% | B2_AW | 8,1% |
-| SGC (33 scenario) | 6,1% | 3,0% | B2_SGC | 6,1% |
-| tỉ lệ unit test đạt trung bình | 50,1% | 52,9% | B2_UT | **58,3%** |
-| có gọi `task_completed` | 54/99 | 55/99 | B2_TC | **68/99** |
+| TGC | 6,1% | 6,1% | 2,0% | 8,1% |
+| SGC (33 scenario) | 6,1% | 3,0% | 0,0% | 6,1% |
+| tỉ lệ unit test đạt trung bình | 50,1% | 52,9% | 39,0% | **58,3%** |
+| có gọi `task_completed` | 54/99 | 55/99 | 35/99 | **68/99** |
 
 **ALFWorld theo loại tác vụ** (số đúng / tổng):
 
@@ -117,7 +117,7 @@ Chênh lệch tổng ±4 điểm vì thế là nhiễu thuần túy. Kết quả
 |---|---|---|---|---|
 | ALFWorld | 70% | 60% | 81% | 65% |
 | BrowseComp-Plus | 15% | 23% | 18% | 18% |
-| AppWorld | 4,0% | B2_AW | 5,8% (69 tác vụ) | 8,1% |
+| AppWorld | 4,0% | 2,0% | 5,8% (69 tác vụ) | 8,1% |
 
 - **B2 cũ:** các biến thể được thăng hạng nhờ val nhưng composer gần như không chọn chúng, nên harness cuối thực chất là H0.
 - **B3 cũ:** chỉ tìm kiếm trên D1–D6 và không viết bundle. ALFWorld 81% của nó (ít token: 52k mỗi episode) tốt hơn bản bundle (65%, 141k mỗi episode). Tuy vậy cả hai chênh lệch với H0 đều không có ý nghĩa thống kê.
@@ -134,7 +134,7 @@ Chênh lệch tổng ±4 điểm vì thế là nhiễu thuần túy. Kết quả
   - **B3:** canary chấp nhận cả 5 vòng. Train theo vòng là 20, 27, 20, 20, 17%; chọn r2 (chiến lược "chia câu hỏi thành câu hỏi con, kiểm chứng từng ý").
 - **AppWorld**
   - **B1:** r1 crash ở smoke (HTTP 400 `tool_call_id`); r2, r3, r5 lần lượt thành incumbent mới (val 6,7 → 10 → 13,3%); r4 bị loại ở validate. Harness cuối chọn bộ `auth_recovery` cho `agent_loop`, `tool_policy` và `verifier`: phát hiện lỗi 401/422 rồi chèn lời gọi `supervisor.show_account_passwords`. Val tăng nhưng test vẫn đúng bằng H0: 6/99.
-  - **B2:** B2_AW_EVO_TEXT
+  - **B2:** r1 thăng hạng `verifier/complete_album_coverage`, nhưng composer không chọn nó cho tác vụ test nào; r2 không có biến thể nào qua cổng; r3 crash ở bước kiểm tra chạy (`agent_loop/token_propagating`, `memory/persistent`); r4 thăng hạng `agent_loop/repetition_breaker`; r5 ghi đè `repetition_breaker` (lỗi 2) và thêm `agent_loop/todo_error_aware`. Ở test, composer chọn `todo_error_aware` cho 46/99 tác vụ và `repetition_breaker` cho 5/99. Kết quả 2/99, kém H0 4 tác vụ; tỉ lệ unit test đạt và số lần gọi `task_completed` đều giảm.
   - **B3:** canary chấp nhận cả 5 vòng; train 10, 13, 10, 17, 23%; chọn r5. Trên test B3 tốt nhất ở mọi chỉ số phụ (unit test đạt 58%, gọi `task_completed` 68/99), nhưng TGC chỉ hơn H0 2 tác vụ.
 
 ## 4. Nhận xét từng baseline
@@ -158,6 +158,7 @@ Chênh lệch tổng ±4 điểm vì thế là nhiễu thuần túy. Kết quả
 
 **Điểm yếu**
 - Thăng hạng chỉ dựa vào cổng, không so reward, nên biến thể có hại vẫn vào thư viện. Ví dụ ALFWorld: `goal_satisfied` được chọn cho 54 tác vụ và trên nhóm đó kém H0 6 tác vụ; tổng 60% so với 73% (p = 0,024). Một phần chênh lệch là nhiễu (xem nhóm chạy `default`), nhưng không có cơ chế nào loại biến thể này.
+- AppWorld: kết quả kém nhất (2/99). `todo_error_aware` được chọn cho 46 tác vụ, nhưng tỉ lệ unit test đạt giảm từ 50% xuống 39%. Còn biến thể verifier thăng hạng ở r1 thì không bao giờ được chọn.
 - Chất lượng phụ thuộc composer: nó chỉ đọc mô tả, không có phản hồi về việc biến thể có giúp hay không.
 - Tốn nhất ở phía proposer ($0,14–0,21 mỗi benchmark) vì có nhiều lời gọi LLM mỗi vòng. Nhiều vòng không ra gì ("no open proposal", "no variant passed").
 
@@ -186,7 +187,7 @@ Chênh lệch tổng ±4 điểm vì thế là nhiễu thuần túy. Kết quả
    - tên mới đăng ký ngay trong `default.py` (`context_mgmt/context_summary`), hoặc tùy chọn mới có mặc định tắt (`compress_dropped=False`).
 
    Hệ quả: harness cuối của B1 trên BrowseComp-Plus (r2) chạy y hệt H0.
-2. **B2, implementer có thể ghi đè biến thể đã thăng hạng nếu dùng lại tên.** Regex cho phép chỉ loại `default.py`, còn `niche_reject` bỏ qua biến thể cùng tên. Đã thấy trên BrowseComp-Plus: `verifier/completeness.py` bị thay giữa r2 và r3.
+2. **B2, implementer có thể ghi đè biến thể đã thăng hạng nếu dùng lại tên.** Regex cho phép chỉ loại `default.py`, còn `niche_reject` bỏ qua biến thể cùng tên. Đã thấy hai lần: `verifier/completeness.py` trên BrowseComp-Plus (r2 → r3) và `agent_loop/repetition_breaker.py` trên AppWorld (r4 → r5).
 3. **B2 thiếu bước `confirm` và cổng hành động** so với mã gốc. Implementer chỉ thêm biến thể, nên ít ảnh hưởng, nhưng là một khác biệt.
 4. **Crash của ứng viên bị cổng bắt** (HTTP 400 `tool_call_id` ở B1 AppWorld r1; "too many values to unpack" ở B1 BrowseComp-Plus r3; B2 BrowseComp-Plus r4 crash ở bước kiểm tra chạy). Đây là lỗi của ứng viên do LLM viết, không phải lỗi framework; cổng hoạt động đúng.
 5. **B3, `adapt_for_case` đôi khi nhận JSON hỏng** ("LLM config response JSON parse failed", 20 ca tổng cộng) và rơi về cấu hình chung. Đây là hành vi của mã gốc, không phải lỗi port. Việc số token tăng mạnh khi thích nghi theo ca cũng là hành vi gốc.

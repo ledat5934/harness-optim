@@ -40,14 +40,14 @@ Test subset: 99 tasks (`benchmarks/appworld/test100.json`).
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | h0 | 99 | 6.1% (6) | 2.8%–12.6% | – | – | 185,585 | 0.00198 | 0.03261 | 0 | 0.000 | 0.405 |
 | b1 | 99 | 6.1% (6) | 2.8%–12.6% | +2 / −2 | 1.000 | 185,322 | 0.00190 | 0.03129 | 1 | 0.064 | 0.185 |
-| b2 | 79 | 2.5% (2) | 0.7%–8.8% | +0 / −1 | 1.000 | 209,436 | 0.00244 | 0.09623 | 0 | 0.182 | 0.280 |
+| b2 | 99 | 2.0% (2) | 0.6%–7.1% | +0 / −4 | 0.125 | 218,083 | 0.00257 | 0.12715 | 0 | 0.182 | 0.280 |
 | b3 | 99 | 8.1% (8) | 4.2%–15.1% | +2 / −0 | 0.500 | 274,895 | 0.00327 | 0.04051 | 0 | 0.098 | 0.393 |
 
 | method | TGC | SGC | mean fraction of unit tests passed | task_completed called |
 |---|---|---|---|---|
 | h0 | 6.1% | 6.1% (33 scenarios) | 50.1% | 54/99 |
 | b1 | 6.1% | 3.0% (33 scenarios) | 52.9% | 55/99 |
-| b2 | 2.5% | 0.0% (27 scenarios) | 40.4% | 32/79 |
+| b2 | 2.0% | 0.0% (33 scenarios) | 39.0% | 35/99 |
 | b3 | 8.1% | 6.1% (33 scenarios) | 58.3% | 68/99 |
 
 Run-to-run noise: a second run of a behaviourally identical harness (`results/medium/aborted_unselected/b1_appworld.jsonl`) on the same 66 tasks: 4.5% vs H0 4.5% (0 tasks flip to pass, 0 to fail).
@@ -56,7 +56,7 @@ Evolution (per round):
 
 - H0 val: 3.3% (30 tasks)
 - b1: r1: smoke crash; r2: new incumbent (val 6.7%); r3: new incumbent (val 10.0%); r4: rejected at validation; r5: new incumbent (val 13.3%) -> final: /home/user/harness-optim/results/medium/runs/b1/appworld/candidates/r5
-- b2: (no log.json, run stopped early) val per candidate: 
+- b2: r1: promoted [['verifier', 'complete_album_coverage']]; r2: no variant passed the gates; r3: execution check crashed [['agent_loop', 'token_propagating'], ['memory', 'persistent']]; r4: promoted [['agent_loop', 'repetition_breaker']]; r5: promoted [['agent_loop', 'repetition_breaker'], ['agent_loop', 'todo_error_aware']] -> final: /home/user/harness-optim/results/medium/runs/b2/appworld/candidates/r5
 - b3 iteration 0 (H0, K rolls) train reward: 12.2%
 - b3: r1: passed canary [canary: accepted by canary gate] -> train run of r1: 10.0%; r2: passed canary [canary: accepted by canary gate] -> train run of r2: 13.3%; r3: passed canary [canary: accepted by canary gate] -> train run of r3: 10.0%; r4: passed canary [canary: accepted by canary gate] -> train run of r4: 16.7%; r5: passed canary [canary: accepted by canary gate] -> train run of r5: 23.3% -> final: r5 (iteration 5, train 23.3%)
 
@@ -88,4 +88,4 @@ Evolution (per round):
 - b3 iteration 0 (H0, K rolls) train reward: 11.1%
 - b3: r1: passed canary [canary: accepted by canary gate] -> train run of r1: 20.0%; r2: passed canary [canary: accepted by canary gate] -> train run of r2: 26.7%; r3: passed canary [canary: accepted by canary gate] -> train run of r3: 20.0%; r4: passed canary [canary: accepted by canary gate] -> train run of r4: 20.0%; r5: passed canary [canary: accepted by canary gate] -> train run of r5: 16.7% -> final: r2 (iteration 2, train 26.7%)
 
-Total spend of the MEDIUM run: $15.29 (spend.json total $15.86).
+Total spend of the MEDIUM run: $15.35 (spend.json total $15.92).
