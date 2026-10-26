@@ -22,8 +22,10 @@ One round (ModularRSI's epoch, text-only: no tool calls, no Harbor):
   6. dual_implement: each lane builds its change in its own staging tree: static gate, reviewer, routing probe.
      A reviewer's implementation reject gets one repair pass in the same round.
   7. Promotion: the first passing lane is merged; the second is rebased onto it and its tree-wide gates re-run.
-  8. Integration static gate, 2-task execution check, validation with the task-aware composer, confirm check, then the
-     shared promotion rule C.better. Test runs use the frozen incumbent only.
+  8. Integration static gate and the 2-task execution (sanity crash) check; a candidate that clears every gate is
+     promoted (the reference compares no reward). A new variant must also pass the niche-dedup gate (step 6).
+  9. The next window's evidence: K rolls of the current library (task-aware composer) on a fresh batch of
+     cfg["n_val"] // K train tasks, rotating through the train set. Test runs use the frozen library.
 """
 from __future__ import annotations
 
@@ -46,6 +48,7 @@ from baselines.vendor.modularrsi import confirm as CF
 from baselines.vendor.modularrsi import dispositions as DS
 from baselines.vendor.modularrsi import dual_implement as DI
 from baselines.vendor.modularrsi import lease as LS
+from baselines.vendor.modularrsi import niche as NI
 from baselines.vendor.modularrsi import portfolio as PF
 from baselines.vendor.modularrsi import prompts as P
 from baselines.vendor.modularrsi import promotion as PR
@@ -62,7 +65,7 @@ from h0.compose import root_bundle
 from h0.protocols import SLOTS
 from h0.registry import load_registry
 
-MAX_DIAG = 4        # diagnosed tasks per round (ModularRSI batches more; budget-limited here)
+MAX_DIAG = 10       # diagnosed tasks per round (ModularRSI investigates the whole batch; capped for budget)
 MAX_LANES = 2       # the portfolio's default lane ceiling: one incumbent lane and one novelty lane
 
 # Our slot -> ModularRSI lens key (trajectory_analysis._MODULE_LENS). memory has no entry and falls back to the generic lens.
@@ -88,6 +91,8 @@ Rules: same imports style (stdlib, json, re, `benchmarks.common`, `h0.protocols`
 `def register(reg): reg.register("{slot}", "<name>", lambda c: <Class>(**c), "<one-line DESCRIPTION of when this
 variant helps>", config_schema={{...}}, niche={{...}})`. The DESCRIPTION is what a per-task composer reads to decide
 when to select the variant, so state the situations it is for. Never mention task names, ids, or entities.
+NICHE names the cell your variant occupies (axis: value pairs); it must differ from every existing variant's cell:
+{niches}
 
 Output exactly one file block:
 ### FILE: variants/{slot}/<name>.py
@@ -124,7 +129,8 @@ PROTO = {
     "agent_loop": "run(self, task, env, h, llm, rec) -> LoopOutcome   # h.context_mgmt/.tool_policy/.memory/.verifier/.system_prompt",
     "context_mgmt": "build(self, system, task, history, memory_notes) -> list[dict] (OpenAI messages; keep tool-call pairs intact)",
     "tool_policy": "tools(self, task) -> list[dict]; parse(self, resp, task) -> list[Action]; format_observation(self, action, result, task) -> str",
-    "memory": "recall(self, task) -> str; update(self, task, outcome, success, trajectory) -> None",
+    "memory": ("recall(self, task) -> str; update(self, task, outcome, success, trajectory) -> None   # NOTE: every "
+               "episode builds a fresh harness and update() is never called, so nothing persists across episodes"),
     "verifier": "check(self, task, action, state, env_done) -> Verdict(accept: bool, feedback: str)",
 }
 
@@ -322,7 +328,8 @@ def _implement(client, bench: str, slot: str, proposal: str, stage: Path, extra:
     """One implementer call in its own staging tree; up to 2 attempts (the static gate's log is fed back)."""
     allowed = re.compile(rf"^variants/{slot}/(?!default\.py$)[a-z0-9_]+\.py$")
     code = (stage / "variants" / slot / "default.py").read_text(encoding="utf-8")
-    prompt = IMPLEMENT.format(slot=slot, finding=proposal + extra, proto=PROTO[slot], code=code)
+    prompt = IMPLEMENT.format(slot=slot, finding=proposal + extra, proto=PROTO[slot], code=code,
+                              niches=_niches(stage, slot))
     glog = "not run"
     for attempt in range(2):
         r = client.chat([{"role": "user", "content": prompt}], tag=f"b2:implement:{bench}", max_tokens=6000,
@@ -473,6 +480,32 @@ async def routing_diagnosis(client, bench: str, stage: Path, slot: str, name: st
     return diag
 
 
+def niche_reject(stage: Path, slot: str, name: str) -> str | None:
+    """Reference S5 niche-dedup gate (online_evo._niche_dedup_reject) on the H0 registry: a new variant must declare a
+    NICHE, and must not land in the cell of another active variant of its slot (our implementer never declares
+    SUPERSEDES, so any collision is a near-duplicate). Best-effort like the reference: an error passes."""
+    try:
+        infos = load_registry(stage).infos(slot)
+        new = next(i for i in infos if i.name == name)
+        key = NI.niche_key(slot, new.niche)
+        if not key:
+            return (f"{slot}/{name} declares no NICHE — every new variant must name its cell "
+                    "(niche={axis: value} in register)")
+        clash = sorted(i.name for i in infos if i.name != name and NI.niche_key(slot, i.niche) == key)
+        if clash:
+            return f"{slot}/{name} lands in the occupied niche cell {dict(key)} of {clash} without superseding it"
+    except Exception:
+        return None
+    return None
+
+
+def _niches(root: Path, slot: str) -> str:
+    try:
+        return "\n".join(f"- {i.name}: {i.niche}" for i in load_registry(root).infos(slot)) or "- (none)"
+    except Exception:
+        return "- (unknown)"
+
+
 async def _lane_check(client, bench: str, brief: DI.LaneBrief, lens_of: dict[str, str], pairs: list[dict],
                       by_task: dict, repair: dict[str, str]) -> DI.LaneResult:
     """One lane's gates: implementation and reviewer. Routing is recorded as a diagnosis, never as a rejection."""
@@ -487,6 +520,9 @@ async def _lane_check(client, bench: str, brief: DI.LaneBrief, lens_of: dict[str
     if impl["gate"] != "ok":
         return DI.LaneResult(passed=False, detail={"reject": "implementation", "reason": impl["gate"]})
     written = impl["written"][0]
+    nr = niche_reject(stage, slot, impl["names"][0])  # reference order: smoke -> niche dedup -> review
+    if nr is not None:
+        return DI.LaneResult(passed=False, detail={"reject": "implementation", "reason": nr})
     rv = _review(client, bench, slot, stage, written, text, pairs)
     if rv["decision"] != "accept":
         return DI.LaneResult(passed=False, detail={"reject": rv["reject_class"], "reason": rv["reason"],
@@ -654,10 +690,28 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
     tasks = shared["tasks"]
     rcfg = RouterConfig(k=cfg["k"])
     ledger = Ledger.load(ws)  # persisted to <ws>/router_ledger.json
-    inc_root, inc_val, inc_tok = C.H0_ROOT, C.score(shared["h0_val"]), sum(r["tokens"] for r in shared["h0_val"])
-    inc_composer = False
+    inc_root, inc_composer = C.H0_ROOT, False
     log = {"method": "b2", "bench": bench, "k": cfg["k"], "rounds": []}
-    evidence = shared["h0_train"]
+    evidence = shared["h0_train"]  # window 1: the shared H0 evidence, K rolls on every train task
+    train_ids = tasks["train"][1]
+    per_batch = max(1, cfg["n_val"] // cfg["k"])  # the shared per-round budget: n_val episodes = per_batch tasks x K
+    batches: list[list[str]] = []
+
+    def next_evidence(ri: int) -> list[dict]:
+        """Reference windows: the next window learns from K rolls of the CURRENT library on a fresh batch of train
+        tasks (rotating through the train set). Not run after the last round."""
+        nonlocal evidence
+        if ri >= cfg["rounds"]:
+            return evidence
+        start = ((ri - 1) * per_batch) % len(train_ids)
+        batch = (train_ids + train_ids)[start: start + per_batch]
+        batches.append(batch)
+        recs = []
+        for k in range(1, cfg["k"] + 1):
+            recs += C.evaluate(bench, tasks["train"][0], batch, inc_root, client, f"b2_{bench}_r{ri}_evid{k}", out,
+                               composer=llm_composer_factory(client, bench, []) if inc_composer else None,
+                               workers=cfg["workers"], label={"method": "b2", "phase": "evidence", "round": ri, "roll": k})
+        return recs
     for ri in range(1, cfg["rounds"] + 1):
         C.budget_check(f"b2[{bench}] round {ri}")
         step = f"r{ri}"
@@ -685,7 +739,9 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
             code = (inc_root / "variants" / slot / "default.py").read_text(encoding="utf-8")
             if pairs:
                 findings[slot] = investigate(client, bench, slot, pairs, code)
-            if eff:
+        # reference: the efficiency investigator runs only when the contrast pass found no culprit
+        if eff and not any(f["is_culprit"] for fs in findings.values() for f in fs):
+            for slot in SLOTS:
                 eff_findings[slot] = investigate_efficiency(client, bench, slot, eff)
         rd["findings"] = {s: [{k: f.get(k) for k in ("task", "parse", "is_culprit", "fixable_now", "suggested_change")}
                               for f in fs] for s, fs in findings.items()}
@@ -718,6 +774,7 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
 
         if not picks:
             settle("no open proposal")
+            evidence = next_evidence(ri)
             continue
 
         # step 6: dual implementation, gates, one repair pass
@@ -739,6 +796,7 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
             close_lanes(ws, step, outcomes, merged_ids, False, failed)
             shutil.rmtree(work, ignore_errors=True)
             settle("no variant passed the gates")
+            evidence = next_evidence(ri)
             continue
 
         # step 8: integration, execution check, validation, confirm, shared promotion rule
@@ -748,6 +806,7 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
             close_lanes(ws, step, outcomes, merged_ids, False, failed)
             shutil.rmtree(work, ignore_errors=True)
             settle("integration failed")
+            evidence = next_evidence(ri)
             continue
         (cand / "bundle.json").write_text(json.dumps({s: {"name": n} for s, n in rd["accepted"]}))
         ex = C.evaluate(bench, tasks["train"][0], tasks["train"][1][:cfg["n_check"]], cand, client, f"b2_{bench}_r{ri}_exec", out,
@@ -758,26 +817,17 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
             close_lanes(ws, step, outcomes, merged_ids, False, failed)
             shutil.rmtree(work, ignore_errors=True)
             settle("execution check crashed")
+            evidence = next_evidence(ri)
             continue
-        comp_log: list = []
-        composer = llm_composer_factory(client, bench, comp_log)
-        val = C.evaluate(bench, tasks["val"][0], tasks["val"][1], cand, client, f"b2_{bench}_r{ri}_val", out,
-                         composer=composer, workers=cfg["workers"], label={"method": "b2", "phase": "val", "round": ri})
-        v, tok = C.score(val), sum(r["tokens"] for r in val)
-        rd.update(val=v, tokens_val=tok, composer_choices=comp_log)
-        regs = confirm_check(val, comp_log, merged)
-        rd["confirm_regressions"] = [{k: g[k] for k in ("variant", "shared_tasks", "delta")} for g in regs]
-        promoted = C.better(v, tok, inc_val, inc_tok) and not regs
-        close_lanes(ws, step, outcomes, merged_ids, promoted, failed)
+        # reference: promotion on the gates alone (smoke, niche dedup, review, sanity crash check); no reward is compared
+        close_lanes(ws, step, outcomes, merged_ids, True, failed)
         shutil.rmtree(work, ignore_errors=True)
-        if promoted:
-            inc_root, inc_val, inc_tok, inc_composer = cand, v, tok, True
-            evidence = ex + val
-            settle("promoted", progress=True)
-        else:
-            settle("kept incumbent")
+        inc_root, inc_composer = cand, True
+        settle("promoted", progress=True)
+        evidence = next_evidence(ri)
+    log["evidence_batches"] = batches
     log["final"] = str(inc_root)
-    (ws / "final.json").write_text(json.dumps({"final_root": str(inc_root), "val": inc_val, "composer": inc_composer}, indent=1))
+    (ws / "final.json").write_text(json.dumps({"final_root": str(inc_root), "composer": inc_composer}, indent=1))
     C.budget_check(f"b2[{bench}] test")
     comp_log = []
     test = C.evaluate(bench, tasks["test"][0], tasks["test"][1], inc_root, client, f"b2_{bench}_test", out,

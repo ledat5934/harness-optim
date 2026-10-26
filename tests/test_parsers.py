@@ -10,7 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from baselines.b2_modular import _composer_choice  # noqa: E402
-from baselines.b3_memo import API, MODEL, ChatShim, ConfigController, _diagnoses, base_config, clamp, norm_dim  # noqa: E402
+from baselines.b3_memo import API, MODEL, _diagnoses, base_config, clamp, norm_dim  # noqa: E402
+from baselines.vendor.memoharness.controllers.llm_controller import LLMController  # noqa: E402
 from baselines.proposer_io import (as_bool, as_float, extract_json, field, gate_hint, parse_files, reply_files,  # noqa: E402
                                    salvage_fields)
 from benchmarks.common import tool_arg  # noqa: E402
@@ -62,7 +63,7 @@ def test_composer_and_b3_shapes():
     ids = ["look_at_obj-Alarm-308/trial_T1", "pick_two-Cd-101/trial_T2"]
     d = _diagnoses([{"case_id": "look_at_obj-Alarm-308", "primary_dim": "D2"}, {"case": "case pick_two-Cd-101/trial_T2"}], ids)
     assert d[ids[0]]["primary_dim"] == "D2" and ids[1] in d
-    ctl = ConfigController(client=ChatShim(None, "x"), model=MODEL, api_config=API)
+    ctl = LLMController(client=None, model=MODEL, api_config=API)  # the reference parser/stabilizer
     cfg = clamp(ctl._build_harness_config({"D3": {"max_tokens": "3000", "temperature": 5}}, base_config(ctl)))
     assert cfg.D3["max_tokens"] == 3000 and cfg.D3["temperature"] == 1.0  # reference parser, then range guard
 

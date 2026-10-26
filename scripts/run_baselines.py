@@ -30,8 +30,8 @@ import llm as llm_mod  # noqa: E402
 from baselines import common as C  # noqa: E402
 
 
-def load_shared(bench: str, cfg: dict = C.SMOKE, allow_stale: bool = False) -> dict:
-    p = C.OUT / f"h0_{bench}.jsonl"
+def load_shared(bench: str, cfg: dict = C.SMOKE, allow_stale: bool = False, h0_dir: Path | None = None) -> dict:
+    p = (h0_dir or C.OUT) / f"h0_{bench}.jsonl"
     recs = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
     tasks = C.protocol_tasks(bench, C.PROTOCOLS[cfg["name"]])
     # smaller val/test (debug): prefixes of the protocol lists, so the shared H0 val records still match
@@ -72,6 +72,7 @@ def main():
     args = ap.parse_args()
     base_cfg = C.PROTOCOLS[args.protocol]
     C.use_protocol(base_cfg)
+    h0_dir = C.OUT  # the shared H0 records stay in the protocol's folder, also in debug mode
     cfg = dict(base_cfg)
     if args.debug:
         cfg.update(n_check=1, n_val=1, n_test=1, workers=1)
@@ -93,7 +94,7 @@ def main():
     elif cfg != base_cfg:
         raise SystemExit("--n-*/--workers overrides need --debug (they would mix into the committed results)")
     llm_mod.budget_banner(f"run_baselines[{args.bench}/{args.method}]")
-    shared = load_shared(args.bench, cfg, allow_stale=args.debug)
+    shared = load_shared(args.bench, cfg, allow_stale=args.debug, h0_dir=h0_dir)
     print(f"shared H0: train records={len(shared['h0_train'])} (pass {sum(r['success'] for r in shared['h0_train'])}), "
           f"val={C.score(shared['h0_val']):.2f}")
     mod = {"b1": "baselines.b1_freeform", "b2": "baselines.b2_modular", "b3": "baselines.b3_memo"}[args.method]

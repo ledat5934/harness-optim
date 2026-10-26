@@ -38,6 +38,9 @@ def renamed(slot: str, name: str) -> str:
     src = (C.H0_ROOT / "variants" / slot / "default.py").read_text(encoding="utf-8")
     code = src.replace(f'reg.register("{slot}", "default"', f'reg.register("{slot}", "{name}"')
     assert code != src
+    # a new variant must occupy its own niche cell (niche-dedup gate): add an axis no other variant declares
+    code = code.replace("niche={", f'niche={{"cell": "{name}", ', 1)
+    assert f'"cell": "{name}"' in code
     return code
 
 
@@ -212,3 +215,14 @@ if __name__ == "__main__":
         if name.startswith("test_") and callable(fn):
             fn()
             print("PASS", name)
+
+
+def test_niche_dedup_gate_rejects_undeclared_or_occupied_cells():
+    stage = tmp("b2niche_")
+    C.new_candidate(stage, C.H0_ROOT)
+    src = (C.H0_ROOT / "variants" / "agent_loop" / "default.py").read_text(encoding="utf-8")
+    f = stage / "variants" / "agent_loop" / "dup_loop.py"
+    f.write_text(src.replace('reg.register("agent_loop", "default"', 'reg.register("agent_loop", "dup_loop"'), encoding="utf-8")
+    assert "occupied niche cell" in B2.niche_reject(stage, "agent_loop", "dup_loop")  # same cell as default
+    f.write_text(renamed("agent_loop", "dup_loop"), encoding="utf-8")
+    assert B2.niche_reject(stage, "agent_loop", "dup_loop") is None

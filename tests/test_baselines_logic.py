@@ -22,6 +22,12 @@ from baselines.vendor.modularrsi.router import Bucket, Ledger, RouterConfig, rou
 TMP = Path(tempfile.mkdtemp(prefix="b2test_"))
 
 
+def _b3_ctl(client=None):
+    from baselines import b3_memo as B3
+    root = Path(tempfile.mkdtemp(prefix="b3ctl_"))
+    return B3.BundleController(bundle_root=root / "bundle", client=client, bench="alfworld", workspace=root)
+
+
 def traj(name: str, task: str, instr: str = "do it") -> str:
     p = TMP / f"{name}.json"
     p.write_text(json.dumps({"task_id": task, "success": True, "steps": 1, "tokens": 5, "events": [
@@ -132,26 +138,31 @@ def _b3_rec(tid, ok, instr, idx=0):
 
 def test_b3_config_mapping_matches_h0():
     from baselines import b3_memo as B3
-    ctl = B3.ConfigController(client=B3.ChatShim(None, "x"), model=B3.MODEL, api_config=B3.API)
+    ctl = _b3_ctl()
     base = B3.base_config(ctl)
     # H0 values for every mapped knob, and no strategy text (H0's loop has none)
     assert base.D5["history_keep"] == 30 and base.D3["max_tokens"] == 2048 and base.D3["temperature"] == 0.0
     assert all(getattr(base, d)["strategy"] == "" for d in B3.DIMS)
-    b = B3.to_bundle(base)
+    b = B3.to_bundle(None, base)  # H0: no bundle text, H0's numbers
     assert b["context_mgmt"]["config"] == {"keep_turns": 30, "extra_system": ""}
     assert b["agent_loop"]["config"] == {"temperature": 0.0, "max_tokens": 2048}
     cfg = base.clone()
     cfg.D1["strategy"] = "verify before finishing"
     cfg.D3["temperature"] = 9
-    got = B3.to_bundle(B3.clamp(cfg))
-    assert "verify before finishing" in got["context_mgmt"]["config"]["extra_system"]
+    B3.RB.write_codex_policy(ctl.bundle_root, cfg)
+    got = B3.to_bundle(ctl.bundle_root, cfg)
+    text = got["context_mgmt"]["config"]["extra_system"]
+    assert "verify before finishing" in text and "## ./AGENTS.override.md" in text and "## ./.memoharness/memory.md" in text
     assert got["agent_loop"]["config"]["temperature"] == 1.0  # clamped to [0, 1]
+    adapted = base.clone()
+    adapted.D4["strategy"] = "adapted rule"
+    assert "adapted rule" in B3.to_bundle(ctl.bundle_root, adapted, [], adapted=True)["context_mgmt"]["config"]["extra_system"]
     assert base.D3["temperature"] == 0.0  # the clone did not alias the base
 
 
 def test_b3_bm25_similarity_and_freeze():
     from baselines import b3_memo as B3
-    ctl = B3.ConfigController(client=B3.ChatShim(None, "x"), model=B3.MODEL, api_config=B3.API)
+    ctl = _b3_ctl()
     base = B3.base_config(ctl)
     bank = B3.BM25ExperienceBank()
     instrs = ["find the red book on the shelf", "wash the dirty plate in the sink", "open the blue box"]
@@ -179,7 +190,7 @@ def test_b3_bm25_similarity_and_freeze():
 
 def test_b3_distill_trigger_is_the_reference_one():
     from baselines import b3_memo as B3
-    ctl = B3.ConfigController(client=B3.ChatShim(None, "x"), model=B3.MODEL, api_config=B3.API)
+    ctl = _b3_ctl()
     base = B3.base_config(ctl)
     bank = B3.BM25ExperienceBank()
     fired = [bank.add_entry(B3.to_entry(_b3_rec("hard", False, "hard task", i), i, base, base, "alfworld",
@@ -258,14 +269,14 @@ def test_b3_canary_rules_are_the_reference_ones():
 def test_b3_adaptation_is_clamped_and_falls_back():
     from baselines import b3_memo as B3
     import llm as llm_mod
-    ctl = B3.ConfigController(client=SimpleNamespace(), model=B3.MODEL, api_config=B3.API)
+    ctl = _b3_ctl()
     base = B3.base_config(ctl)
     task = SimpleNamespace(task_id="t", instruction="do it")
 
     def run(adapt_fn):
         ctl.adapt_for_case = adapt_fn
         alog: list = []
-        return B3.adapt_composer(ctl, B3.BM25ExperienceBank(), base, "alfworld", alog, True)(task, None, None), alog
+        return B3.adapt_composer(ctl, B3.BM25ExperienceBank(), None, base, "alfworld", alog, True)(task, None, None), alog
 
     def wild(bank, case, cfg):
         c = cfg.clone()
@@ -279,7 +290,7 @@ def test_b3_adaptation_is_clamped_and_falls_back():
     def boom(*a):
         raise ValueError("bad json")
     b, alog = run(boom)
-    assert b == B3.to_bundle(base) and "bad json" in alog[0]["error"]
+    assert b == B3.to_bundle(None, base) and "bad json" in alog[0]["error"]
 
     def broke(*a):
         try:
@@ -296,7 +307,7 @@ def test_b3_adaptation_is_clamped_and_falls_back():
 
 def test_b3_ingest_skips_infra_errors():
     from baselines import b3_memo as B3
-    ctl = B3.ConfigController(client=SimpleNamespace(), model=B3.MODEL, api_config=B3.API)
+    ctl = _b3_ctl()
     base = B3.base_config(ctl)
     bank = B3.BM25ExperienceBank()
     recs = [{**_b3_rec(f"s{i}", True, f"task {i}", i), "error": None} for i in range(2)]
@@ -345,6 +356,52 @@ def test_b1_flags_new_variants_that_bundle_does_not_select():
     assert B1.unselected_variants(root, ["variants/agent_loop/loop_x.py"]) == []
     assert B1.unselected_variants(root, ["variants/memory/default.py"]) == []
     assert "bundle.json" in B1.IMPLEMENT_FORMAT and "only runs if `bundle.json` selects it" in B1.SKILL
+
+
+def test_b3_bundle_controller_edits_bundle_with_publish_gate_and_retry():
+    from baselines import b3_memo as B3
+    good_policy = json.dumps({"config": {d: {"strategy": f"{d} rule"} for d in B3.DIMS}})
+    replies = ["### FILE: AGENTS.override.md\n```markdown\n# Overlay\nCheck the goal first.\n```\n"
+               "### FILE: policy.json\n```json\n{not json}\n```\n",
+               "### FILE: policy.json\n```json\n" + good_policy + "\n```\nstatus: fixed"]
+    prompts = []
+
+    class Fake:
+        def chat(self, messages, tag="", max_tokens=None, fallback_no_reasoning=False, **kw):
+            prompts.append((tag, messages[0]["content"]))
+            return SimpleNamespace(content=replies.pop(0))
+
+    ctl = _b3_ctl(Fake())
+    base = B3.base_config(ctl)
+    B3.RB.write_codex_policy(ctl.bundle_root, base)
+    bank = B3.BM25ExperienceBank()
+    _, cfg = ctl.decide_next_harness(bank, "", base, 0)
+    assert len(prompts) == 2 and prompts[0][0] == "b3:controller:alfworld"
+    first, retry = prompts[0][1], prompts[1][1]
+    # the reference iteration prompt (hard constraints, per-task history) with the bundle inline and no tool docs
+    assert "Hard Constraints On What You May Write" in first and "Per-Task History Across Iterations" in first
+    assert "## Current Live State" in first and "policy.json" in first and "sed -n" not in first
+    assert "publish gate failed" in retry and "not valid JSON" in retry  # reference retry prompt with the gate error
+    assert cfg.D1["strategy"] == "D1 rule"
+    assert "Check the goal first." in (ctl.bundle_root / "AGENTS.override.md").read_text()
+    assert B3.publish_gate(ctl.bundle_root) == []
+
+
+def test_b3_controller_budget_error_stops_the_run():
+    from baselines import b3_memo as B3
+    import llm as llm_mod
+
+    class Broke:
+        def chat(self, *a, **k):
+            raise llm_mod.BudgetExceeded("MAX_USD exhausted")
+
+    ctl = _b3_ctl(Broke())
+    base = B3.base_config(ctl)
+    try:
+        ctl.decide_next_harness(B3.BM25ExperienceBank(), "", base, 0)
+    except Exception:
+        pass
+    assert isinstance(ctl.budget_error, llm_mod.BudgetExceeded)  # the run loop re-raises it
 
 def test_chatshim_forwards_reference_kwargs():
     from baselines.b3_memo import ChatShim
