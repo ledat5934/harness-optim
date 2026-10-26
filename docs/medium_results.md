@@ -75,13 +75,16 @@ Nghĩa là chênh lệch tổng ±4 điểm là nhiễu thuần túy, và kết 
 - Khi tác vụ thất bại cả 3 roll (đa số ở AppWorld, BrowseComp-Plus), không có cặp thành công/thất bại để đối chiếu, nên mất lợi thế chính của phương pháp.
 - Không cải thiện được benchmark nào (70%, 15%, 4%).
 
-### B3 MemoHarness (ngân hàng kinh nghiệm + tìm cấu hình D1–D6 + thích nghi theo ca)
-**Điểm mạnh**
-- Ổn định và rẻ khi tìm kiếm: chỉ đổi cấu hình, không viết mã, nên không bao giờ hỏng harness; không vòng nào trượt cổng tĩnh.
+### B3 MemoHarness (ngân hàng kinh nghiệm + tìm kiếm D1–D6 + thích nghi theo ca)
+
+> **Lưu ý: bản port B3 hẹp hơn MemoHarness gốc.** Trong mã gốc, controller duy nhất được hỗ trợ (`controller="codex"`, `CodexBundleController`) là Codex CLI sửa trực tiếp bundle harness: chỉ dẫn agent (`AGENTS.override.md`), `policy.json` (D1–D6), `.memoharness/playbook.md` và `memory.md`. Mã còn có `LLMController.decide_next_harness`, sinh lại toàn bộ mã Python `HarnessImpl`. Prompt chỉ-cấu-hình `_CONFIG_ONLY_DOC` trong mã gốc chỉ dùng cho `adapt_for_case` lúc test. Bản port dùng prompt chỉ-cấu-hình cho cả bước tìm kiếm toàn cục, nên kết quả dưới đây là của biến thể hẹp này, không phải của MemoHarness đầy đủ (`docs/baseline_fidelity.md`, B3 (c)).
+
+**Điểm mạnh** (của bản port)
+- Ổn định và rẻ khi tìm kiếm: bản port chỉ đổi cấu hình, không viết mã hay văn bản tự do, nên không bao giờ hỏng harness.
 - Cải thiện trên ALFWorld (81%, +8) và nhỉnh hơn H0 ở hai benchmark còn lại, dù chưa có ý nghĩa thống kê.
 - Canary với luật thứ ba (port từ mã gốc) đã loại một đề xuất tệ ở ALFWorld.
 
-**Điểm yếu**
+**Điểm yếu** (phần lớn do bản port)
 - Không gian tìm kiếm hẹp: chỉ 3 số (temperature, max_tokens, số lượt giữ) và văn bản chiến lược có tác dụng trên H0. Phần lớn chẩn đoán nhắm vào núm của Harbor không tồn tại trong H0 (`stop_rule`, `tool_protocol='alfworld'`, `tool_access=bash`), nên văn bản chiến lược mô tả những thay đổi không xảy ra.
 - Không tách được nguồn cải thiện (temperature 0,7? giữ 12 lượt? văn bản chiến lược?) nếu không ablation.
 - Canary 2 tác vụ quá yếu khi tỉ lệ thành công thấp: qua cả 5 vòng ở BrowseComp-Plus.
