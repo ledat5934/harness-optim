@@ -11,6 +11,8 @@ A *candidate* is a harness root directory: a copy of `h0/variants/**`, an option
 """
 from __future__ import annotations
 
+import os
+
 import dataclasses
 import hashlib
 import importlib
@@ -48,6 +50,10 @@ def use_protocol(cfg: dict) -> None:
     """Point the result directories at the protocol's own folder (smoke keeps results/, the others results/<name>/)."""
     global OUT, RUNS
     OUT = ROOT / "results" if cfg["name"] == "smoke" else ROOT / "results" / cfg["name"]
+    if os.environ.get("RESULTS_SUFFIX"):  # e.g. a re-run with another model: results/medium_<suffix>/
+        OUT = OUT.with_name(f"{OUT.name}_{os.environ['RESULTS_SUFFIX']}")
+        import benchmarks.common as bc
+        bc.TRAJ_DIR = OUT / "trajectories"
     RUNS = OUT / "runs"
     OUT.mkdir(parents=True, exist_ok=True)
 

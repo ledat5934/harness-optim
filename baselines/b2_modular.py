@@ -327,7 +327,10 @@ def route_and_cluster(client, bench: str, ws: Path, step: str, recs: list[BL.Fin
 # ---------------------------------------------------------------- implementation (steps 6-7)
 def _implement(client, bench: str, slot: str, proposal: str, stage: Path, extra: str = "") -> dict:
     """One implementer call in its own staging tree; up to 2 attempts (the static gate's log is fed back)."""
-    allowed = re.compile(rf"^variants/{slot}/(?!default\.py$)[a-z0-9_]+\.py$")
+    # additive library: never the default, and never an existing variant's file (reusing a promoted variant's name
+    # would silently replace it, and the failure path below would delete it)
+    taken = sorted(p.stem for p in (stage / "variants" / slot).glob("*.py"))
+    allowed = re.compile(rf"^variants/{slot}/(?!(?:{'|'.join(map(re.escape, taken))})\.py$)[a-z0-9_]+\.py$")
     code = (stage / "variants" / slot / "default.py").read_text(encoding="utf-8")
     prompt = IMPLEMENT.format(slot=slot, finding=proposal + extra, proto=PROTO[slot], code=code,
                               niches=_niches(stage, slot))
@@ -337,7 +340,8 @@ def _implement(client, bench: str, slot: str, proposal: str, stage: Path, extra:
                         fallback_no_reasoning=True)
         written, _ = apply_files(stage, reply_files(r), allowed)
         if not written:
-            glog = "no ### FILE block for an allowed path was found in the answer"
+            glog = ("no ### FILE block for an allowed path was found in the answer (a NEW file "
+                    f"variants/{slot}/<name>.py; names already taken: {taken})")
         else:
             ok, glog = C.static_gate(stage)
             if ok:  # activation precondition: the new variant must register

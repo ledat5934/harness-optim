@@ -3,14 +3,14 @@
 #   stage 1: the 5 shared H0 phases (train rolls 1-3, val, test) as 5 processes
 #   stage 2: B1, B2, B3 as 3 processes (they only read the shared H0 records)
 # AppWorld must run sequentially inside one process, so separate processes are how it gets parallel.
-#   bash scripts/medium_parallel.sh <alfworld|appworld|browsecomp_plus>      logs: results/medium/logs/<bench>_*.log
+#   bash scripts/medium_parallel.sh <alfworld|appworld|browsecomp_plus>      logs: results/medium[_$RESULTS_SUFFIX]/logs/<bench>_*.log
 set -u
 B=$1
 case $B in alfworld) V=/root/hg-venv;; appworld) V=/root/aw-venv;; browsecomp_plus) V=/root/bcp-venv;; *) echo "bench?"; exit 2;; esac
 R=$(cd "$(dirname "$0")/.." && pwd)
 export ALFWORLD_DATA=${ALFWORLD_DATA:-/root/.cache/alfworld} APPWORLD_ROOT=${APPWORLD_ROOT:-/root/appworld_root}
 export JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk-amd64} PYTHONPATH=$R PYTHONUNBUFFERED=1
-L=$R/results/medium/logs; mkdir -p $L
+L=$R/results/medium${RESULTS_SUFFIX:+_$RESULTS_SUFFIX}/logs; mkdir -p $L
 cd $R
 stage() {  # run each "name|args" in parallel, fail if any fails
   local pids=() names=() rc=0
@@ -23,7 +23,7 @@ stage() {  # run each "name|args" in parallel, fail if any fails
   done
   return $rc
 }
-H="scripts/run_h0.py --protocol medium --bench $B --workers 4"
+H="scripts/run_h0.py --protocol medium --bench $B --workers ${WORKERS:-4}"
 if [ "${SKIP_H0:-0}" != 1 ]; then
 echo "== $(date +%T) H0 $B"
 stage "h0_train1|$H --phase train --roll 1" "h0_train2|$H --phase train --roll 2" "h0_train3|$H --phase train --roll 3" \

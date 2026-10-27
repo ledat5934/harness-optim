@@ -17,6 +17,7 @@ import io
 import json
 import os
 import random
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -204,21 +205,34 @@ class LLM:
         if tools:
             body["tools"] = tools
             if tool_choice is not None:
+                if "openrouter.ai" not in self.base_url and isinstance(tool_choice, dict) \
+                        and "function" in tool_choice:
+                    # 9router forwards tool_choice to the Codex Responses API verbatim, which takes the flat form
+                    # and silently ignores the nested chat-completions one
+                    tool_choice = {"type": "function", "name": tool_choice["function"]["name"]}
                 body["tool_choice"] = tool_choice
         if stop:
             body["stop"] = stop
-        if reasoning is not None:
+        if reasoning is not None and "openrouter.ai" in self.base_url:
             body["reasoning"] = reasoning
+        elif reasoning is not None:  # OpenAI-style gateways reject OpenRouter's `reasoning` object
+            body["reasoning_effort"] = "none" if reasoning.get("enabled") is False else reasoning.get("effort", "low")
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json",
                    "X-Title": "HarnessGraph-smoke"}
         last_err: str | None = None
         with self._sem:
-            for attempt in range(self.max_retries):
+            attempt = 0
+            while attempt < self.max_retries:
                 t0 = time.time()
                 try:
                     r = self._session.post(f"{self.base_url}/chat/completions", json=body, headers=headers,
                                            timeout=self.timeout)
                     latency = time.time() - t0
+                    wait = _quota_reset_s(r)
+                    if wait is not None:  # subscription quota window exhausted: wait for the reset, keep the attempt
+                        _log({"event": "quota_wait", "tag": tag, "sleep": wait, "error": r.text[:300]})
+                        time.sleep(wait)
+                        continue
                     if r.status_code in (408, 429, 500, 502, 503, 504, 520, 522, 524):  # 52x: provider-side (Cloudflare) errors
                         last_err = f"HTTP {r.status_code}: {r.text[:300]}"
                         raise _Retry()
@@ -238,6 +252,7 @@ class LLM:
                     sleep = min(60, 2 ** attempt + random.random())
                     _log({"event": "retry", "tag": tag, "attempt": attempt, "error": last_err, "sleep": sleep})
                     time.sleep(sleep)
+                    attempt += 1
         raise LLMError(f"failed after {self.max_retries} retries: {last_err}")
 
     def _finish(self, data: dict, latency: float, tag: str, body: dict | None = None) -> LLMResponse:
@@ -246,7 +261,10 @@ class LLM:
         ct = int(usage.get("completion_tokens") or 0)
         cost = usage.get("cost")
         cost_source = "usage.cost"
-        if cost is None:  # never guess prices: look the generation up instead
+        if cost is None and "openrouter.ai" not in self.base_url:
+            # a subscription gateway (e.g. 9router -> Codex) bills no per-call price; usage is tracked in tokens
+            cost, cost_source = 0.0, "unpriced_gateway"
+        elif cost is None:  # never guess prices: look the generation up instead
             cost, cost_source = self._lookup_generation_cost(data.get("id")), "generation_endpoint"
         cost = float(cost or 0.0)
         s = _add_spend(cost, pt, ct, tag)
@@ -278,6 +296,21 @@ class LLM:
 
 class _Retry(Exception):
     pass
+
+
+_RESET = re.compile(r"(?:resets?_in_seconds|resets?_after_seconds)\W+(\d+)|reset (?:after|in) (\d+)\s*s", re.I)
+_QUOTA = re.compile(r"usage.?limit|quota|rate.?limit", re.I)
+
+
+def _quota_reset_s(r) -> float | None:
+    """Seconds to wait when a subscription gateway (9router -> Codex) reports an exhausted usage window: an HTTP 429
+    that names the quota and its reset time. Plain transient errors keep the normal retry path."""
+    if r.status_code not in (429, 503) or not _QUOTA.search(r.text or ""):
+        return None
+    m = _RESET.search(r.text or "")
+    if not m:
+        return 300.0
+    return min(6 * 3600.0, float(m.group(1) or m.group(2)) + 5)
 
 
 def _valid_tool_args(messages: list[dict]) -> list[dict]:

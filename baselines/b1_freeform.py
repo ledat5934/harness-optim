@@ -415,9 +415,13 @@ def unselected_variants(cand_dir: Path, written: list[str]) -> list[str]:
         sel = {}
     out = []
     for rel in written:
-        if not rel.endswith(".py") or rel.endswith("/default.py"):
+        if not rel.endswith(".py"):
             continue
-        for slot, name in _REGISTER.findall((cand_dir / rel).read_text(encoding="utf-8")):
+        regs = _REGISTER.findall((cand_dir / rel).read_text(encoding="utf-8"))
+        if not regs and not rel.endswith("/default.py"):  # a variant file that registers nothing never runs
+            out.append(f"{rel} (registers no variant)")
+        # default.py may register extra names too: they run only when selected, like a new file's
+        for slot, name in regs:
             if name != "default" and sel.get(slot) != name:
                 out.append(f"{slot}/{name}")
     return out
