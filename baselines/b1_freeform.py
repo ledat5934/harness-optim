@@ -358,7 +358,7 @@ def analyze(bench: str, ws: Path, pool: list[dict], frontier: dict, evidence: li
     r = client.chat([{"role": "user", "content": prompt}], tag=f"b1:analyze:{bench}", max_tokens=6000,
                     fallback_no_reasoning=True)
     (ws / f"analysis_r{round_i}.txt").write_text(r.content, encoding="utf-8")
-    pending = extract_json(r.content)
+    pending = extract_json(r.content, key="candidates")
     if not isinstance(pending, dict) or not isinstance(pending.get("candidates"), list) or not pending["candidates"]:
         return {"ok": False, "text": r.content}
     cand = dict(pending["candidates"][0])

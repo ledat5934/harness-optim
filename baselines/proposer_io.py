@@ -166,18 +166,19 @@ def _balanced(text: str, start: int, opener: str, closer: str) -> int:
     return -1
 
 
-def extract_json(text: str, prefer: str = "{"):
+def extract_json(text: str, prefer: str = "{", key: str | None = None):
     """First balanced JSON object/array in free text (as ModularRSI/_extract_json does); ```json fences first.
-    prefer="[" looks for an array first (otherwise the first object INSIDE an array would be returned)."""
+    prefer="[" looks for an array first (otherwise the first object INSIDE an array would be returned).
+    key: only an object that has this key counts (a reply that also contains code holds other JSON-like dicts)."""
     text = text or ""
     for src in re.findall(r"```[a-zA-Z]*[ \t]*\n(.*?)\n[ \t]*```", text, re.S) + [text]:
-        v = _extract(src, prefer)
+        v = _extract(src, prefer, key)
         if v is not None:
             return v
     return None
 
 
-def _extract(text: str, prefer: str):
+def _extract(text: str, prefer: str, key: str | None = None):
     order = (("{", "}"), ("[", "]")) if prefer == "{" else (("[", "]"), ("{", "}"))
     for opener, closer in order:
         start = text.find(opener)
@@ -185,7 +186,7 @@ def _extract(text: str, prefer: str):
             end = _balanced(text, start, opener, closer)
             if end != -1:
                 v = _loads(text[start:end + 1])
-                if v is not None:
+                if v is not None and (key is None or (isinstance(v, dict) and key in v)):
                     return v
             start = text.find(opener, start + 1)
     return None
