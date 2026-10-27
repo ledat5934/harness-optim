@@ -298,7 +298,8 @@ class _Retry(Exception):
     pass
 
 
-_RESET = re.compile(r"(?:resets?_in_seconds|resets?_after_seconds)\W+(\d+)|reset (?:after|in) (\d+)\s*s", re.I)
+_RESET = re.compile(r"(?:resets?_in_seconds|resets?_after_seconds)\W+(\d+)"
+                    r"|reset (?:after|in) (?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s)?", re.I)
 _QUOTA = re.compile(r"usage.?limit|quota|rate.?limit", re.I)
 
 
@@ -308,9 +309,11 @@ def _quota_reset_s(r) -> float | None:
     if r.status_code not in (429, 503) or not _QUOTA.search(r.text or ""):
         return None
     m = _RESET.search(r.text or "")
-    if not m:
+    if not m or not any(m.groups()):
         return 300.0
-    return min(6 * 3600.0, float(m.group(1) or m.group(2)) + 5)
+    secs = float(m.group(1)) if m.group(1) else \
+        3600 * int(m.group(2) or 0) + 60 * int(m.group(3) or 0) + int(m.group(4) or 0)
+    return min(6 * 3600.0, secs + 5)
 
 
 def _valid_tool_args(messages: list[dict]) -> list[dict]:
