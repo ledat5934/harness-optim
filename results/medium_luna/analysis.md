@@ -39,21 +39,22 @@ Test subset: 99 tasks (`benchmarks/appworld/test100.json`).
 | h0 | 99 | 74.7% (74) | 65.4%–82.3% | – | – | 85,163 | 0.00000 | 0.00000 | 0 | 0.000 | 0.000 |
 | b1 | 99 | 77.8% (77) | 68.6%–84.8% | +8 / −5 | 0.581 | 98,906 | 0.00000 | 0.00000 | 0 | 0.000 | 0.000 |
 | b2 | 99 | 74.7% (74) | 65.4%–82.3% | +6 / −6 | 1.000 | 87,599 | 0.00000 | 0.00000 | 0 | 0.000 | 0.000 |
-| b3 | 61 | 75.4% (46) | 63.3%–84.5% | +2 / −3 | 1.000 | 139,180 | 0.00000 | 0.00000 | 0 | 0.000 | 0.000 |
+| b3 | 99 | 75.8% (75) | 66.5%–83.1% | +7 / −6 | 1.000 | 139,374 | 0.00000 | 0.00000 | 0 | 0.000 | 0.000 |
 
 | method | TGC | SGC | mean fraction of unit tests passed | task_completed called |
 |---|---|---|---|---|
 | h0 | 74.7% | 63.6% (33 scenarios) | 89.2% | 99/99 |
 | b1 | 77.8% | 66.7% (33 scenarios) | 90.5% | 99/99 |
 | b2 | 74.7% | 57.6% (33 scenarios) | 89.4% | 99/99 |
-| b3 | 75.4% | 61.9% (21 scenarios) | 88.8% | 61/61 |
+| b3 | 75.8% | 63.6% (33 scenarios) | 88.1% | 99/99 |
 
 Evolution (per round):
 
 - H0 val: 70.0% (30 tasks)
 - b1: r1: new incumbent (val 73.3%); r2: kept incumbent (val 70.0%); r3: kept incumbent (val 66.7%); r4: kept incumbent (val 70.0%); r5: kept incumbent (val 60.0%) -> final: /home/user/harness-optim/results/medium_luna/runs/b1/appworld/candidates/r1
 - b2: r1: no open proposal; r2: no open proposal; r3: no open proposal; r4: no open proposal; r5: no open proposal -> final: /home/user/harness-optim/h0
-- b3: (no log.json, run stopped early) val per candidate: 
+- b3 iteration 0 (H0, K rolls) train reward: 71.1%
+- b3: r1: passed canary [canary: accepted by canary gate] -> train run of r1: 66.7%; r2: passed canary [canary: accepted by canary gate] -> train run of r2: 83.3%; r3: passed canary [canary: accepted by canary gate] -> train run of r3: 70.0%; r4: rejected by canary [canary: reward delta -0.500 < threshold -0.340] -> train run of r3: 60.0%; r5: rejected by canary [canary: reward delta -0.500 < threshold -0.340] -> train run of r3: 80.0% -> final: r2 (iteration 2, train 83.3%)
 
 ## browsecomp_plus
 
