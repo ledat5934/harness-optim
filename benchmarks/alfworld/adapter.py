@@ -85,6 +85,7 @@ class AlfworldEnv:
             env_id = textworld.gym.register_game(gamefile, infos, max_episode_steps=MAX_STEPS + 10,
                                                  wrappers=[AlfredDemangler(), AlfredInfos])
         with _TW_LOCK:
+            _install_lib_pool()
             self.env = textworld.gym.make(env_id)
         self.won = False
         self.admissible: list[str] = []
@@ -119,7 +120,38 @@ class AlfworldEnv:
 
     def close(self) -> None:
         with _TW_LOCK:
+            _release_downward_libs(self.env)
             self.env.close()
+
+
+_LIB_POOL: list = []
+
+
+def _pooled_load_lib():
+    """Stand-in for fast_downward.load_lib: PddlEnv loads a private temp copy of libdownward.so (32 MB) per env
+    and never unloads it, so the deleted copy stays mapped and holds disk until the process exits; long runs hit
+    ENOSPC. Copies are recycled through a pool instead (dlclose segfaults at exit when a game is reloaded)."""
+    return _LIB_POOL.pop() if _LIB_POOL else _orig_load_lib()
+
+
+def _install_lib_pool() -> None:
+    global _orig_load_lib
+    import fast_downward
+    if fast_downward.load_lib is not _pooled_load_lib:
+        _orig_load_lib = fast_downward.load_lib
+        fast_downward.load_lib = _pooled_load_lib
+
+
+def _release_downward_libs(env) -> None:
+    for e in getattr(getattr(env, "batch_env", None), "envs", None) or []:
+        while e is not None:
+            lib = getattr(e, "downward_lib", None)
+            if lib is not None:
+                e.downward_lib = None
+                lib.cleanup()
+                _LIB_POOL.append(lib)
+                break
+            e = getattr(e, "_wrapped_env", None)
 
 
 def run_episode(task_id: str, harness, llm, split: str = "train", run_tag: str = "adhoc",

@@ -107,6 +107,27 @@ class BM25ExperienceBank(ExperienceBank):
         super().__init__(min_consecutive_failures=MIN_CONSECUTIVE_FAILURES)
         self.frozen = False
 
+    @classmethod
+    def from_snapshot(cls, path: Path) -> "BM25ExperienceBank":
+        """Rebuild a bank from the inspection JSON that ExperienceBank.save writes next to its pickle (entries are
+        re-added in order, so the indexes and case_stats are recomputed exactly)."""
+        from baselines.vendor.memoharness.core.models import GlobalPattern
+        snap = json.loads(Path(path).read_text())
+        bank = cls()
+        for e in snap["entries"]:
+            d = e["diagnosis"]
+            bank.add_entry(PerCaseEntry(
+                case_id=e["case_id"], iteration=e["iteration"], case_features=CaseFeatures(**e["case_features"]),
+                config=HarnessConfig(**e["config"]), delta_from_prev=e["delta_from_prev"],
+                trajectory=Trajectory(**e["trajectory"]), primary_reward=e["primary_reward"],
+                cost_actual=e["cost_actual"],
+                diagnosis=Diagnosis(success=d["success"], analysis=d["analysis"],
+                                    diagnostic_signal=DiagnosticSignal(**d["diagnostic_signal"]))))
+        bank.global_patterns = [GlobalPattern(**{**g, "iteration_range": tuple(g["iteration_range"])})
+                                for g in snap["global_patterns"]]
+        bank.last_distill_entry_count = snap["meta"]["last_distill_entry_count"]
+        return bank
+
     def add_entry(self, entry: PerCaseEntry) -> bool:
         if self.frozen:
             raise RuntimeError("experience bank is frozen (test time)")
@@ -624,7 +645,7 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke", adapt
     log["final"] = {"global": sel["harness"], "iteration": best, "train": sel["score"][0], "config": sel["cfg"].as_dict()}
     bank.frozen = True
     n_frozen = len(bank.entries)
-    bank.save(ws / "bank.json")
+    bank.save(ws / "bank.pkl")  # pickle + bank.json (save writes the JSON next to it with suffix .json)
     (ws / "final.json").write_text(json.dumps(log["final"], indent=1, default=str))
     C.budget_check(f"b3[{bench}] test")
     alog: list = []
