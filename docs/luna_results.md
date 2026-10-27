@@ -110,6 +110,8 @@ Nhược điểm: tốn token nhất, gấp khoảng 1,6–2,2 lần H0.
 
 Lỗi 7 không xảy ra trong lần chạy ling (không có episode lỗi ENOSPC), nên `docs/medium_results.md` không bị ảnh hưởng. Sau khi chạy lại, không còn episode lỗi hạ tầng nào trong `results/medium_luna/`.
 
+Tiến trình B3 AppWorld treo ở bước thoát sau khi đã ghi xong kết quả (chỉ còn 1 luồng, chiếm CPU), nên phải kill thủ công. Vì vậy `/root/bench/luna_appworld.out` ghi "FAILED b3", nhưng kết quả trong `baseline_runs.jsonl` đã đầy đủ. Tôi chưa tìm ra nguyên nhân; nhiều khả năng do phần dọn dẹp server AppWorld.
+
 Ghi chú nhỏ, chưa sửa vì không ảnh hưởng: `baselines/b3_memo.py` vẫn ghi `MODEL = "inclusionai/ling-3.0-flash"`, nhưng `ChatShim` bỏ qua tham số model nên mọi lệnh gọi đều đi tới model cấu hình trong `.env`.
 
 ## 5. Dữ liệu
