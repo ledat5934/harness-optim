@@ -1,6 +1,6 @@
 """Metrics of the MEDIUM run -> results/medium/analysis.md (numbers computed from results/medium/*.jsonl, never typed).
 
-  python scripts/analyze_medium.py
+  python scripts/analyze_medium.py            (RESULTS_SUFFIX=luna: results/medium_luna/)
 
 Per benchmark and method (H0, B1, B2, B3), on the fixed test100 subset:
   success with a 95% Wilson interval; paired comparison with H0 on the same tasks (wins/losses, exact McNemar p);
@@ -15,12 +15,18 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import subprocess
 from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-M = ROOT / "results" / "medium"
+M = ROOT / "results" / ("medium" + (f"_{os.environ['RESULTS_SUFFIX']}" if os.environ.get("RESULTS_SUFFIX") else ""))
+SUFFIX = os.environ.get("RESULTS_SUFFIX", "")
+# a suffixed run goes through a subscription gateway (unpriced: $0 per call), so the shared spend.json says
+# nothing about it; its model is the one configured in .env for that run
+MODEL = next((l.split("=", 1)[1].strip() for l in (ROOT / ".env").read_text().splitlines()
+              if l.startswith("LLM_MODEL=")), "?") if SUFFIX and (ROOT / ".env").exists() else "inclusionai/ling-3.0-flash"
 BENCHES = ["alfworld", "appworld", "browsecomp_plus"]
 METHODS = ["h0", "b1", "b2", "b3"]
 
@@ -68,6 +74,8 @@ def smoke_spend() -> dict:
 
 
 def search_cost(bench: str) -> dict[str, float]:
+    if SUFFIX:
+        return {}
     now = json.loads((ROOT / "results" / "spend.json").read_text())["by_tag"]
     old = smoke_spend()
     out = defaultdict(float)
@@ -233,14 +241,17 @@ def main():
     out = ["# MEDIUM run: results", "",
            "1 seed; 5 evolution rounds; 50 train tasks x 3 rolls; 30 val tasks (B1 only; B2 promotes on gates, B3 "
            "selects on train runs, as in their references); fixed 100-task test subsets. "
-           "Model `inclusionai/ling-3.0-flash` for agent, proposers and the BrowseComp-Plus judge. "
+           f"Model `{MODEL}` for agent, proposers and the BrowseComp-Plus judge. "
            "Infra-error episodes count as failures. McNemar: exact, two-sided, on tasks where exactly one of the two "
            "methods succeeded.", ""]
     for b in BENCHES:
         out += bench_section(b)
-    s = json.loads((ROOT / "results" / "spend.json").read_text())
-    old = sum(v["usd"] for v in smoke_spend().values())
-    out.append(f"Total spend of the MEDIUM run: ${s['total_usd'] - old:.2f} (spend.json total ${s['total_usd']:.2f}).")
+    if SUFFIX:
+        out.append("Spend: $0 metered (every call went through a subscription gateway; cost columns are 0).")
+    else:
+        s = json.loads((ROOT / "results" / "spend.json").read_text())
+        old = sum(v["usd"] for v in smoke_spend().values())
+        out.append(f"Total spend of the MEDIUM run: ${s['total_usd'] - old:.2f} (spend.json total ${s['total_usd']:.2f}).")
     (M / "analysis.md").write_text("\n".join(out) + "\n", encoding="utf-8")
     print("\n".join(out))
 
