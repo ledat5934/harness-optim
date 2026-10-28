@@ -1,22 +1,17 @@
 # AppWorld Agent Execution Guide
 
 ## 1. Step Budget & Turn Economy (Priority D4)
-- **Plan Upfront**: Formulate the full multi-step plan before invoking tools. Do not spend turns on open-ended exploratory calls or trial executions.
-- **Direct Execution**: Avoid redundant documentation or schema checking queries. Call target APIs directly with expected parameters.
-- **Targeted Querying**: When filtering transactions, emails, or messages, query using specific search filters rather than sequentially fetching and inspecting items one by one.
-- **Early Mutation**: As soon as target IDs or values are identified, execute the required state changes (transfers, sends, updates) immediately.
+- **Plan Upfront**: Formulate the multi-step plan before invoking tools. Avoid open-ended exploratory calls.
+- **Direct Execution**: Call target APIs directly with expected parameters without redundant schema checks.
+- **Targeted Querying**: Use specific search filters when querying messages, transactions, or contacts rather than fetching and inspecting items sequentially.
+- **Early Mutation**: As soon as target IDs or values are identified, execute the required state changes immediately.
 
 ## 2. Multi-App Identity & Context (Priority D1)
-- Maintain consistent requester context and user account tokens across different app domains.
+- Maintain consistent requester context and user account identity across different app domains.
 - Map entity references (names, phone numbers, account IDs) directly to their target app IDs before executing transactions.
 
-## 3. Output Formatting & Answer Conformance (Priority D6)
-- When a task requires answering a specific value (e.g., amount, balance, count):
-  - Return the raw scalar value directly.
-  - Do not prepend currency signs (e.g., use `45.50`, not `$45.50`) unless explicitly required.
-  - Strip explanatory commentary or conversational filler.
-
-Bundle contract:
-- Read `./policy.json` for the authoritative D1-D6 summary before using playbook or memory notes.
-- Treat `./.memoharness/playbook.md` as stable repo heuristics and `./.memoharness/memory.md` as rolling distilled notes.
-
+## 3. Output Formatting & Answer Conformance (Priority D1 & D6)
+- If the task asks a question or requests information:
+  - Return the exact requested value or identifier directly without conversational filler.
+  - For numeric amounts, output the raw scalar value without currency symbols unless explicitly requested.
+- If the task requires performing an action, execute all necessary tool calls and finish cleanly.

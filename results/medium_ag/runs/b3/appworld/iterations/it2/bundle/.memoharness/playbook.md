@@ -1,0 +1,15 @@
+# Repo Playbook
+
+Use `./policy.json` as the authoritative D1-D6 summary.
+Use this file for stable MemoHarness execution heuristics that should survive iteration-to-iteration.
+
+Current priorities:
+- Read `./policy.json` first, then use this playbook for stable execution heuristics.
+- D1 strategy: Direct final answer formatting and precise multi-app entity resolution
+- D2 strategy: Direct targeted API tool invocations without exploratory trial calls
+- D4 strategy: Step-budgeted execution: plan sequence upfront, batch queries, mutate early
+- D5 strategy: Sliding window of 30 turns to retain execution context
+- D6 strategy: Strict schema conformance: raw numeric values and exact target entities
+
+Distilled emphasis:
+- Maintain strict distinction between direct scalar question answers and operational action completion to avoid final turn deliberation failures.
