@@ -1,0 +1,95 @@
+STATE: H0 achieved 96.7% pass rate (29/30 tasks solved) on validation, failing only 3ab5b8b_1.
+R1 attempted universal budget nudging and API token guidance, but dropped to 90.0% (-6.7%) due to regressions on 50e1ac9_2, fac291d_3, and 3ab5b8b_2.
+In 3ab5b8b_2, the agent ran out of steps (40 steps) because an accidental variable overwrite (`apis = ...`) destroyed the global `apis` namespace, leading to an endless debugging loop.
+In 3ab5b8b_1, H0 failed because it did not recognize that playlists must be filtered or handled properly before calling complete_task.
+Mean turns across H0 is 20.8 with ~6.05M total tokens.
+
+HYPOTHESIS: Adding general programming hygiene guidance to never overwrite the root environment objects (`apis`) and providing proactive guidance on handling paginated API endpoints will prevent catastrophic state loss and task timeouts, improving val pass rate to 100% while reducing wasted exploratory steps.
+CANDIDATE: name=protect_env_state, changes="Add general guidance in context_mgmt default.py advising the agent never to reassign framework objects like `apis` and noting that listing APIs are paginated (page_index/page_limit)", prediction="Achieve 100.0% pass rate on validation split by preventing namespace corruption and pagination misses, while slightly reducing total turn count."
+PARENT: h0
+
+### FILE: variants/context_mgmt/default.py
+"""context_mgmt/default: system prompt + guidance + memory notes, pinned task message, sliding window.
+
+Keeps the first user message (task) pinned and the most recent `keep_turns` assistant turns, together with the
+tool/user replies that belong to them, so native tool-call pairing is never broken. When older turns are
+dropped, a one-line marker says how many were elided. Each tool observation is also capped at `max_obs_chars`
+inside the context. This matches the simplified AppWorld agent's `trimmed_messages` (drop the oldest
+non-instruction messages when too long) and MemoHarness's stabilized default (sliding window that pins the
+instruction).
+"""
+from __future__ import annotations
+
+_EXECUTION_GUIDANCE = (
+    "Execution tips:\n"
+    "1. Never reassign or overwrite environment globals or collections (such as `apis` or builtins).\n"
+    "2. Listing APIs are typically paginated; loop with `page_index` or check total items when gathering collections.\n"
+    "3. Check API doc parameters before calling unfamiliar methods to avoid 401/422 errors."
+)
+
+
+class SlidingWindow:
+    def __init__(self, keep_turns: int = 30, max_obs_chars: int = 6000, extra_system: str = ""):
+        self.keep_turns, self.max_obs_chars, self.extra_system = keep_turns, max_obs_chars, extra_system
+
+    def build(self, system, task, history, memory_notes):
+        sys_parts = [system]
+        if task.guidance:
+            sys_parts.append(task.guidance)
+        sys_parts.append(_EXECUTION_GUIDANCE)
+        if self.extra_system:
+            sys_parts.append(self.extra_system)
+        if memory_notes:
+            sys_parts.append("Notes from previous experience:\n" + memory_notes)
+        msgs = [{"role": "system", "content": "\n\n".join(sys_parts)}]
+        if not history:
+            return msgs
+        head, rest = history[0], history[1:]
+        # group: an assistant message followed by its tool/user replies
+        groups, cur = [], []
+        for m in rest:
+            if m["role"] == "assistant" and cur:
+                groups.append(cur)
+                cur = []
+            cur.append(m)
+        if cur:
+            groups.append(cur)
+        dropped = max(0, len(groups) - self.keep_turns)
+        kept = groups[dropped:]
+        msgs.append(head)
+        if dropped:
+            msgs.append({"role": "user", "content": f"[{dropped} earlier steps omitted from context]"})
+        for g in kept:
+            for m in g:
+                if m["role"] == "tool" and len(m.get("content") or "") > self.max_obs_chars:
+                    c = m["content"]
+                    m = {**m, "content": c[: self.max_obs_chars] + f"\n...[truncated {len(c) - self.max_obs_chars} chars]"}
+                msgs.append(m)
+        return msgs
+
+
+def register(reg):
+    reg.register("context_mgmt", "default", lambda c: SlidingWindow(**c),
+                 "System prompt + benchmark guidance + execution guidance + memory notes; task message pinned; "
+                 "sliding window over the last 30 assistant turns (tool pairs kept intact); observations capped at 6000 chars.",
+                 config_schema={"keep_turns": "int (default 30)", "max_obs_chars": "int (default 6000)",
+                                "extra_system": "str appended to the system prompt (default empty)"},
+                 niche={"strategy": "sliding_window", "summarize": "no"})
+
+
+```json
+{
+  "iteration": 2,
+  "candidates": [
+    {
+      "name": "protect_env_state",
+      "parent": "h0",
+      "hypothesis": "Adding general programming hygiene guidance to never overwrite the root environment objects (`apis`) and providing proactive guidance on handling paginated API endpoints will prevent catastrophic state loss and task timeouts, improving val pass rate to 100% while reducing wasted exploratory steps.",
+      "changes": "Added general execution guidance in context_mgmt/default.py warning against overwriting environment globals like `apis`, reminding about pagination in listing endpoints, and checking parameter docs.",
+      "expected_efficiency": "Slight reduction in turns (~1-2 steps/episode) and avoidance of max_step failures."
+    }
+  ]
+}
+```
+
+CANDIDATES: protect_env_state
