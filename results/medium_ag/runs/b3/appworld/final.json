@@ -1,0 +1,43 @@
+{
+ "global": "r4",
+ "iteration": 4,
+ "train": 1.0,
+ "config": {
+  "D1": {
+   "examples": false,
+   "structured_instruction": true,
+   "compression": "none",
+   "strategy": "Direct final answer formatting and precise multi-app entity resolution"
+  },
+  "D2": {
+   "tool_access": "bash",
+   "tool_protocol": "native",
+   "retrieval_mode": "none",
+   "top_k": 0,
+   "strategy": "Direct targeted API tool invocations; never invoke completion tool for probing"
+  },
+  "D3": {
+   "temperature": 0.0,
+   "max_tokens": 2048,
+   "top_p": 1.0,
+   "candidate_count": 1,
+   "strategy": "Deterministic low-temperature decoding"
+  },
+  "D4": {
+   "workflow": "agentic_loop",
+   "stop_rule": "env_done_or_accepted_finish_or_max_steps",
+   "strategy": "Strict turn budgeting: eliminate redundant post-mutation verification and finalize immediately"
+  },
+  "D5": {
+   "memory_policy": "sliding_window",
+   "history_keep": 30,
+   "strategy": "Sliding window of 30 turns to retain execution context"
+  },
+  "D6": {
+   "postprocess": "schema_strip",
+   "validator": "verifier_slot",
+   "fallback": "none",
+   "strategy": "Strict schema conformance: raw numeric values and exact target entities"
+  }
+ }
+}

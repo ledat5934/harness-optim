@@ -12,4 +12,4 @@ Current priorities:
 - D6 strategy: Strict schema conformance: raw numeric values and exact target entities
 
 Distilled emphasis:
-- Maintain strict turn budgeting and immediate finish to preserve the 100% solve rate across flipping tasks.
+- Recent distilled pressure is highest on D4 (5 pattern(s)); keep that dimension under active scrutiny.
