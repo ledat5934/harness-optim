@@ -1,0 +1,79 @@
+{
+  "bundle_version": 2,
+  "config": {
+    "D1": {
+      "examples": false,
+      "structured_instruction": true,
+      "compression": "none",
+      "strategy": "Enforce strict target entity extraction without conversational preamble or narrative explanation."
+    },
+    "D2": {
+      "tool_access": "benchmark_tools",
+      "tool_protocol": "native",
+      "retrieval_mode": "document_inspect",
+      "top_k": 5,
+      "strategy": "Inspect full retrieved documents rather than relying on search snippets when facts are missing."
+    },
+    "D3": {
+      "temperature": 0.0,
+      "max_tokens": 3072,
+      "top_p": 1.0,
+      "candidate_count": 1,
+      "strategy": "Allocate 3072 max tokens to prevent reasoning or finish call truncation."
+    },
+    "D4": {
+      "workflow": "react_loop",
+      "stop_rule": "env_done_or_accepted_finish_or_max_steps",
+      "strategy": "Sub-goal decomposition and early convergence before step 20 to eliminate turn exhaustion."
+    },
+    "D5": {
+      "memory_policy": "sliding_window",
+      "history_keep": 30,
+      "strategy": "Retain full turn trajectory across multi-hop reasoning steps."
+    },
+    "D6": {
+      "postprocess": "extract_target_entity",
+      "validator": "verifier_slot",
+      "fallback": "best_candidate_entity",
+      "strategy": "Isolate bare target value and suppress conversational justifications on finish."
+    }
+  },
+  "runtime_files": {
+    "agents": "AGENTS.override.md",
+    "policy": "policy.json",
+    "memory": ".memoharness/memory.md",
+    "playbook": ".memoharness/playbook.md"
+  },
+  "codex": {
+    "model": "",
+    "reasoning_effort": "medium",
+    "reasoning_summary": "auto"
+  },
+  "updated_iteration": 1,
+  "distilled_patterns": [
+    {
+      "pattern_id": "browsecomp-d6-output-preamble",
+      "primary_dim": "D6",
+      "description": "Agent identified the correct target entity but failed evaluation by emitting conversational explanations, reasoning narrative, or justification wrappers instead of the exact answer.",
+      "effect": "Caused failures in 811, 815, 821, 822, and 826. Enforcing strict entity extraction restores reward.",
+      "evidence": ["811", "815", "821", "822", "826"],
+      "iteration_range": [0, 1]
+    },
+    {
+      "pattern_id": "browsecomp-d4-turn-exhaustion",
+      "primary_dim": "D4",
+      "description": "Agent cycles through repetitive, slightly varied search queries without decomposing sub-goals or inspecting full pages, hitting the 25-turn budget ceiling.",
+      "effect": "Accounts for the majority (47) of iteration 0 failures. Mitigated by budget pacing and keyword pivoting.",
+      "evidence": ["793", "794", "796", "797", "802", "833"],
+      "iteration_range": [0, 1]
+    },
+    {
+      "pattern_id": "browsecomp-d3-truncation",
+      "primary_dim": "D3",
+      "description": "Generation truncated mid-turn due to insufficient token headroom, preventing completion of reasoning or the finish action.",
+      "effect": "Failed case 809. Increasing D3.max_tokens to 3072 eliminates truncation risk.",
+      "evidence": ["809"],
+      "iteration_range": [0, 1]
+    }
+  ]
+}

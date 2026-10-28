@@ -67,3 +67,22 @@ shared H0: train records=150 (pass 149), val=0.97
     [b1_alfworld_r2_val] look_at_obj_in_light-Newspaper-None-DeskLamp-210/trial_T2019 ok=True steps=6 tok=17477 $0.00000 err=
     [b1_alfworld_r2_val] pick_clean_then_place_in_recep-Pot-None-DiningTable-26/trial ok=True steps=37 tok=144128 $0.00000 err=
 [budget] b1[alfworld] round 3 spent=$15.921650 of MAX_USD=$26.00 remaining=$10.078350 (38.8%) calls=241931
+[budget] b1[alfworld] round 4 spent=$15.921650 of MAX_USD=$26.00 remaining=$10.078350 (38.8%) calls=242495
+Traceback (most recent call last):
+  File "/home/user/harness-optim/scripts/run_baselines.py", line 123, in <module>
+    main()
+  File "/home/user/harness-optim/scripts/run_baselines.py", line 106, in main
+    res = m.run(args.bench, shared, llm_mod.LLM(), cfg=cfg)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/harness-optim/baselines/b1_freeform.py", line 459, in run
+    an = analyze(bench, ws, pool, frontier, evidence[-MAX_TRAJ_IN_PROMPT:], client, ri, n_train, n_val, k)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/harness-optim/baselines/b1_freeform.py", line 358, in analyze
+    r = client.chat([{"role": "user", "content": prompt}], tag=f"b1:analyze:{bench}", max_tokens=6000,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/harness-optim/llm.py", line 191, in chat
+    r = self._chat(messages, tools, tag, temperature, max_tokens, tool_choice, stop, reasoning)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/harness-optim/llm.py", line 258, in _chat
+    raise LLMError(f"failed after {self.max_retries} retries: {last_err}")
+llm.LLMError: failed after 8 retries: HTTP 503: {"error":{"message":"[antigravity/gemini-3.8-flash] [403]: {\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"This service has been disabled in this account for violation of Terms of Service. Please submit an appeal to continue using this product.\",\n    \" (reset after 1m 19s)"}}

@@ -3,13 +3,9 @@
 Use `./policy.json` as the authoritative D1-D6 summary.
 Use this file for stable MemoHarness execution heuristics that should survive iteration-to-iteration.
 
-Current priorities:
-- Read `./policy.json` first, then use this playbook for stable execution heuristics.
-- D1 strategy: inspect verifier evidence first
-- D2 strategy: use local tooling and file inspection first
-- D4 strategy: iterate until checks are satisfied
-- D5 strategy: keep rolling memory compact and evidence-backed
-- D6 strategy: validate outputs before finishing
-
-Distilled emphasis:
-- Recent distilled pressure is highest on D4 (1 pattern(s)); keep that dimension under active scrutiny.
+Current Priorities:
+- D1/D6: Extract strictly the target value without conversational preamble, prefix, or explanation.
+- D2: Inspect full document contents when search snippets lack necessary precision.
+- D3: Maintain sufficient token headroom (3072) to prevent truncation of final calls.
+- D4: Plan multi-constraint searches and finish before step 20 to avoid turn budget exhaustion.
+- D5: Retain complete multi-hop conversation context across steps.

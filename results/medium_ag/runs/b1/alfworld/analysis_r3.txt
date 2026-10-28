@@ -1,0 +1,280 @@
+### Step 1: Analyze
+
+STATE:
+- H0 validation: 96.7% (29/30), mean turns 11.4, failing task 19 (Ladle-Drawer-2 max_steps timeout).
+- R1 (parent): 100.0% (30/30), mean turns 10.4, placing command normalization (`put/place` -> `move`) resolved syntax rejections.
+- R2: 96.7% (29/30), mean turns 9.9; domain system prompt guidance caused direct interaction attempts before navigation (e.g. `open fridge 1` -> `Nothing happens.`), losing a step and causing task 19 to fail at 50 steps.
+- Trajectories reveal two critical inefficiencies: (1) Gemini Flash occasionally emits tool calls as raw content text (`call:default_api:act{command:...}`), causing 2-3 dropped no-action turns; (2) natural language commands for object lighting (`turn on/switch on <lamp>`) and utensil handling (`pick up`, `heat/clean/cool in/using`) are rejected by ALFWorld grammar, prompting agents to waste 2-3 turns querying `admissible_commands`.
+
+HYPOTHESIS:
+"Expanding `tool_policy` to parse LLM text-call leaks (`call:(?:default_api:)?act{...}`, unquoted arg blocks, bare action text fallback) and normalizing common action verbs (`turn on/switch on` -> `use`, `pick up` -> `take`, `heat/cool/clean ... in/using` -> `... with ...`) will eliminate dropped LLM turns and syntax-induced `admissible_commands` queries, reducing mean turns from 10.4 to under 9.5 while solidly maintaining 100% pass rate."
+
+CANDIDATE: name=robust_tool_calling, changes="In variants/tool_policy/default.py, add regex parsing for call:default_api:act{...} and unquoted key-value text calls, add bare command line fallback for act tools, and expand _normalize_command_str to map 'turn on/switch on' to 'use', 'pick up' to 'take', and 'in/using' to 'with' for conditioning actions.", prediction="Mean turns reduced by ~1-1.5 turns, token consumption reduced by ~10%, maintaining 100% pass rate on validation."
+
+PARENT: r1
+
+---
+
+### Step 2: Implement
+
+### FILE: variants/tool_policy/default.py
+"""tool_policy/default: expose the env's native tools as-is; parse native tool calls with robust text fallbacks.
+
+- tools(task): the adapter's tool schemas, unchanged.
+- parse(resp): native `tool_calls`. When the model replies in text, we accept:
+  - standard <tool_call>{json}</tool_call> and GLM-style arg_key/arg_value blocks
+  - Qwen-style <function=name> blocks
+  - bare JSON objects {"name": ..., "arguments": ...}
+  - Gemini-style `call:default_api:name{key:value}` or `call:name{key:value}` text leaks
+  - direct single-line text game commands when the task exposes an `act` tool
+- command normalization:
+  - `put/place <obj> in/on/into/onto <recep>` -> `move <obj> to <recep>`
+  - `turn on/switch on <obj>` -> `use <obj>`
+  - `turn off/switch off <obj>` -> `use <obj>`
+  - `pick up/pick <obj> from <recep>` -> `take <obj> from <recep>`
+  - `heat/cool/clean <obj> in/inside/using/under <recep>` -> `<verb> <obj> with <recep>`
+  - tool name mapping: `put` or `place` -> `move`
+- format_observation: truncated to `max_obs_chars`.
+"""
+from __future__ import annotations
+
+import json
+import re
+
+from benchmarks.common import truncate
+from h0.protocols import Action
+
+_TC_BLOCK = re.compile(r"<tool_call>(.*?)(?:</tool_call>|$)", re.S)
+_ARG_KV = re.compile(r"<arg_key>\s*(.*?)\s*</arg_key>\s*<arg_value>(.*?)</arg_value>", re.S)
+_FN_BLOCK = re.compile(r"<function=([\w.\-]+)>(.*?)(?:</function>|$)", re.S)
+_CALL_API_BLOCK = re.compile(r"(?:call:)?(?:default_api:)?([\w.\-]+)\s*\{([^}]+)\}", re.S)
+_EXACT = re.compile(r"^\W*exact answer\W*:", re.I | re.M)
+_PARAM = re.compile(r"<parameter=([\w.\-]+)>\s*(.*?)\s*</parameter>", re.S)
+
+# Action normalization patterns
+_PUT_PATTERN = re.compile(r"^\s*(?:put|place)\s+(.+?)\s+(?:in/on|into|onto|in|on)\s+(.+?)\s*$", re.I)
+_TURN_ON_PATTERN = re.compile(r"^\s*(?:turn\s+on|switch\s+on|turn_on|switch_on)\s+(.+?)\s*$", re.I)
+_TURN_OFF_PATTERN = re.compile(r"^\s*(?:turn\s+off|switch\s+off|turn_off|switch_off)\s+(.+?)\s*$", re.I)
+_PICK_UP_PATTERN = re.compile(r"^\s*(?:pick\s+up|pick)\s+(.+?)\s+from\s+(.+?)\s*$", re.I)
+_CONDITION_PATTERN = re.compile(r"^\s*(heat|cool|clean)\s+(.+?)\s+(?:in|inside|using|under)\s+(.+?)\s*$", re.I)
+
+# Direct command pattern fallback
+_BARE_CMD_PATTERN = re.compile(
+    r"^\s*(?:>|\$|\bact\b:?|\bcommand\b:?)?\s*"
+    r"(go to\s+.+|take\s+.+\s+from\s+.+|pick up\s+.+\s+from\s+.+|move\s+.+\s+to\s+.+|"
+    r"put\s+.+\s+(?:in/on|into|onto|in|on)\s+.+|place\s+.+\s+(?:in/on|into|onto|in|on)\s+.+|"
+    r"open\s+.+|close\s+.+|toggle\s+.+|use\s+.+|turn on\s+.+|switch on\s+.+|"
+    r"clean\s+.+\s+(?:with|in|inside|using|under)\s+.+|"
+    r"heat\s+.+\s+(?:with|in|inside|using)\s+.+|"
+    r"cool\s+.+\s+(?:with|in|inside|using)\s+.+|"
+    r"inventory|look|examine\s+.+)\s*$",
+    re.I
+)
+
+
+def _json_objects(text: str):
+    """Every balanced top-level {...} in free text that decodes as JSON (strings with braces/escapes handled)."""
+    i = text.find("{")
+    while i != -1:
+        depth, in_str, esc, end = 0, False, False, -1
+        for j in range(i, len(text)):
+            c = text[j]
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            elif c == '"':
+                in_str = True
+            elif c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    end = j
+                    break
+        if end == -1:
+            return
+        try:
+            yield json.loads(text[i:end + 1])
+            i = text.find("{", end + 1)
+        except json.JSONDecodeError:
+            i = text.find("{", i + 1)
+
+
+def _decode_args(raw):
+    """Tool arguments -> dict. Accepts a dict, a JSON string, JSON inside a code fence or followed by extra text."""
+    if isinstance(raw, dict):
+        return raw
+    raw = raw or "{}"
+    try:
+        args = json.loads(raw)
+        if isinstance(args, str):  # double-encoded
+            args = json.loads(args)
+        if isinstance(args, dict):
+            return args
+    except (json.JSONDecodeError, TypeError):
+        pass
+    for obj in _json_objects(str(raw)):
+        if isinstance(obj, dict):
+            return obj
+    return {"_raw": raw}
+
+
+def _value(v: str):
+    v = v.strip()
+    try:
+        return json.loads(v) if v[:1] in "[{" else v
+    except json.JSONDecodeError:
+        return v
+
+
+def _normalize_command_str(s: str) -> str:
+    cleaned = s.strip().strip("'\"").rstrip(".")
+    # 1. put/place -> move
+    m = _PUT_PATTERN.match(cleaned)
+    if m:
+        return f"move {m.group(1).strip()} to {m.group(2).strip()}"
+    # 2. turn on / switch on -> use
+    m = _TURN_ON_PATTERN.match(cleaned)
+    if m:
+        return f"use {m.group(1).strip()}"
+    # 3. turn off / switch off -> use
+    m = _TURN_OFF_PATTERN.match(cleaned)
+    if m:
+        return f"use {m.group(1).strip()}"
+    # 4. pick up -> take
+    m = _PICK_UP_PATTERN.match(cleaned)
+    if m:
+        return f"take {m.group(1).strip()} from {m.group(2).strip()}"
+    # 5. heat/cool/clean with appliance
+    m = _CONDITION_PATTERN.match(cleaned)
+    if m:
+        return f"{m.group(1).lower()} {m.group(2).strip()} with {m.group(3).strip()}"
+    return s
+
+
+def _normalize_val(v):
+    if isinstance(v, str):
+        return _normalize_command_str(v)
+    if isinstance(v, dict):
+        return {k: _normalize_val(val) for k, val in v.items()}
+    if isinstance(v, list):
+        return [_normalize_val(item) for item in v]
+    return v
+
+
+def _normalize_args(args: dict) -> dict:
+    if not isinstance(args, dict):
+        return args
+    return {k: _normalize_val(v) for k, v in args.items()}
+
+
+class NativeTools:
+    def __init__(self, max_obs_chars: int = 8000, text_fallback: bool = True):
+        self.max_obs_chars, self.text_fallback = max_obs_chars, text_fallback
+
+    def tools(self, task):
+        return task.tools
+
+    def parse(self, resp, task):
+        acts = []
+        for tc in resp.tool_calls or []:
+            fn = tc.get("function") or {}
+            raw_args = fn.get("arguments") or "{}"
+            args = _decode_args(raw_args)
+            args = _normalize_args(args)
+            acts.append(Action(tool=fn.get("name", ""), args=args, call_id=tc.get("id"),
+                               raw={"function": {"name": fn.get("name", ""), "arguments": raw_args}}))
+        names = {t["function"]["name"] for t in getattr(task, "tools", [])}
+        for act in acts:
+            if act.tool in ("put", "place") and act.tool not in names and "move" in names:
+                act.tool = "move"
+        if acts or not self.text_fallback:
+            return acts
+
+        # Structured text tool calls
+        content = resp.content or ""
+        for name, args in self._text_calls(content):
+            args = _normalize_args(args)
+            if name in ("put", "place") and name not in names and "move" in names:
+                name = "move"
+            if name in names:
+                return [Action(tool=name, args=args, call_id=None, raw={"name": name, "arguments": args})]
+
+        # Finish tool fallback
+        fin = getattr(task, "finish_tool", "")
+        if fin in names and _EXACT.search(content):
+            args = {"answer": content.strip()}
+            return [Action(tool=fin, args=args, call_id=None, raw={"name": fin, "arguments": args})]
+
+        # Bare command fallback for interactive text environments
+        if "act" in names:
+            for line in content.splitlines():
+                line = line.strip().strip("`*")
+                m = _BARE_CMD_PATTERN.match(line)
+                if m:
+                    cmd = _normalize_command_str(m.group(1))
+                    return [Action(tool="act", args={"command": cmd}, call_id=None,
+                                   raw={"name": "act", "arguments": {"command": cmd}})]
+
+        return []
+
+    @staticmethod
+    def _text_calls(txt: str):
+        for body in _TC_BLOCK.findall(txt):
+            body = body.strip()
+            if body.startswith("{"):
+                for d in _json_objects(body):
+                    if isinstance(d, dict) and "name" in d:
+                        yield str(d["name"]), _decode_args(d.get("arguments", d.get("parameters", {})))
+            else:  # GLM style: name, then <arg_key>/<arg_value> pairs
+                name = re.split(r"[\s<]", body, maxsplit=1)[0]
+                yield name, {k: _value(v) for k, v in _ARG_KV.findall(body)}
+        for name, body in _FN_BLOCK.findall(txt):
+            yield name, {k: _value(v) for k, v in _PARAM.findall(body)}
+        for m in _CALL_API_BLOCK.finditer(txt):
+            fn_name, body = m.group(1), m.group(2).strip()
+            # If body is json
+            try:
+                d = json.loads("{" + body + "}")
+                if isinstance(d, dict):
+                    yield fn_name, d
+                    continue
+            except Exception:
+                pass
+            # If body is unquoted k:v
+            if ":" in body:
+                k, v = body.split(":", 1)
+                yield fn_name, {k.strip().strip("'\""): v.strip().strip("'\"")}
+        for d in _json_objects(txt):
+            if isinstance(d, dict) and isinstance(d.get("name"), str) and ("arguments" in d or "parameters" in d):
+                yield d["name"], _decode_args(d.get("arguments", d.get("parameters", {})))
+
+    def format_observation(self, action, result, task):
+        return truncate(result.observation, self.max_obs_chars)
+
+
+def register(reg):
+    reg.register("tool_policy", "default", lambda c: NativeTools(**c),
+                 "Exposes the environment's native tools unchanged; parses native and leaked text tool calls "
+                 "(including call:default_api:act{...} and bare commands); normalizes interactive action syntax; "
+                 "observations truncated head+tail to 8000 chars.",
+                 config_schema={"max_obs_chars": "int (default 8000)", "text_fallback": "bool (default true)"},
+                 niche={"exposure": "all", "parse": "native+text", "obs": "truncate"})
+```
+
+---
+
+### Step 3: Write pending_eval.json
+
+```json
+{
+  "iteration": 3,
+  "candidates": [
+    {
+      "name": "robust_tool_calling",
+      "parent": "r1",
+      "hypothesis": "Expanding tool_policy to parse LLM text-call leaks (call:(?:default_api:)?act{...}, unquoted arg blocks, bare action text fallback) and normalizing common action verbs (turn on/switch on -> use, pick up -> take, heat/cool

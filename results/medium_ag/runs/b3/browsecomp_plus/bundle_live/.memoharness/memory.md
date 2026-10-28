@@ -1,11 +1,11 @@
 # Rolling Memory
 
-Updated after iteration 0.
+Updated after iteration 1.
 
 - Read `./policy.json` first and use this file only for recent distilled lessons.
 - Keep only recurring failures and verified repair heuristics here.
 
-Recent distilled patterns:
-- [D4] Cases in browsecomp_plus consistently fail with zero reward under D4, indicating that the react_loop workflow with env_done_or_accepted_finish_or_max_steps terminates prematurely or fails to orchestrate multi-step web browsing trajectories effectively.
-  Effect: Eliminates all progress (0.0 reward across 6 runs). Recommend altering D4 workflow to an exploratory plan-and-solve or multi-turn agent loop with explicit retry handling.
-  Evidence: 770, 772
+Distilled Patterns:
+- [D6/D1] Conversational wrappers and narrative justifications fail evaluators that match exact entities (cases 811, 815, 821, 822, 826). The final response must be the bare answer entity or phrase only.
+- [D4/D2] Repetitive querying and reliance on search snippets causes turn exhaustion at step 25 (cases 793, 794, 796, 797, 802, 833). Decompose constraints, inspect full page texts directly, and converge by step 18-20.
+- [D3] Case 809 suffered generation truncation under 2048 max tokens. Increased D3.max_tokens to 3072 to ensure clean finish tool execution.
