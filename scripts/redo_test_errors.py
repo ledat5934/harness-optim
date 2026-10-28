@@ -50,6 +50,8 @@ def main():
     ap.add_argument("--method", required=True, choices=["b1", "b2", "b3"])
     ap.add_argument("--protocol", default="medium", choices=sorted(C.PROTOCOLS))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--missing", action="store_true",
+                    help="also run test tasks with no record (a run killed mid-test after writing final.json)")
     args = ap.parse_args()
     cfg = C.PROTOCOLS[args.protocol]
     C.use_protocol(cfg)
@@ -58,10 +60,12 @@ def main():
     recs = [json.loads(l) for l in out.read_text().splitlines() if l.strip()]
     test = [r for r in recs if r.get("run_tag") == tag]
     bad = [r for r in test if r.get("error")]
-    print(f"{out.name}: {len(test)} test records, {len(bad)} with errors")
-    if not bad or args.dry_run:
+    split, test_ids = C.protocol_tasks(args.bench, cfg)["test"]
+    done = {r["task_id"] for r in test}
+    missing = [t for t in test_ids if t not in done] if args.missing else []
+    print(f"{out.name}: {len(test)} test records, {len(bad)} with errors, {len(missing)} missing")
+    if not (bad or missing) or args.dry_run:
         return
-    split = bad[0]["split"]
     client = llm_mod.LLM()
     h = test_harness(args.method, args.bench, client)
     label = {"method": args.method, "phase": "test", **h.get("label_extra", {})}
@@ -69,7 +73,7 @@ def main():
     bad_ids = {id(r) for r in bad}
     keep = [r for r in recs if id(r) not in bad_ids]
     out.write_text("".join(json.dumps(r, default=str) + "\n" for r in keep))
-    C.evaluate(args.bench, split, [r["task_id"] for r in bad], h["root"], client, tag, out,
+    C.evaluate(args.bench, split, [r["task_id"] for r in bad] + missing, h["root"], client, tag, out,
                composer=h.get("composer"), workers=cfg["workers"], label=label)
     test = [json.loads(l) for l in out.read_text().splitlines() if l.strip()]
     test = [r for r in test if r.get("run_tag") == tag]
@@ -77,9 +81,13 @@ def main():
     errs = sum(1 for r in test if r.get("error"))
     print(f"test after redo: n={len(test)} success={succ:.3f} errors={errs}")
     runs = C.OUT / "baseline_runs.jsonl"
-    last = [json.loads(l) for l in runs.read_text().splitlines()
-            if l.strip() and json.loads(l).get("bench") == args.bench and json.loads(l).get("method") == args.method][-1]
-    C.append_jsonl(runs, {**last, "test_success": succ, "n_test": len(test), "redo_test_errors": len(bad)})
+    prev = [json.loads(l) for l in runs.read_text().splitlines()
+            if l.strip() and json.loads(l).get("bench") == args.bench and json.loads(l).get("method") == args.method
+            and json.loads(l).get("protocol") == args.protocol]
+    last = prev[-1] if prev else {"protocol": args.protocol, "bench": args.bench, "method": args.method,
+                                  "note": "summary rebuilt by redo_test_errors (run killed during test)"}
+    C.append_jsonl(runs, {**last, "test_success": succ, "n_test": len(test), "redo_test_errors": len(bad),
+                          "redo_test_missing": len(missing)})
 
 
 if __name__ == "__main__":

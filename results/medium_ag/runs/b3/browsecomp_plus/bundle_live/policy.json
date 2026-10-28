@@ -3,39 +3,39 @@
   "config": {
     "D1": {
       "examples": false,
-      "structured_instruction": true,
+      "structured_instruction": false,
       "compression": "none",
-      "strategy": "strict_canonical_entity_extraction"
+      "strategy": ""
     },
     "D2": {
-      "tool_access": "bash",
+      "tool_access": "benchmark_tools",
       "tool_protocol": "native",
-      "retrieval_mode": "search_then_inspect",
-      "top_k": 5,
-      "strategy": "broad_noun_queries_with_active_page_inspection"
+      "retrieval_mode": "none",
+      "top_k": 0,
+      "strategy": ""
     },
     "D3": {
       "temperature": 0.0,
       "max_tokens": 2048,
       "top_p": 1.0,
       "candidate_count": 1,
-      "strategy": "deterministic_factual_generation"
+      "strategy": ""
     },
     "D4": {
-      "workflow": "agentic_loop",
+      "workflow": "react_loop",
       "stop_rule": "env_done_or_accepted_finish_or_max_steps",
-      "strategy": "hard_step_cap_with_fallback_convergence"
+      "strategy": ""
     },
     "D5": {
       "memory_policy": "sliding_window",
-      "history_keep": 25,
-      "strategy": "rolling_window_with_distilled_heuristics"
+      "history_keep": 30,
+      "strategy": ""
     },
     "D6": {
-      "postprocess": "direct_entity",
+      "postprocess": "none",
       "validator": "verifier_slot",
-      "fallback": "best_grounded_candidate",
-      "strategy": "strict_isolated_entity_no_narrative"
+      "fallback": "none",
+      "strategy": ""
     }
   },
   "runtime_files": {
@@ -48,56 +48,5 @@
     "model": "",
     "reasoning_effort": "medium",
     "reasoning_summary": "auto"
-  },
-  "updated_iteration": 3,
-  "distilled_patterns": [
-    {
-      "pattern_id": "llm-pattern-iter3-1",
-      "primary_dim": "D6",
-      "description": "Agent fails to call the finish tool, outputs answers in thought text, or embeds conversational narrative in tool arguments.",
-      "effect": "Immediate zero-reward failure. Enforce mandatory finish tool execution containing only the bare canonical entity.",
-      "evidence": [
-        "770",
-        "772",
-        "773",
-        "775",
-        "783",
-        "787"
-      ],
-      "iteration_range": [
-        0,
-        3
-      ]
-    },
-    {
-      "pattern_id": "llm-pattern-iter3-2",
-      "primary_dim": "D4",
-      "description": "Agent exhausts 25-turn budget cycling redundant searches without converging on documents or calling finish.",
-      "effect": "Abrupt step limit failure. Enforce anti-stagnation rules and mandatory fallback finish invocation by step 16.",
-      "evidence": [
-        "769",
-        "770",
-        "772",
-        "773"
-      ],
-      "iteration_range": [
-        0,
-        3
-      ]
-    },
-    {
-      "pattern_id": "llm-pattern-iter3-3",
-      "primary_dim": "D2",
-      "description": "Overly rigid search queries fail to retrieve biographical/document details; agent repeatedly searches instead of reading page text.",
-      "effect": "Misses ground truth evidence. Require 2-4 noun queries and page inspection of promising search links.",
-      "evidence": [
-        "769",
-        "787"
-      ],
-      "iteration_range": [
-        0,
-        3
-      ]
-    }
-  ]
+  }
 }
