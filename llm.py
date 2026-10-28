@@ -186,11 +186,16 @@ class LLM:
              fallback_no_reasoning: bool = False) -> LLMResponse:
         """`reasoning` is passed to OpenRouter as-is. The model emits hidden reasoning; on long generation prompts
         it can spend the whole max_tokens budget there and return empty content (finish_reason=length). With
-        `fallback_no_reasoning=True`, an empty reply (no content, no tool calls) is retried once with
-        reasoning={"enabled": False}; the retry is logged under tag "<tag>:noreason"."""
+        `fallback_no_reasoning=True`, an empty reply (no content, no tool calls) or one cut at max_tokens is retried
+        once with reasoning={"enabled": False} (a cut one with twice the budget); the retry is logged under tag "<tag>:noreason"."""
         r = self._chat(messages, tools, tag, temperature, max_tokens, tool_choice, stop, reasoning)
-        if fallback_no_reasoning and not (r.content or "").strip() and not r.tool_calls:
-            r = self._chat(messages, tools, tag + ":noreason", temperature, max_tokens, tool_choice, stop,
+        finish = ((r.raw or {}).get("choices") or [{}])[0].get("finish_reason")
+        empty = not (r.content or "").strip() and not r.tool_calls
+        if fallback_no_reasoning and (empty or finish in ("length", "max_tokens")):
+            # a reply cut at max_tokens is retried too: on gateways that hide reasoning (antigravity gemini) the
+            # thinking eats the budget and only a fragment of the answer comes back, with finish_reason=max_tokens
+            r = self._chat(messages, tools, tag + ":noreason", temperature,
+                           max_tokens if empty else 2 * (max_tokens or self.max_tokens), tool_choice, stop,
                            {"enabled": False})
         return r
 
@@ -218,7 +223,8 @@ class LLM:
         if reasoning is not None and "openrouter.ai" in self.base_url:
             body["reasoning"] = reasoning
         elif reasoning is not None:  # OpenAI-style gateways reject OpenRouter's `reasoning` object
-            body["reasoning_effort"] = "none" if reasoning.get("enabled") is False else reasoning.get("effort", "low")
+            off = "low" if self.model.startswith("ag/") else "none"  # antigravity rejects "none"; "low" hides thinking
+            body["reasoning_effort"] = off if reasoning.get("enabled") is False else reasoning.get("effort", "low")
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json",
                    "X-Title": "HarnessGraph-smoke"}
         last_err: str | None = None

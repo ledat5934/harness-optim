@@ -1,0 +1,58 @@
+,
+            )
+```
+If `llm.chat` throws an exception, the entire run crashes immediately!
+Wait! Can the agent loop recover from a transient LLM error or bad context?
+If `llm.chat` throws an error:
+Wait, should `agent_loop` or `context_mgmt` handle it?
+If `context_mgmt` ensures clean, valid UTF-8 messages without lone surrogates, and keeps the context well-formed, that's clean and principled.
+
+Wait! What else happened in `df61dc5_2`?
+Look at `state.step` in `df61dc5_2`:
+`step=38`.
+Why was `state.step` 38?
+Because `task.max_steps` is 40.
+At step 38, `remaining` was 2.
+Wait! Look at `agent_loop/default.py`:
+```python
+            # Budget awareness (only for tasks that end with an explicit finish tool): like the reference search
+            # agents, force a final answer instead of silently running out of steps.
+            if (
+                task.finish_tool
+                and self.budget_nudge_steps
+                and remaining <= self.budget_nudge_steps
+            ):
+              if not nudged:
+                state.history.append({
+                    "role": "user",
+                    "content": (
+                        f"Only {remaining} step(s) left. Call"
+                        f" `{task.finish_tool}` now with your best final answer"
+                        " based on the evidence gathered so far."
+                    ),
+                })
+                nudged = True
+```
+Wait! Look at `task.finish_tool`!
+Does AppWorld have `task.finish_tool`?
+Let's check!
+In AppWorld:
+Does `task` have `finish_tool`?
+Wait! In AppWorld, tasks do NOT have a finish tool in `task.tools`.
+Why?
+Because in AppWorld:
+The only tool in `task.tools` is `execute_python`!
+And how does an AppWorld task finish?
+`apis.supervisor.complete_task()` is called inside python code!
+When `apis.supervisor.complete_task()` is called, `sr.done` is True!
+Then:
+```python
+            if sr.done:
+              v = h.verifier.check(task, act, state, env_done=True)
+              if v.accept:
+                return LoopOutcome("done", state.step, llm_calls=llm_calls)
+```
+So in AppWorld, `task.finish_tool` is None or ""!
+Therefore, `budget_nudge_steps` in `agent_loop/default.py` NEVER FIRES FOR APPWORLD!
+Because `task.finish_tool` is falsy!
+So if an AppWorld agent is running out of steps (e.g. at
