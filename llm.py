@@ -308,7 +308,7 @@ class _Retry(Exception):
 
 _RESET = re.compile(r"(?:resets?_in_seconds|resets?_after_seconds)\W+(\d+)"
                     r"|reset (?:after|in) (?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s)?", re.I)
-_QUOTA = re.compile(r"usage.?limit|quota|rate.?limit", re.I)
+_QUOTA = re.compile(r"usage.?limit|quota|rate.?limit|unavailable \(reset after", re.I)  # antigravity cooldown: 503 "Unavailable (reset after 1h 2m)"
 
 
 def _quota_reset_s(r) -> float | None:
