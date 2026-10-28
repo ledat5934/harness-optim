@@ -1,12 +1,12 @@
 {
- "iteration": 3,
+ "iteration": 4,
  "candidates": [
   {
-   "name": "budget_aware_react",
+   "name": "robust_message_sanitizer",
    "parent": "h0",
-   "hypothesis": "Providing a step budget warning when remaining steps are low (<= 4) for all tasks reminds the agent to finalize state changes and mark the task complete before running out of turns, preventing max_steps timeouts.",
-   "changes": "In variants/agent_loop/default.py, generalize the budget nudge so that if remaining steps <= budget_nudge_steps and not nudged, a message warns of the remaining steps and instructs finalizing actions and calling the task completion API/tool.",
-   "expected_efficiency": "Reduces mean turns on long tasks near the 40-step limit and prevents timeout failures."
+   "hypothesis": "In agent_loop/default.py, ensuring assistant messages never contain completely empty content when no tool calls are present will eliminate Gemini Flash HTTP 400 INVALID_ARGUMENT crashes, recovering dropped tasks (530b157_2, df61dc5_1) and achieving 100% pass rate.",
+   "changes": "In agent_loop/default.py, ensure assistant messages always have non-empty content if tool_calls is empty, preventing provider API HTTP 400 invalid argument rejections.",
+   "expected_efficiency": "Eliminates unexpected HTTP 400 crashes on turns with empty assistant responses; token count and step count remain comparable."
   }
  ]
 }
