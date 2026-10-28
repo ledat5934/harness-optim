@@ -1,12 +1,12 @@
 {
- "iteration": 2,
+ "iteration": 3,
  "candidates": [
   {
-   "name": "protect_env_state",
+   "name": "budget_aware_react",
    "parent": "h0",
-   "hypothesis": "Adding general programming hygiene guidance to never overwrite the root environment objects (`apis`) and providing proactive guidance on handling paginated API endpoints will prevent catastrophic state loss and task timeouts, improving val pass rate to 100% while reducing wasted exploratory steps.",
-   "changes": "Added general execution guidance in context_mgmt/default.py warning against overwriting environment globals like `apis`, reminding about pagination in listing endpoints, and checking parameter docs.",
-   "expected_efficiency": "Slight reduction in turns (~1-2 steps/episode) and avoidance of max_step failures."
+   "hypothesis": "Providing a step budget warning when remaining steps are low (<= 4) for all tasks reminds the agent to finalize state changes and mark the task complete before running out of turns, preventing max_steps timeouts.",
+   "changes": "In variants/agent_loop/default.py, generalize the budget nudge so that if remaining steps <= budget_nudge_steps and not nudged, a message warns of the remaining steps and instructs finalizing actions and calling the task completion API/tool.",
+   "expected_efficiency": "Reduces mean turns on long tasks near the 40-step limit and prevents timeout failures."
   }
  ]
 }
