@@ -1,5 +1,5 @@
 {
-  "bundle_version": 2,
+  "bundle_version": 1,
   "config": {
     "D1": {
       "examples": false,
@@ -52,53 +52,92 @@
   "updated_iteration": 2,
   "distilled_patterns": [
     {
-      "pattern_id": "llm-pattern-iter1-d6-narrative-truncation",
+      "pattern_id": "llm-pattern-iter2-3",
+      "primary_dim": "D4",
+      "description": "Multi-hop browsing cases frequently exhaust turn budgets before resolving all intermediary facts, triggering premature termination under hard step limits and forcing unverified fallback submissions.",
+      "effect": "Prevents step-exhaustion failures on 3 cases. Increase the maximum step limit in D4 and adjust the stop rule to prioritize evidence grounding over early budget convergence.",
+      "evidence": [
+        "769",
+        "794",
+        "796"
+      ],
+      "iteration_range": [
+        0,
+        2
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter2-1",
       "primary_dim": "D6",
-      "description": "Agent embeds conversational prefaces or narrative explanatory text inside the answer call, which exceeds evaluation boundaries or truncates the target entity.",
-      "effect": "Caused 9 out of 14 failures in Iteration 1 (including flipping task 778). Enforce strict isolated entity output with zero commentary or markdown wrappers.",
+      "description": "Across multiple browsecomp_plus cases, the agent repeatedly includes explanatory narratives, reasoning preambles, and conversational text within the final answer submission instead of submitting only the isolated entity, causing post-processing and verification validation checks to fail.",
+      "effect": "Causes 0.0 reward across 8 cases due to strict string matching failures. Update D6 postprocess to an active entity-extraction parser (e.g., regex/schema extraction) and enforce strict single-token/entity verification.",
       "evidence": [
         "770",
         "772",
         "773",
         "775",
-        "778",
         "783",
         "784",
         "787",
-        "791"
+        "794"
       ],
       "iteration_range": [
-        1,
-        1
+        0,
+        2
       ]
     },
     {
-      "pattern_id": "llm-pattern-iter1-d4-budget-exhaustion",
-      "primary_dim": "D4",
-      "description": "Agent repeatedly issues non-productive queries past step 15, exhausting the turn budget without converging on an answer.",
-      "effect": "Caused 4 failures (including flipping task 805). Impose hard convergence stop by step 15-18 to submit best grounded candidate.",
-      "evidence": [
-        "794",
-        "796",
-        "797",
-        "805"
-      ],
-      "iteration_range": [
-        1,
-        1
-      ]
-    },
-    {
-      "pattern_id": "llm-pattern-iter1-d2-rigid-query-spinning",
+      "pattern_id": "llm-pattern-iter2-2",
       "primary_dim": "D2",
-      "description": "Search queries with overly narrow phrases or quotation marks fail to return snippets, leading to query cycling instead of page inspection.",
-      "effect": "Stalls retrieval; broad 2-4 noun queries and immediate candidate page inspection prevent zero-result loops.",
+      "description": "The retrieval workflow relies on overly rigid keyword queries and fails to systematically fetch and inspect candidate documents, leading to budget depletion before locating the necessary factual evidence.",
+      "effect": "Agents exhaust step limits and submit ungrounded fallback guesses. Configure D2 with iterative query expansion and automatic snippet ranking, while increasing D4 step budgets for complex browse trajectories.",
       "evidence": [
-        "769"
+        "769",
+        "773",
+        "784",
+        "794",
+        "796"
       ],
       "iteration_range": [
-        1,
-        1
+        0,
+        2
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter2-1",
+      "primary_dim": "D6",
+      "description": "Agents consistently contaminate final answer calls with explanatory prose, preambles, and conversational narrative rather than pure entities. The current D6 configuration (direct_entity postprocessor with verifier_slot) fails to parse or strip extraneous commentary from the submission string, causing strict benchmark evaluators to reject otherwise grounded answers.",
+      "effect": "Eliminates repeated zero-reward evaluations across 8 cases. Upgrade D6 postprocess to regex_entity_cleaner or llm_extractor, and configure the validator to enforce strict isolated token matching.",
+      "evidence": [
+        "770",
+        "772",
+        "773",
+        "775",
+        "783",
+        "784",
+        "787",
+        "794"
+      ],
+      "iteration_range": [
+        0,
+        2
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter2-2",
+      "primary_dim": "D2",
+      "description": "The search strategy relies on exhaustive keyword variations and narrow term reformulation rather than fetching and inspecting document contents. Agents loop through queries without reading retrieved page text, quickly depleting turn limits before uncovering necessary evidence and ultimately forcing ungrounded guesses at the horizon.",
+      "effect": "Prevents search-loop budget exhaustion in 5 cases. Shift D2 retrieval_mode to forced_fetch_and_parse with explicit page extraction depth, capping search queries before mandatory inspection.",
+      "evidence": [
+        "769",
+        "773",
+        "784",
+        "794",
+        "796"
+      ],
+      "iteration_range": [
+        0,
+        2
       ]
     }
   ]

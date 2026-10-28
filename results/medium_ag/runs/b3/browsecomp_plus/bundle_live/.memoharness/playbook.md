@@ -12,6 +12,6 @@ Current priorities:
 - D6 strategy: strict_isolated_entity_no_narrative
 
 Distilled emphasis:
-- Primary failure mode in iteration 1 was D6 (9 cases): verbose prefaces and explanations submitted inside the answer field resulted in truncation. Enforce isolated target entity output.
-- Secondary failure mode was D4 (4 cases): turn limit exhaustion. Enforce hard step cap and early convergence by step 15-18.
-- Retrieval discipline on D2: avoid quotation marks and query cycling; inspect candidate pages directly.
+- Recent distilled pressure is highest on D6 (2 pattern(s)); keep that dimension under active scrutiny.
+- Recent distilled pressure is highest on D2 (2 pattern(s)); keep that dimension under active scrutiny.
+- Recent distilled pressure is highest on D4 (1 pattern(s)); keep that dimension under active scrutiny.

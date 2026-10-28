@@ -1,0 +1,144 @@
+{
+  "bundle_version": 1,
+  "config": {
+    "D1": {
+      "examples": false,
+      "structured_instruction": true,
+      "compression": "none",
+      "strategy": "strict_canonical_entity_extraction"
+    },
+    "D2": {
+      "tool_access": "bash",
+      "tool_protocol": "native",
+      "retrieval_mode": "search_then_inspect",
+      "top_k": 5,
+      "strategy": "broad_noun_queries_with_active_page_inspection"
+    },
+    "D3": {
+      "temperature": 0.0,
+      "max_tokens": 2048,
+      "top_p": 1.0,
+      "candidate_count": 1,
+      "strategy": "deterministic_factual_generation"
+    },
+    "D4": {
+      "workflow": "agentic_loop",
+      "stop_rule": "env_done_or_accepted_finish_or_max_steps",
+      "strategy": "hard_step_cap_with_fallback_convergence"
+    },
+    "D5": {
+      "memory_policy": "sliding_window",
+      "history_keep": 25,
+      "strategy": "rolling_window_with_distilled_heuristics"
+    },
+    "D6": {
+      "postprocess": "direct_entity",
+      "validator": "verifier_slot",
+      "fallback": "best_grounded_candidate",
+      "strategy": "strict_isolated_entity_no_narrative"
+    }
+  },
+  "runtime_files": {
+    "agents": "AGENTS.override.md",
+    "policy": "policy.json",
+    "memory": ".memoharness/memory.md",
+    "playbook": ".memoharness/playbook.md"
+  },
+  "codex": {
+    "model": "",
+    "reasoning_effort": "medium",
+    "reasoning_summary": "auto"
+  },
+  "updated_iteration": 2,
+  "distilled_patterns": [
+    {
+      "pattern_id": "llm-pattern-iter2-3",
+      "primary_dim": "D4",
+      "description": "Multi-hop browsing cases frequently exhaust turn budgets before resolving all intermediary facts, triggering premature termination under hard step limits and forcing unverified fallback submissions.",
+      "effect": "Prevents step-exhaustion failures on 3 cases. Increase the maximum step limit in D4 and adjust the stop rule to prioritize evidence grounding over early budget convergence.",
+      "evidence": [
+        "769",
+        "794",
+        "796"
+      ],
+      "iteration_range": [
+        0,
+        2
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter2-1",
+      "primary_dim": "D6",
+      "description": "Across multiple browsecomp_plus cases, the agent repeatedly includes explanatory narratives, reasoning preambles, and conversational text within the final answer submission instead of submitting only the isolated entity, causing post-processing and verification validation checks to fail.",
+      "effect": "Causes 0.0 reward across 8 cases due to strict string matching failures. Update D6 postprocess to an active entity-extraction parser (e.g., regex/schema extraction) and enforce strict single-token/entity verification.",
+      "evidence": [
+        "770",
+        "772",
+        "773",
+        "775",
+        "783",
+        "784",
+        "787",
+        "794"
+      ],
+      "iteration_range": [
+        0,
+        2
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter2-2",
+      "primary_dim": "D2",
+      "description": "The retrieval workflow relies on overly rigid keyword queries and fails to systematically fetch and inspect candidate documents, leading to budget depletion before locating the necessary factual evidence.",
+      "effect": "Agents exhaust step limits and submit ungrounded fallback guesses. Configure D2 with iterative query expansion and automatic snippet ranking, while increasing D4 step budgets for complex browse trajectories.",
+      "evidence": [
+        "769",
+        "773",
+        "784",
+        "794",
+        "796"
+      ],
+      "iteration_range": [
+        0,
+        2
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter2-1",
+      "primary_dim": "D6",
+      "description": "Agents consistently contaminate final answer calls with explanatory prose, preambles, and conversational narrative rather than pure entities. The current D6 configuration (direct_entity postprocessor with verifier_slot) fails to parse or strip extraneous commentary from the submission string, causing strict benchmark evaluators to reject otherwise grounded answers.",
+      "effect": "Eliminates repeated zero-reward evaluations across 8 cases. Upgrade D6 postprocess to regex_entity_cleaner or llm_extractor, and configure the validator to enforce strict isolated token matching.",
+      "evidence": [
+        "770",
+        "772",
+        "773",
+        "775",
+        "783",
+        "784",
+        "787",
+        "794"
+      ],
+      "iteration_range": [
+        0,
+        2
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter2-2",
+      "primary_dim": "D2",
+      "description": "The search strategy relies on exhaustive keyword variations and narrow term reformulation rather than fetching and inspecting document contents. Agents loop through queries without reading retrieved page text, quickly depleting turn limits before uncovering necessary evidence and ultimately forcing ungrounded guesses at the horizon.",
+      "effect": "Prevents search-loop budget exhaustion in 5 cases. Shift D2 retrieval_mode to forced_fetch_and_parse with explicit page extraction depth, capping search queries before mandatory inspection.",
+      "evidence": [
+        "769",
+        "773",
+        "784",
+        "794",
+        "796"
+      ],
+      "iteration_range": [
+        0,
+        2
+      ]
+    }
+  ]
+}
