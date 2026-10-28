@@ -1,0 +1,740 @@
+{
+ "benchmark": "appworld",
+ "task_id": "afc0fce_3",
+ "run_tag": "b3_appworld_r3_train",
+ "wall_s": 84.33,
+ "tokens": 306282,
+ "cost": 0.0,
+ "llm_calls": 25,
+ "steps": 25,
+ "success": true,
+ "error": null,
+ "eval_info": {
+  "success": true,
+  "num_tests": 9,
+  "passes": 9,
+  "failures": 0,
+  "task_completed": true
+ },
+ "outcome": {
+  "stopped": "done",
+  "steps": 25,
+  "final_answer": null,
+  "llm_calls": 25
+ },
+ "events": [
+  {
+   "type": "task",
+   "instruction": "My name is: Jordan Harrison. My personal email is jo-harr@gmail.com and phone number is 2254213734.\nTask: Add a comment, \"Thank you so much!\", to all the venmo payments I received from my roommates in the last 10 days (including today), and like those payments.",
+   "max_steps": 40
+  },
+  {
+   "type": "harness",
+   "root": "/home/user/harness-optim/results/medium_ag/runs/b3/appworld/iterations/it3",
+   "bundle": {
+    "agent_loop": {
+     "name": "default",
+     "config": {
+      "temperature": 0.0,
+      "max_tokens": 2048
+     }
+    },
+    "context_mgmt": {
+     "name": "default",
+     "config": {
+      "keep_turns": 30,
+      "extra_system": "# Harness bundle (MemoHarness)\nThe files below are your harness policy, in the order to read them.\n\n## ./AGENTS.override.md\n# AppWorld Agent Execution Guide\n\n## 1. Tool Discipline & Session Safety (Priority D2 & D4)\n- **No Finish Probing**: Never call completion or finish tools to inspect state or trigger tracebacks; completion tool calls permanently end the session. Invoke finish only when all operations and answers are complete.\n- **Bound Search Loops**: Avoid speculative repeated querying. If initial search returns no matches, attempt at most one alternative filter or index before taking the next best action.\n- **Targeted Querying**: Use specific search filters (sender, recipient, dates, account IDs) rather than paginating or inspecting broad collections sequentially.\n- **Early Mutation**: Execute required state mutations (transfers, status updates, message sends) immediately once target entity identifiers are resolved.\n\n## 2. Multi-App Identity & Entity Resolution (Priority D1)\n- Maintain consistent requester context across app boundaries (e.g. mapping phone/email in contacts to payment or chat accounts).\n- Map entity references directly to target internal IDs before invoking transactional APIs.\n\n## 3. Output Formatting & Answer Conformance (Priority D1 & D6)\n- For informational queries, output the exact scalar value or identifier without conversational phrasing.\n- For monetary or numeric values, emit raw numeric digits without currency signs or unit suffixes unless requested.\n- For action tasks, complete all required mutations, then finish.\n\nBundle contract:\n- Read `./policy.json` for authoritative D1-D6 summary before using playbook or memory notes.\n- Treat `./.memoharness/playbook.md` as stable repo heuristics and `./.memoharness/memory.md` as rolling distilled notes.\n\n## ./policy.json\n{\n  \"bundle_version\": 1,\n  \"config\": {\n    \"D1\": {\n      \"examples\": false,\n      \"structured_instruction\": true,\n      \"compression\": \"none\",\n      \"strategy\": \"Direct final answer formatting and precise multi-app entity resolution\"\n    },\n    \"D2\": {\n      \"tool_access\": \"bash\",\n      \"tool_protocol\": \"native\",\n      \"retrieval_mode\": \"none\",\n      \"top_k\": 0,\n      \"strategy\": \"Direct targeted API tool invocations; never invoke completion tool for probing\"\n    },\n    \"D3\": {\n      \"temperature\": 0.0,\n      \"max_tokens\": 2048,\n      \"top_p\": 1.0,\n      \"candidate_count\": 1,\n      \"strategy\": \"Deterministic low-temperature decoding\"\n    },\n    \"D4\": {\n      \"workflow\": \"agentic_loop\",\n      \"stop_rule\": \"env_done_or_accepted_finish_or_max_steps\",\n      \"strategy\": \"Step-budgeted execution: bound search retry loops, batch queries, mutate early\"\n    },\n    \"D5\": {\n      \"memory_policy\": \"sliding_window\",\n      \"history_keep\": 30,\n      \"strategy\": \"Sliding window of 30 turns to retain execution context\"\n    },\n    \"D6\": {\n      \"postprocess\": \"schema_strip\",\n      \"validator\": \"verifier_slot\",\n      \"fallback\": \"none\",\n      \"strategy\": \"Strict schema conformance: raw numeric values and exact target entities\"\n    }\n  },\n  \"runtime_files\": {\n    \"agents\": \"AGENTS.override.md\",\n    \"policy\": \"policy.json\",\n    \"memory\": \".memoharness/memory.md\",\n    \"playbook\": \".memoharness/playbook.md\"\n  },\n  \"codex\": {\n    \"model\": \"\",\n    \"reasoning_effort\": \"medium\",\n    \"reasoning_summary\": \"auto\"\n  },\n  \"updated_iteration\": 2,\n  \"distilled_patterns\": [\n    {\n      \"pattern_id\": \"llm-pattern-iter2-1\",\n      \"primary_dim\": \"D4\",\n      \"description\": \"Agent exhausts turn limit by engaging in unbounded speculative analysis loops and repeated queries when target records are not immediately found.\",\n      \"effect\": \"Impose strict 1-retry bound on speculative queries to preserve turn budget.\",\n      \"evidence\": [\n        \"afc0fce_2\"\n      ],\n      \"iteration_range\": [\n        2,\n        2\n      ]\n    },\n    {\n      \"pattern_id\": \"llm-pattern-iter2-2\",\n      \"primary_dim\": \"D2\",\n      \"description\": \"Agent misuses task completion / finish tool as an inspection or debugging probe to provoke error tracebacks, prematurely terminating the environment.\",\n      \"effect\": \"Prohibit invoking completion tools for state probing; reserve exclusively for final termination.\",\n      \"evidence\": [\n        \"d0b1f43_2\"\n      ],\n      \"iteration_range\": [\n        2,\n        2\n      ]\n    },\n    {\n      \"pattern_id\": \"llm-pattern-iter1-1\",\n      \"primary_dim\": \"D4\",\n      \"description\": \"Turn limit exhaustion caused by exploratory probing and unbatched linear scanning across multi-app entity graphs.\",\n      \"effect\": \"Plan upfront, target specific search filters, and mutate early.\",\n      \"evidence\": [\n        \"b0a8eae_1\",\n        \"b0a8eae_2\",\n        \"b0a8eae_3\",\n        \"d0b1f43_3\"\n      ],\n      \"iteration_range\": [\n        0,\n        1\n      ]\n    }\n  ]\n}\n\n## ./.memoharness/playbook.md\n# Repo Playbook\n\nUse `./policy.json` as the authoritative D1-D6 summary.\nUse this file for stable MemoHarness execution heuristics that should survive iteration-to-iteration.\n\nCurrent priorities:\n- Read `./policy.json` first, then use this playbook for stable execution heuristics.\n- D1 strategy: Direct final answer formatting and precise multi-app entity resolution\n- D2 strategy: Direct targeted API tool invocations; never invoke completion tool for probing\n- D4 strategy: Step-budgeted execution: bound search retry loops, batch queries, mutate early\n- D5 strategy: Sliding window of 30 turns to retain execution context\n- D6 strategy: Strict schema conformance: raw numeric values and exact target entities\n\nDistilled emphasis:\n- Active guardrails on D2 (preventing finish tool probing) and D4 (bounding speculative querying loops within turn limits).\n\n## ./.memoharness/memory.md\n# Rolling Memory\n\nUpdated after iteration 2.\n\n- Read `./policy.json` first and use this file only for recent distilled lessons.\n- Keep only recurring failures and verified repair heuristics here.\n\nRecent distilled patterns:\n- [D2] Misusing task completion / finish tool as an exploratory probe terminates the session prematurely. Completion tools must strictly be invoked only when all task requirements are satisfied (evidence: d0b1f43_2).\n- [D4] Unbounded speculative querying loops when items are missing exhaust the execution budget. Bound query retries to at most one alternative filter before proceeding (evidence: afc0fce_2).\n- [D4] Unbatched linear scanning across multi-app entities consumes excessive turns. Plan sequence upfront, filter specifically, and mutate target state as soon as IDs are known (evidence: b0a8eae_1, b0a8eae_2, b0a8eae_3, d0b1f43_3).\n"
+     }
+    },
+    "tool_policy": {
+     "name": "default",
+     "config": {}
+    },
+    "memory": {
+     "name": "default",
+     "config": {}
+    },
+    "verifier": {
+     "name": "default",
+     "config": {}
+    }
+   },
+   "meta": {}
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179694797_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's inspect phone contacts, supervisor info, and date/time\\ndate_time = apis.phone.get_current_date_and_time()\\nprint(\\\"Current date/time:\\\", date_time)\\n\\n# Check api documentation for venmo\\nprint(apis.api_docs.show_api_descriptions(app_name='venmo'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 5016,
+   "ct": 93,
+   "cost": 0.0,
+   "step": 0
+  },
+  {
+   "type": "step",
+   "n": 1,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's inspect phone contacts, supervisor info, and date/time\ndate_time = apis.phone.get_current_date_and_time()\nprint(\"Current date/time:\", date_time)\n\n# Check api documentation for venmo\nprint(apis.api_docs.show_api_descriptions(app_name='venmo'))\n"
+   },
+   "observation": "Current date/time: {'date': 'Friday, June 02, 2023', 'time': '11:55 PM'}\n[\n {\n  \"name\": \"show_account\",\n  \"description\": \"Show your account information. Unlike show_profile, this includes private information.\"\n },\n {\n  \"name\": \"signup\",\n  \"description\": \"Sign up to create account.\"\n },\n {\n  \"name\": \"delete_account\",\n  \"description\": \"Delete your account.\"\n },\n {\n  \"name\": \"update_account_name\",\n  \"description\": \"Update your first or last name in the account profile.\"\n },\n {\n  \"name\": \"login\",\n  \"description\": \"Login to your account.\"\n },\n {\n  \"name\": \"logout\",\n  \"description\": \"Logout from your account.\"\n },\n {\n  \"name\": \"send_verification_code\",\n  \"description\": \"Send account verification code to your email address.\"\n },\n {\n  \"name\": \"verify_account\",\n  \"description\": \"Verify your account using the verification code sent to your email address.\"\n },\n {\n  \"name\": \"send_password_reset_code\",\n  \"description\": \"Send password reset code to your email address.\"\n },\n {\n  \"name\": \"reset_password\",\n  \"description\": \"Reset your password using the password reset code sent to your email address.\"\n },\n {\n  \"name\": \"show_profile\",\n  \"description\": \"Show public profile information of a user, including your friendship status with them.\"\n },\n {\n  \"name\": \"search_users\",\n  \"description\": \"Search Venmo users by name or email address.\"\n },\n {\n  \"name\": \"search_friends\",\n  \"description\": \"Search your or others' friends by name or email address.\"\n },\n {\n  \"name\": \"add_friend\",\n  \"description\": \"Add a friend to your friend list.\"\n },\n {\n  \"name\": \"remove_friend\",\n  \"description\": \"Remove a friend from your friend list.\"\n },\n {\n  \"name\": \"show_venmo_balance\",\n  \"description\": \"Show your Venmo balance.\"\n },\n {\n  \"name\": \"add_to_venmo_balance\",\n  \"description\": \"Add money to your Venmo balance.\"\n },\n {\n  \"name\": \"withdraw_from_venmo_balance\",\n  \"description\": \"Withdraw money from your Venmo balance.\"\n },\n {\n  \"name\": \"show_bank_transfer_history\",\n  \"description\": \"Show histroy of money transfer from Venmo to payment card and vice versa.\"\n },\n {\n  \"name\": \"download_bank_transfer_receipt\",\n  \"description\": \"Download the receipt of money transfer from Venmo to payment card or vice versa.\"\n },\n {\n  \"name\": \"show_transaction\",\n  \"description\": \"Show transaction details.\"\n },\n {\n  \"name\": \"update_transaction\",\n  \"description\": \"Update transaction information.\"\n },\n {\n  \"name\": \"show_transactions\",\n  \"description\": \"Get a list of your transactions.\"\n },\n {\n  \"name\": \"create_transaction\",\n  \"description\": \"Send money to a user.\"\n },\n {\n  \"name\": \"download_transaction_receipt\",\n  \"description\": \"Download the receipt of a transaction (money sent from one user to another).\"\n },\n {\n  \"name\": \"like_transaction\",\n  \"description\": \"Like a transaction.\"\n },\n {\n  \"name\": \"unlike_transaction\",\n  \"description\": \"Unlike a transaction.\"\n },\n {\n  \"name\": \"show_transaction_comments\",\n  \"description\": \"Get a list of transaction comments.\"\n },\n {\n  \"name\": \"create_transaction_comment\",\n  \"description\": \"Create a new transaction comment.\"\n },\n {\n  \"name\": \"show_transaction_comment\",\n  \"description\": \"Show detailed information about a transaction comment.\"\n },\n {\n  \"name\": \"delete_transaction_comment\",\n  \"description\": \"Delete a transaction comment.\"\n },\n {\n  \"name\": \"update_transaction_comment\",\n  \"description\": \"Update a transaction comment.\"\n },\n {\n  \"name\": \"like_transaction_comment\",\n  \"description\": \"Like a transaction comment.\"\n },\n {\n  \"name\": \"unlike_transaction_comment\",\n  \"description\": \"Unlike a previously liked transaction comment.\"\n },\n {\n  \"name\": \"show_payment_card\",\n  \"description\": \"Get details of a payment card.\"\n },\n {\n  \"name\": \"delete_payment_card\",\n  \"description\": \"Delete payment card information.\"\n },\n {\n  \"name\": \"update_payment_card\",\n  \"description\": \"Update payment card information.\"\n },\n {\n  \"name\": \"show_payment_cards\",\n  \"description\": \"Get a list of users payment cards.\"\n },\n {\n  \"name\": \"add_payment_card\",\n  \"description\": \"Add a new payment card.\"\n },\n {\n  \"name\": \"show_received_payment_requests\",\n  \"description\": \"Get a list of payment requests you have received from others.\"\n },\n {\n  \"name\": \"show_sent_payment_requests\",\n  \"description\": \"Get a list of payment requests you have sent to others.\"\n },\n {\n  \"name\": \"create_payment_request\",\n  \"description\": \"Send a payment request.\"\n },\n {\n  \"name\": \"delete_payment_request\",\n  \"description\": \"Delete a payment request.\"\n },\n {\n  \"name\": \"update_payment_request\",\n  \"description\": \"Update payment request information.\"\n },\n {\n  \"name\": \"approve_payment_request\",\n  \"description\": \"Approve a payment request.\"\n },\n {\n  \"name\": \"deny_payment_request\",\n  \"description\": \"Deny a payment request.\"\n },\n {\n  \"name\": \"remind_payment_request\",\n  \"description\": \"Send a reminder to a user via notification about this payment request.\"\n },\n {\n  \"name\": \"show_social_feed\",\n  \"description\": \"Show your social feed (transactions of your friends).\"\n },\n {\n  \"name\": \"show_notifications\",\n  \"description\": \"Get a list of your notifications.\"\n },\n {\n  \"name\": \"delete_notifications\",\n  \"description\": \"Delete all of your notifications.\"\n },\n {\n  \"name\": \"mark_notifications\",\n  \"description\": \"Mark all notifications as read or unread.\"\n },\n {\n  \"name\": \"show_notifications_count\",\n  \"description\": \"Get the count of your notifications.\"\n },\n {\n  \"name\": \"delete_notification\",\n  \"description\": \"Delete a notification.\"\n },\n {\n  \"name\": \"mark_notification\",\n  \"description\": \"Mark a notification as read or unread.\"\n }\n]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179701305_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Check contacts, supervisor info, notes, splitwise to identify roommates\\ncontacts = apis.phone.list_contacts()\\nprint(\\\"Contacts:\\\", len(contacts))\\nfor c in contacts:\\n    print(c)\\n\"}"
+     }
+    }
+   ],
+   "pt": 6633,
+   "ct": 63,
+   "cost": 0.0,
+   "step": 1
+  },
+  {
+   "type": "step",
+   "n": 2,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Check contacts, supervisor info, notes, splitwise to identify roommates\ncontacts = apis.phone.list_contacts()\nprint(\"Contacts:\", len(contacts))\nfor c in contacts:\n    print(c)\n"
+   },
+   "observation": "Execution failed. Traceback:\n  File \"<python-input>\", line 2, in <module>\n    contacts = apis.phone.list_contacts()\n               ^^^^^^^^^^^^^^^^^^^^^^^^\nException: No API named 'list_contacts' found in the phone app."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179703475_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check phone APIs\\nprint(apis.api_docs.show_api_descriptions(app_name='phone'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 6729,
+   "ct": 44,
+   "cost": 0.0,
+   "step": 2
+  },
+  {
+   "type": "step",
+   "n": 3,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check phone APIs\nprint(apis.api_docs.show_api_descriptions(app_name='phone'))\n"
+   },
+   "observation": "[\n {\n  \"name\": \"show_account\",\n  \"description\": \"Show your account information. Unlike show_profile, this includes private information.\"\n },\n {\n  \"name\": \"signup\",\n  \"description\": \"Sign up to create account.\"\n },\n {\n  \"name\": \"delete_account\",\n  \"description\": \"Delete your account.\"\n },\n {\n  \"name\": \"update_account_name\",\n  \"description\": \"Update your first or last name in the account profile.\"\n },\n {\n  \"name\": \"login\",\n  \"description\": \"Login to your account.\"\n },\n {\n  \"name\": \"logout\",\n  \"description\": \"Logout from your account.\"\n },\n {\n  \"name\": \"send_password_reset_code\",\n  \"description\": \"Send password reset code to your phone number.\"\n },\n {\n  \"name\": \"reset_password\",\n  \"description\": \"Reset your password using the password reset code sent to your email address.\"\n },\n {\n  \"name\": \"show_profile\",\n  \"description\": \"Show public profile information of a user.\"\n },\n {\n  \"name\": \"show_contact_relationships\",\n  \"description\": \"Get a list of all relationships available in your contact book.\"\n },\n {\n  \"name\": \"search_contacts\",\n  \"description\": \"Search your contact book for relatives' information.\"\n },\n {\n  \"name\": \"add_contact\",\n  \"description\": \"Add a new contact.\"\n },\n {\n  \"name\": \"delete_contact\",\n  \"description\": \"Delete contact information.\"\n },\n {\n  \"name\": \"update_contact\",\n  \"description\": \"Update contact information.\"\n },\n {\n  \"name\": \"show_text_message_window\",\n  \"description\": \"Show text messages with a contact around a given date and time.\"\n },\n {\n  \"name\": \"search_text_messages\",\n  \"description\": \"Show or search your text messages.\"\n },\n {\n  \"name\": \"show_text_message\",\n  \"description\": \"Show text message details.\"\n },\n {\n  \"name\": \"delete_text_message\",\n  \"description\": \"Delete a text message.\"\n },\n {\n  \"name\": \"send_text_message\",\n  \"description\": \"Send a text message on the given phone number.\"\n },\n {\n  \"name\": \"show_alarms\",\n  \"description\": \"Get a list of alarms.\"\n },\n {\n  \"name\": \"create_alarm\",\n  \"description\": \"Create a new alarm.\"\n },\n {\n  \"name\": \"show_alarm\",\n  \"description\": \"Show alarm details.\"\n },\n {\n  \"name\": \"delete_alarm\",\n  \"description\": \"Delete an alarm.\"\n },\n {\n  \"name\": \"update_alarm\",\n  \"description\": \"Update an alarm's settings.\"\n },\n {\n  \"name\": \"show_voice_message_window\",\n  \"description\": \"Show voice messages with a contact around a given date and time.\"\n },\n {\n  \"name\": \"search_voice_messages\",\n  \"description\": \"Show or search text voice_messages between the user and a contact.\"\n },\n {\n  \"name\": \"show_voice_message\",\n  \"description\": \"Show voice message details.\"\n },\n {\n  \"name\": \"delete_voice_message\",\n  \"description\": \"Delete a voice message.\"\n },\n {\n  \"name\": \"send_voice_message\",\n  \"description\": \"Send a voice message on the given phone number.\"\n },\n {\n  \"name\": \"get_current_date_and_time\",\n  \"description\": \"Show current date and time.\"\n }\n]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179708279_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"print(apis.phone.show_contact_relationships())\\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='search_contacts'))\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='show_transactions'))\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='like_transaction'))\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='create_transaction_comment'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 7505,
+   "ct": 149,
+   "cost": 0.0,
+   "step": 3
+  },
+  {
+   "type": "step",
+   "n": 4,
+   "tool": "execute_python",
+   "args": {
+    "code": "print(apis.phone.show_contact_relationships())\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='search_contacts'))\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='show_transactions'))\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='like_transaction'))\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='create_transaction_comment'))\n"
+   },
+   "observation": "Execution failed. Traceback:\n  File \"<python-input>\", line 1, in <module>\n    print(apis.phone.show_contact_relationships())\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nException: Response status code is 401:\n{\"message\":\"You are either not authorized to access this phone API endpoint or your access token is missing, invalid or expired.\"}"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179711383_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Need to login or check supervisor credentials\\nsupervisor_creds = apis.supervisor.get_account_credentials()\\nprint(supervisor_creds)\\n\"}"
+     }
+    }
+   ],
+   "pt": 7689,
+   "ct": 49,
+   "cost": 0.0,
+   "step": 4
+  },
+  {
+   "type": "step",
+   "n": 5,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Need to login or check supervisor credentials\nsupervisor_creds = apis.supervisor.get_account_credentials()\nprint(supervisor_creds)\n"
+   },
+   "observation": "Execution failed. Traceback:\n  File \"<python-input>\", line 2, in <module>\n    supervisor_creds = apis.supervisor.get_account_credentials()\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nException: No API named 'get_account_credentials' found in the supervisor app."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179713296_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"print(apis.api_docs.show_api_descriptions(app_name='supervisor'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 7825,
+   "ct": 36,
+   "cost": 0.0,
+   "step": 5
+  },
+  {
+   "type": "step",
+   "n": 6,
+   "tool": "execute_python",
+   "args": {
+    "code": "print(apis.api_docs.show_api_descriptions(app_name='supervisor'))\n"
+   },
+   "observation": "[\n {\n  \"name\": \"show_active_task\",\n  \"description\": \"Show the currently active task assigned to you by the supervisor.\"\n },\n {\n  \"name\": \"complete_task\",\n  \"description\": \"Mark the currently active task as complete with the given answer.\"\n },\n {\n  \"name\": \"show_profile\",\n  \"description\": \"Show your supervisor's profile information.\"\n },\n {\n  \"name\": \"show_addresses\",\n  \"description\": \"Show your supervisor's addresses.\"\n },\n {\n  \"name\": \"show_payment_cards\",\n  \"description\": \"Show your supervisor's payment_cards.\"\n },\n {\n  \"name\": \"show_account_passwords\",\n  \"description\": \"Show your supervisor's app account passwords.\"\n }\n]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179715136_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"passwords = apis.supervisor.show_account_passwords()\\nprint(passwords)\\nprofile = apis.supervisor.show_profile()\\nprint(profile)\\n\"}"
+     }
+    }
+   ],
+   "pt": 8014,
+   "ct": 54,
+   "cost": 0.0,
+   "step": 6
+  },
+  {
+   "type": "step",
+   "n": 7,
+   "tool": "execute_python",
+   "args": {
+    "code": "passwords = apis.supervisor.show_account_passwords()\nprint(passwords)\nprofile = apis.supervisor.show_profile()\nprint(profile)\n"
+   },
+   "observation": "[\n {\n  \"account_name\": \"amazon\",\n  \"password\": \"hq(Y-=i\"\n },\n {\n  \"account_name\": \"file_system\",\n  \"password\": \"n#5vSNx\"\n },\n {\n  \"account_name\": \"gmail\",\n  \"password\": \"S4kyt)a\"\n },\n {\n  \"account_name\": \"phone\",\n  \"password\": \"Ee%AVVI\"\n },\n {\n  \"account_name\": \"simple_note\",\n  \"password\": \"%i(z@6X\"\n },\n {\n  \"account_name\": \"splitwise\",\n  \"password\": \"j9@8ww6\"\n },\n {\n  \"account_name\": \"spotify\",\n  \"password\": \"&{Ef&tC\"\n },\n {\n  \"account_name\": \"todoist\",\n  \"password\": \"YAeG+q9\"\n },\n {\n  \"account_name\": \"venmo\",\n  \"password\": \"ZEgU=ep\"\n }\n]\n{\n \"first_name\": \"Jordan\",\n \"last_name\": \"Harrison\",\n \"email\": \"jo-harr@gmail.com\",\n \"phone_number\": \"2254213734\",\n \"birthday\": \"1988-04-06\",\n \"sex\": \"male\"\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179717747_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Login to phone and venmo\\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='login'))\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='login'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 8408,
+   "ct": 78,
+   "cost": 0.0,
+   "step": 7
+  },
+  {
+   "type": "step",
+   "n": 8,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Login to phone and venmo\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='login'))\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='login'))\n"
+   },
+   "observation": "{\n \"app_name\": \"phone\",\n \"api_name\": \"login\",\n \"path\": \"/auth/token\",\n \"method\": \"POST\",\n \"description\": \"Login to your account.\",\n \"parameters\": [\n  {\n   \"name\": \"username\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Your account phone_number.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"password\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Your account password.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"access_token\": \"string\",\n   \"token_type\": \"string\"\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n{\n \"app_name\": \"venmo\",\n \"api_name\": \"login\",\n \"path\": \"/auth/token\",\n \"method\": \"POST\",\n \"description\": \"Login to your account.\",\n \"parameters\": [\n  {\n   \"name\": \"username\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Your account email.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"password\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Your account password.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"access_token\": \"string\",\n   \"token_type\": \"string\"\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179719701_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Log into phone and venmo\\napis.phone.login(username=\\\"2254213734\\\", password=\\\"Ee%AVVI\\\")\\napis.venmo.login(username=\\\"jo-harr@gmail.com\\\", password=\\\"ZEgU=ep\\\")\\n\\n# Check contacts relationships and search contacts\\nrelationships = apis.phone.show_contact_relationships()\\nprint(\\\"Relationships:\\\", relationships)\\n\"}"
+     }
+    }
+   ],
+   "pt": 8932,
+   "ct": 106,
+   "cost": 0.0,
+   "step": 8
+  },
+  {
+   "type": "step",
+   "n": 9,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Log into phone and venmo\napis.phone.login(username=\"2254213734\", password=\"Ee%AVVI\")\napis.venmo.login(username=\"jo-harr@gmail.com\", password=\"ZEgU=ep\")\n\n# Check contacts relationships and search contacts\nrelationships = apis.phone.show_contact_relationships()\nprint(\"Relationships:\", relationships)\n"
+   },
+   "observation": "Execution failed. Traceback:\n  File \"<python-input>\", line 6, in <module>\n    relationships = apis.phone.show_contact_relationships()\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nException: Response status code is 401:\n{\"message\":\"You are either not authorized to access this phone API endpoint or your access token is missing, invalid or expired.\"}"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179722277_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Wait, what was returned by login?\\nres_phone = apis.phone.login(username=\\\"2254213734\\\", password=\\\"Ee%AVVI\\\")\\nprint(\\\"phone login:\\\", res_phone)\\nres_venmo = apis.venmo.login(username=\\\"jo-harr@gmail.com\\\", password=\\\"ZEgU=ep\\\")\\nprint(\\\"venmo login:\\\", res_venmo)\\n\"}"
+     }
+    }
+   ],
+   "pt": 9142,
+   "ct": 112,
+   "cost": 0.0,
+   "step": 9
+  },
+  {
+   "type": "step",
+   "n": 10,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Wait, what was returned by login?\nres_phone = apis.phone.login(username=\"2254213734\", password=\"Ee%AVVI\")\nprint(\"phone login:\", res_phone)\nres_venmo = apis.venmo.login(username=\"jo-harr@gmail.com\", password=\"ZEgU=ep\")\nprint(\"venmo login:\", res_venmo)\n"
+   },
+   "observation": "phone login: {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwaG9uZSsyMjU0MjEzNzM0IiwiZXhwIjoxNjg1NzUxNjMxfQ.N8rjTMsmgmnXlQ_ezkSY5jNMdnCytRZYdug5Q-skd0U', 'token_type': 'Bearer'}\nvenmo login: {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ2ZW5tbytqby1oYXJyQGdtYWlsLmNvbSIsImV4cCI6MTY4NTc1MTA1N30.Wcpes5-PCa_wtaY04CEEbK-zcpsChApcKkkm_TIitA0', 'token_type': 'Bearer'}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179724567_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Wait, how are tokens passed in AppWorld? Usually apis manages cookies/session or headers automatically, but let's check search_contacts api doc\\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='show_contact_relationships'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 9496,
+   "ct": 79,
+   "cost": 0.0,
+   "step": 10
+  },
+  {
+   "type": "step",
+   "n": 11,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Wait, how are tokens passed in AppWorld? Usually apis manages cookies/session or headers automatically, but let's check search_contacts api doc\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='show_contact_relationships'))\n"
+   },
+   "observation": "{\n \"app_name\": \"phone\",\n \"api_name\": \"show_contact_relationships\",\n \"path\": \"/contact_relationships\",\n \"method\": \"GET\",\n \"description\": \"Get a list of all relationships available in your contact book.\",\n \"parameters\": [\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from phone app login.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": [\n   \"string\"\n  ],\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179727047_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Aha! access_token is a required parameter for the API endpoints!\\n# Wait, or does venmo also require access_token? Let's check venmo show_transactions\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='show_transactions'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 9697,
+   "ct": 84,
+   "cost": 0.0,
+   "step": 11
+  },
+  {
+   "type": "step",
+   "n": 12,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Aha! access_token is a required parameter for the API endpoints!\n# Wait, or does venmo also require access_token? Let's check venmo show_transactions\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='show_transactions'))\n"
+   },
+   "observation": "{\n \"app_name\": \"venmo\",\n \"api_name\": \"show_transactions\",\n \"path\": \"/transactions\",\n \"method\": \"GET\",\n \"description\": \"Get a list of your transactions.\",\n \"parameters\": [\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from venmo app login.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"query\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Search query string.\",\n   \"default\": \"\",\n   \"constraints\": []\n  },\n  {\n   \"name\": \"user_email\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"If passed, only transactions between you and user with this email address will be shown.\",\n   \"default\": null,\n   \"constraints\": [\n    \"value is email address\"\n   ]\n  },\n  {\n   \"name\": \"min_created_at\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Minimum created_at datetime to filter transactions in YYYY-MM-DD format.\",\n   \"default\": \"1500-01-01\",\n   \"constraints\": []\n  },\n  {\n   \"name\": \"max_created_at\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Maximum created_at datetime to filter transactions in YYYY-MM-DD format.\",\n   \"default\": \"3000-01-01\",\n   \"constraints\": []\n  },\n  {\n   \"name\": \"min_like_count\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"Minimum like count to filter transactions.\",\n   \"default\": 0,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"max_like_count\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"Maximum like count to filter transactions.\",\n   \"default\": 9223372036854775807,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"min_amount\",\n   \"type\": \"number\",\n   \"required\": false,\n   \"description\": \"Minimum amount to filter transactions.\",\n   \"default\": 0,\n   \"constraints\": [\n    \"value > 0.0\"\n   ]\n  },\n  {\n   \"name\": \"max_amount\",\n   \"type\": \"number\",\n   \"required\": false,\n   \"description\": \"Maximum amount to filter transactions.\",\n   \"default\": 9223372036854775807,\n   \"constraints\": [\n    \"value > 0.0\"\n   ]\n  },\n  {\n   \"name\": \"private\",\n   \"type\": \"boolean\",\n   \"required\": false,\n   \"description\": \"Filter transactions by privacy.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"direction\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Filter transactions by direction of the transaction (sent or received). Will skip filtering if not passed.\",\n   \"default\": null,\n   \"constraints\": [\n    \"value in ['sent', 'received']\"\n   ]\n  },\n  {\n   \"name\": \"page_index\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"The index of the page to return.\",\n   \"default\": 0,\n   \"constraints\": [\n    \"value >= 0.0\"\n   ]\n  },\n  {\n   \"name\": \"page_limit\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"The maximum number of results to return per page.\",\n   \"default\": 5,\n   \"constraints\": [\n    \"value >= 1.0, <= 20.0\"\n   ]\n  },\n  {\n   \"name\": \"sort_by\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"The attribute to sort the transactions by prefixed with +/- to reflect ascending/descending. Valid attributes: created_at, like_count and amount. If both query and sort_by are given and non-empty, results will be first ranked by query relevance, then paginated, and will then be sorted by the given attribute within each page.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": [\n   {\n    \"transaction_id\": 1,\n    \"amount\": 0.0,\n    \"description\": \"string\",\n    \"created_at\": \"2019-01-01T00:00:00\",\n    \"updated_at\": \"2019-01-01T00:00:00\",\n    \"private\": true,\n    \"like_count\": 1,\n    \"payment_card_digits\": \"string\",\n    \"comment_count\": 1,\n    \"sender\": {\n     \"name\": \"string\",\n     \"email\": \"user@example.com\"\n    },\n    \"receiver\": {\n     \"name\": \"string\",\n     \"email\": \"user@example.com\"\n    }\n   }\n  ],\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179729657_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"phone_token = res_phone['access_token']\\nvenmo_token = res_venmo['access_token']\\n\\n# Check contacts relationships in phone\\nrel = apis.phone.show_contact_relationships(access_token=phone_token)\\nprint(\\\"Phone relationships:\\\", rel)\\n\"}"
+     }
+    }
+   ],
+   "pt": 10726,
+   "ct": 80,
+   "cost": 0.0,
+   "step": 12
+  },
+  {
+   "type": "step",
+   "n": 13,
+   "tool": "execute_python",
+   "args": {
+    "code": "phone_token = res_phone['access_token']\nvenmo_token = res_venmo['access_token']\n\n# Check contacts relationships in phone\nrel = apis.phone.show_contact_relationships(access_token=phone_token)\nprint(\"Phone relationships:\", rel)\n"
+   },
+   "observation": "Phone relationships: ['brother', 'coworker', 'father', 'friend', 'manager', 'mother', 'parent', 'roommate', 'sibling', 'sister']\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179732080_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's search contacts with relationship 'roommate'\\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='search_contacts'))\\nroommates_contacts = apis.phone.search_contacts(access_token=phone_token, relationship='roommate')\\nprint(\\\"Roommates:\\\", roommates_contacts)\\n\"}"
+     }
+    }
+   ],
+   "pt": 10858,
+   "ct": 95,
+   "cost": 0.0,
+   "step": 13
+  },
+  {
+   "type": "step",
+   "n": 14,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's search contacts with relationship 'roommate'\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='search_contacts'))\nroommates_contacts = apis.phone.search_contacts(access_token=phone_token, relationship='roommate')\nprint(\"Roommates:\", roommates_contacts)\n"
+   },
+   "observation": "{\n \"app_name\": \"phone\",\n \"api_name\": \"search_contacts\",\n \"path\": \"/contacts\",\n \"method\": \"GET\",\n \"description\": \"Search your contact book for relatives' information.\",\n \"parameters\": [\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from phone app login.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"query\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Search query for the contacts list.\",\n   \"default\": \"\",\n   \"constraints\": []\n  },\n  {\n   \"name\": \"relationship\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Relationship with the person in the contacts list to filter by.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"page_index\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"The index of the page to return.\",\n   \"default\": 0,\n   \"constraints\": [\n    \"value >= 0.0\"\n   ]\n  },\n  {\n   \"name\": \"page_limit\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"The maximum number of results to return per page.\",\n   \"default\": 5,\n   \"constraints\": [\n    \"value >= 1.0, <= 20.0\"\n   ]\n  }\n ],\n \"response_schemas\": {\n  \"success\": [\n   {\n    \"contact_id\": 1,\n    \"first_name\": \"string\",\n    \"last_name\": \"string\",\n    \"email\": \"user@example.com\",\n    \"phone_number\": \"string\",\n    \"relationships\": [\n     \"string\"\n    ],\n    \"birthday\": \"string\",\n    \"home_address\": \"string\",\n    \"work_address\": \"string\",\n    \"created_at\": \"2019-01-01T00:00:00\"\n   }\n  ],\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\nRoommates: [{'contact_id': 283, 'first_name': 'Kathryn', 'last_name': 'Maldonado', 'email': 'kathrynmaldonado@gmail.com', 'phone_number': '2473084266', 'relationships': ['roommate'], 'birthday': '1989-07-29', 'home_address': '4912 Morales Divide Suite 845\\nSeattle\\nWashington\\nUnited States\\n24529', 'work_address': '265 Carpenter Loop Suite 064\\nSeattle\\nWashington\\nUnited States\\n44564', 'created_at': '2021-10-21T07:40:51'}, {'contact_id': 285, 'first_name': 'Nancy', 'last_name': 'Ritter', 'email': 'nan_ritt@gmail.com', 'phone_number': '2307354647', 'relationships': ['roommate'], 'birthday': '1990-08-14', 'home_address': '4912 Morales Divide Suite 845\\nSeattle\\nWashington\\nUnited States\\n24529', 'work_address': '96967 Fox Loop Suite 397\\nSeattle\\nWashington\\nUnited States\\n86832', 'created_at': '2021-10-21T07:40:51'}, {'contact_id': 284, 'first_name': 'Troy', 'last_name': 'Solomon', 'email': 'tr_solo@gmail.com', 'phone_number': '7273731063', 'relationships': ['roommate'], 'birthday': '1990-02-02', 'home_address': '4912 Morales Divide Suite 845\\nSeattle\\nWashington\\nUnited States\\n24529', 'work_address': '774 Samuel Cape Suite 202\\nSeattle\\nWashington\\nUnited States\\n16844', 'created_at': '2021-10-21T07:40:51'}]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179734287_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check if there are more roommates on page_index 1\\nmore_roommates = apis.phone.search_contacts(access_token=phone_token, relationship='roommate', page_index=1)\\nprint(\\\"More roommates:\\\", more_roommates)\\n\"}"
+     }
+    }
+   ],
+   "pt": 12047,
+   "ct": 77,
+   "cost": 0.0,
+   "step": 14
+  },
+  {
+   "type": "step",
+   "n": 15,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check if there are more roommates on page_index 1\nmore_roommates = apis.phone.search_contacts(access_token=phone_token, relationship='roommate', page_index=1)\nprint(\"More roommates:\", more_roommates)\n"
+   },
+   "observation": "More roommates: []\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179739520_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Roommates identified:\\n# 1. Kathryn Maldonado (kathrynmaldonado@gmail.com, 2473084266)\\n# 2. Nancy Ritter (nan_ritt@gmail.com, 2307354647)\\n# 3. Troy Solomon (tr_solo@gmail.com, 7273731063)\\n\\n# Now let's check current date/time again:\\n# date: Friday, June 02, 2023. Time: 11:55 PM\\n# Task: \\\"Add a comment, \\\"Thank you so much!\\\", to all the venmo payments I received from my roommates in the last 10 days (including today), and like those payments.\\\"\\n\\n# \\\"last 10 days (including today)\\\":\\n# Today is June 02, 2023 (Day 1).\\n# 10 days including today:\\n# June 2 (1), June 1 (2), May 31 (3), May 30 (4), May 29 (5), May 28 (6), May 27 (7), May 26 (8), May 25 (9), May 24 (10).\\n# From datetime import date, timedelta:\\n# date(2023, 6, 2) - timedelta(days=9) = date(2023, 5, 24).\\n# So May 24, 2023 00:00:00 to June 2, 2023 23:59:59.\\n# Let's inspect all received venmo transactions to be completely sure and examine all dates!\\n\\n# Let's fetch all received transactions from venmo\\npage = 0\\nall_received = []\\nwhile True:\\n    txs = apis.venmo.show_transactions(access_token=venmo_token, direction='received', page_index=page, page_limit=20)\\n    if not txs:\\n        break\\n    all_received.extend(txs)\\n    page += 1\\n\\nprint(f\\\"Total received transactions: {len(all_received)}\\\")\\nfor tx in all_received:\\n    print(tx)\\n\"}"
+     }
+    }
+   ],
+   "pt": 12144,
+   "ct": 534,
+   "cost": 0.0,
+   "step": 15
+  },
+  {
+   "type": "step",
+   "n": 16,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Roommates identified:\n# 1. Kathryn Maldonado (kathrynmaldonado@gmail.com, 2473084266)\n# 2. Nancy Ritter (nan_ritt@gmail.com, 2307354647)\n# 3. Troy Solomon (tr_solo@gmail.com, 7273731063)\n\n# Now let's check current date/time again:\n# date: Friday, June 02, 2023. Time: 11:55 PM\n# Task: \"Add a comment, \"Thank you so much!\", to all the venmo payments I received from my roommates in the last 10 days (including today), and like those payments.\"\n\n# \"last 10 days (including today)\":\n# Today is June 02, 2023 (Day 1).\n# 10 days including today:\n# June 2 (1), June 1 (2), May 31 (3), May 30 (4), May 29 (5), May 28 (6), May 27 (7), May 26 (8), May 25 (9), May 24 (10).\n# From datetime import date, timedelta:\n# date(2023, 6, 2) - timedelta(days=9) = date(2023, 5, 24).\n# So May 24, 2023 00:00:00 to June 2, 2023 23:59:59.\n# Let's inspect all received venmo transactions to be completely sure and examine all dates!\n\n# Let's fetch all received transactions from venmo\npage = 0\nall_received = []\nwhile True:\n    txs = apis.venmo.show_transactions(access_token=venmo_token, direction='received', page_index=page, page_limit=20)\n    if not txs:\n        break\n    all_received.extend(txs)\n    page += 1\n\nprint(f\"Total received transactions: {len(all_received)}\")\nfor tx in all_received:\n    print(tx)\n"
+   },
+   "observation": "Total received transactions: 153\n{\n \"transaction_id\": 1167,\n \"amount\": 55.0,\n \"description\": \"Bike \\ud83d\\udeb4 Repairs\",\n \"created_at\": \"2022-11-13T12:03:15\",\n \"updated_at\": \"2022-11-13T12:03:15\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1168,\n \"amount\": 16.0,\n \"description\": \"Late-night pizza run\",\n \"created_at\": \"2022-10-12T02:59:37\",\n \"updated_at\": \"2022-10-12T02:59:37\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1169,\n \"amount\": 13.0,\n \"description\": \"Cosmetics\",\n \"created_at\": \"2023-05-15T18:00:05\",\n \"updated_at\": \"2023-05-15T18:00:05\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1170,\n \"amount\": 20.0,\n \"description\": \"\\ud83c\\udf38 Springtime Flower Garden Project \\ud83c\\udf37\",\n \"created_at\": \"2023-02-21T01:38:08\",\n \"updated_at\": \"2023-02-21T01:38:08\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1171,\n \"amount\": 18.0,\n \"description\": \"\\ud83c\\udf08 Pride Parade Outfits \\ud83c\\udff3\\ufe0f\\ud83c\\udf08\",\n \"created_at\": \"2023-02-08T16:14:46\",\n \"updated_at\": \"2023-02-08T16:14:46\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1172,\n \"amount\": 90.0,\n \"description\": \"Tattoo\",\n \"created_at\": \"2023-03-20T10:24:01\",\n \"updated_at\": \"2023-03-20T10:24:01\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1173,\n \"amount\": 30.0,\n \"description\": \"Skincare Products\",\n \"created_at\": \"2023-04-06T09:07:02\",\n \"updated_at\": \"2023-04-06T09:07:02\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1174,\n \"amount\": 71.0,\n \"description\": \"\\ud83c\\udf0cStargazing Trip\",\n \"created_at\": \"2023-03-22T17:25:59\",\n \"updated_at\": \"2023-03-22T17:25:59\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1175,\n \"amount\": 27.0,\n \"description\": \"Wine Tasting\",\n \"created_at\": \"2023-05-15T22:51:50\",\n \"updated_at\": \"2023-05-15T22:51:50\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1176,\n \"amount\": 179.0,\n \"description\": \"Opera Tickets\",\n \"created_at\": \"2023-04-27T07:39:24\",\n \"updated_at\": \"2023-04-27T07:39:24\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1177,\n \"amount\": 5.0,\n \"description\": \"\\ud83e\\udde6 Funky Socks \\ud83c\\udf08\\u2728\",\n \"created_at\": \"2023-02-25T00:47:41\",\n \"updated_at\": \"2023-02-25T00:47:41\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1178,\n \"amount\": 40.0,\n \"description\": \"\\ud83c\\udfd6Beach Day\",\n \"created_at\": \"2023-04-14T08:10:30\",\n \"updated_at\": \"2023-04-14T08:10:30\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1179,\n \"amount\": 12.0,\n \"description\": \"\\ud83c\\udf6aCookie Dough\",\n \"created_at\": \"2023-01-09T22:41:10\",\n \"updated_at\": \"2023-01-09T22:41:10\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1180,\n \"amount\": 37.0,\n \"description\": \"\\ud83c\\udfae New Video Game Pre-Order \\ud83d\\udd79\\ufe0f\",\n \"created_at\": \"2022-08-29T04:37:25\",\n \"updated_at\": \"2022-08-29T04:37:25\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1181,\n \"amount\": 34.0,\n \"description\": \"Vegan \\ud83c\\udf31 Cooking Class\",\n \"created_at\": \"2022-12-05T23:52:13\",\n \"updated_at\": \"2022-12-05T23:52:13\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kathryn Maldonado\",\n  \"email\": \"kathrynmaldonado@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1182,\n \"amount\": 59.0,\n \"description\": \"\\ud83d\\udec0 Spa Day Self-Care Kit \\ud83c\\udf3f\",\n \"created_at\": \"2022-12-05T22:59:12\",\n \"updated_at\": \"2022-12-05T22:59:12\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kathryn Maldonado\",\n  \"email\": \"kathrynmaldonado@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1183,\n \"amount\": 72.0,\n \"description\": \"\\ud83c\\udfa7 New Headphones \\ud83c\\udfb5\\ud83e\\udd18\",\n \"created_at\": \"2023-05-18T11:37:00\",\n \"updated_at\": \"2023-05-18T11:37:00\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kathryn Maldonado\",\n  \"email\": \"kathrynmaldonado@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1184,\n \"amount\": 20.0,\n \"description\": \"Record Store \\ud83c\\udfb6 Finds\",\n \"created_at\": \"2022-11-23T19:48:37\",\n \"updated_at\": \"2022-11-23T19:48:37\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1185,\n \"amount\": 14.0,\n \"description\": \"\\ud83e\\uddd7 Rock Climbing\",\n \"created_at\": \"2022-09-19T16:49:44\",\n \"updated_at\": \"2022-09-19T16:49:44\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1186,\n \"amount\": 24.0,\n \"description\": \"\\ud83c\\udf54Burger Goals\",\n \"created_at\": \"2022-11-25T06:56:28\",\n \"updated_at\": \"2022-11-25T06:56:28\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1187,\n \"amount\": 180.0,\n \"description\": \"\\ud83d\\ude80 To the Moon! Crypto Buy-In\",\n \"created_at\": \"2023-01-09T10:04:19\",\n \"updated_at\": \"2023-01-09T10:04:19\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1188,\n \"amount\": 34.0,\n \"description\": \"\\ud83c\\udf54 Weekend BBQ Supplies\",\n \"created_at\": \"2022-06-12T22:35:28\",\n \"updated_at\": \"2022-06-12T22:35:28\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1189,\n \"amount\": 42.0,\n \"description\": \"\\ud83d\\udecd\\ufe0fRetail Therapy\",\n \"created_at\": \"2023-03-29T14:02:23\",\n \"updated_at\": \"2023-03-29T14:02:23\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Joseph Weber\",\n  \"email\": \"joseph.webe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1190,\n \"amount\": 82.0,\n \"description\": \"Online Course\",\n \"created_at\": \"2023-05-04T22:38:33\",\n \"updated_at\": \"2023-05-04T22:38:33\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Joseph Weber\",\n  \"email\": \"joseph.webe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1191,\n \"amount\": 15.0,\n \"description\": \"Art \\ud83c\\udfa8 Supplies\",\n \"created_at\": \"2023-04-04T14:45:59\",\n \"updated_at\": \"2023-04-04T14:45:59\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Joseph Weber\",\n  \"email\": \"joseph.webe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1192,\n \"amount\": 39.0,\n \"description\": \"\\u26fd Gas Money\",\n \"created_at\": \"2023-03-19T12:30:23\",\n \"updated_at\": \"2023-03-19T12:30:23\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Joseph Weber\",\n  \"email\": \"joseph.webe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2026,\n \"amount\": 11.0,\n \"description\": \"\\ud83d\\udcf1 App Store Fun\",\n \"created_at\": \"2023-01-03T10:31:49\",\n \"updated_at\": \"2023-01-03T10:31:49\",\n \"private\": false,\n \"like_count\": 5,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2027,\n \"amount\": 8.0,\n \"description\": \"\\ud83c\\udf75Tea Time\",\n \"created_at\": \"2023-04-08T14:04:12\",\n \"updated_at\": \"2023-04-08T14:04:12\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2028,\n \"amount\": 28.0,\n \"description\": \"Charity Run \\ud83c\\udfc3\\ud83d\\udc96\",\n \"created_at\": \"2023-03-26T18:24:26\",\n \"updated_at\": \"2023-03-26T18:24:26\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2029,\n \"amount\": 66.0,\n \"description\": \"\\ud83c\\udf77 Winery Day Trip \\ud83c\\udf47\",\n \"created_at\": \"2023-05-03T18:50:43\",\n \"updated_at\": \"2023-05-03T18:50:43\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2030,\n \"amount\": 22.0,\n \"description\": \"\\ud83c\\udfb3Bowling Squad\",\n \"created_at\": \"2023-03-07T00:02:28\",\n \"updated_at\": \"2023-03-07T00:02:28\",\n \"private\": false,\n \"like_count\": 4,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2031,\n \"amount\": 35.0,\n \"description\": \"\\ud83d\\udc88Fresh Cut\",\n \"created_at\": \"2023-01-21T21:46:30\",\n \"updated_at\": \"2023-01-21T21:46:30\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2032,\n \"amount\": 48.0,\n \"description\": \"\\ud83c\\udfca Pool Party Supplies\",\n \"created_at\": \"2023-03-27T03:08:46\",\n \"updated_at\": \"2023-03-27T03:08:46\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2033,\n \"amount\": 11.0,\n \"description\": \"\\ud83c\\udf33 Park Picnic Snacks\",\n \"created_at\": \"2022-12-28T12:42:51\",\n \"updated_at\": \"2022-12-28T12:42:51\",\n \"private\": false,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2034,\n \"amount\": 29.0,\n \"description\": \"Haircut\",\n \"created_at\": \"2023-03-24T17:21:10\",\n \"updated_at\": \"2023-03-24T17:21:10\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 2035,\n \"amount\": 114.0,\n \"description\": \"Theater Tickets\",\n \"created_at\": \"2023-01-01T03:24:01\",\n \"updated_at\": \"2023-01-01T03:24:01\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3038,\n \"amount\": 48.0,\n \"description\": \"\\ud83c\\udf92 New Backpack \\ud83d\\udcda\\u2728\",\n \"created_at\": \"2022-10-22T08:39:39\",\n \"updated_at\": \"2022-10-22T08:39:39\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Adam Blackburn\",\n  \"email\": \"ad.blackburn@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3039,\n \"amount\": 46.0,\n \"description\": \"\\ud83c\\udfbcVinyl Records\",\n \"created_at\": \"2022-09-09T12:19:35\",\n \"updated_at\": \"2022-09-09T12:19:35\",\n \"private\": false,\n \"like_count\": 5,\n \"payment_card_digits\": null,\n \"comment_count\": 1,\n \"sender\": {\n  \"name\": \"Adam Blackburn\",\n  \"email\": \"ad.blackburn@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3040,\n \"amount\": 30.0,\n \"description\": \"\\ud83e\\udd13Comic Books\",\n \"created_at\": \"2023-04-16T14:53:17\",\n \"updated_at\": \"2023-04-16T14:53:17\",\n \"private\": true,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 1,\n \"sender\": {\n  \"name\": \"Adam Blackburn\",\n  \"email\": \"ad.blackburn@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3041,\n \"amount\": 11.0,\n \"description\": \"\\ud83c\\udf7f Netflix Subscription \\ud83c\\udfac\\ud83d\\udecb\\ufe0f\",\n \"created_at\": \"2022-11-29T18:06:15\",\n \"updated_at\": \"2022-11-29T18:06:15\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Adam Blackburn\",\n  \"email\": \"ad.blackburn@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3042,\n \"amount\": 28.0,\n \"description\": \"\\ud83c\\udfac Movie Marathon Night \\ud83c\\udf7f\",\n \"created_at\": \"2023-03-03T18:51:38\",\n \"updated_at\": \"2023-03-03T18:51:38\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Adam Blackburn\",\n  \"email\": \"ad.blackburn@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3324,\n \"amount\": 22.0,\n \"description\": \"\\ud83c\\udf54 Gourmet Burger and Fries \\ud83c\\udf5f\",\n \"created_at\": \"2023-05-14T12:59:08\",\n \"updated_at\": \"2023-05-14T12:59:08\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3325,\n \"amount\": 41.0,\n \"description\": \"Dry Cleaning\",\n \"created_at\": \"2022-06-26T19:33:04\",\n \"updated_at\": \"2022-06-26T19:33:04\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3326,\n \"amount\": 18.0,\n \"description\": \"\\ud83c\\udf7f Cinema Snacks \\ud83c\\udf6b\",\n \"created_at\": \"2022-08-28T18:24:43\",\n \"updated_at\": \"2022-08-28T18:24:43\",\n \"private\": false,\n \"like_count\": 4,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3327,\n \"amount\": 9.0,\n \"description\": \"Bike ride fuel\",\n \"created_at\": \"2023-03-11T01:37:19\",\n \"updated_at\": \"2023-03-11T01:37:19\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3328,\n \"amount\": 27.0,\n \"description\": \"\\ud83c\\udf7a Craft Beers \\ud83c\\udf7b\\ud83d\\udc4c\",\n \"created_at\": \"2023-04-11T04:28:57\",\n \"updated_at\": \"2023-04-11T04:28:57\",\n \"private\": true,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3329,\n \"amount\": 80.0,\n \"description\": \"Flower Delivery\",\n \"created_at\": \"2023-01-11T14:59:36\",\n \"updated_at\": \"2023-01-11T14:59:36\",\n \"private\": false,\n \"like_count\": 3,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 3330,\n \"amount\": 76.0,\n \"description\": \"Pet Food\",\n \"created_at\": \"2022-05-21T01:42:56\",\n \"updated_at\": \"2022-05-21T01:42:56\",\n \"private\": false,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 4,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 4474,\n \"amount\": 31.0,\n \"description\": \"\\ud83c\\udf79Happy Hour Vibes\",\n \"created_at\": \"2023-05-14T14:45:14\",\n \"updated_at\": \"2023-05-14T14:45:14\",\n \"private\": false,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 4475,\n \"amount\": 8.0,\n \"description\": \"\\ud83c\\udfb6 Spotify Subscription \\ud83c\\udfa7\\ud83d\\udd25\",\n \"created_at\": \"2023-02-26T01:17:59\",\n \"updated_at\": \"2023-02-26T01:17:59\",\n \"private\": false,\n \"like_count\": 3,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 4476,\n \"amount\": 13.0,\n \"description\": \"Charity Run \\ud83c\\udfc3\\ud83d\\udc96\",\n \"created_at\": \"2023-03-26T12:09:35\",\n \"updated_at\": \"2023-03-26T12:09:35\",\n \"private\": false,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 4477,\n \"amount\": 253.0,\n \"description\": \"Auto Insurance\",\n \"created_at\": \"2023-02-25T22:46:17\",\n \"updated_at\": \"2023-02-25T22:46:17\",\n \"private\": false,\n \"like_count\": 4,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 4478,\n \"amount\": 20.0,\n \"description\": \"Skincare Products\",\n \"created_at\": \"2023-03-25T00:37:39\",\n \"updated_at\": \"2023-03-25T00:37:39\",\n \"private\": false,\n \"like_count\": 5,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 4479,\n \"amount\": 25.0,\n \"description\": \"Uber last night\",\n \"created_at\": \"2023-03-16T19:38:50\",\n \"updated_at\": \"2023-03-16T19:38:50\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 4480,\n \"amount\": 158.0,\n \"description\": \"\\ud83c\\udfb5Festival Tix\",\n \"created_at\": \"2023-02-14T16:50:21\",\n \"updated_at\": \"2023-02-14T16:50:21\",\n \"private\": false,\n \"like_count\": 6,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 4481,\n \"amount\": 135.0,\n \"description\": \"\\ud83d\\udc53New Specs\",\n \"created_at\": \"2023-04-07T18:47:32\",\n \"updated_at\": \"2023-04-07T18:47:32\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 4482,\n \"amount\": 28.0,\n \"description\": \"\\ud83c\\udfa8 Art Supplies \\ud83d\\udd8c\\ufe0f\\ud83c\\udfa8\",\n \"created_at\": \"2023-04-20T04:11:45\",\n \"updated_at\": \"2023-04-20T04:11:45\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Tammy Weaver\",\n  \"email\": \"ta.weav@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5087,\n \"amount\": 25.0,\n \"description\": \"\\ud83c\\udf08 Pride Parade Outfits \\ud83c\\udff3\\ufe0f\\ud83c\\udf08\",\n \"created_at\": \"2022-10-27T14:42:13\",\n \"updated_at\": \"2022-10-27T14:42:13\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5088,\n \"amount\": 28.0,\n \"description\": \"Car Wash\",\n \"created_at\": \"2022-09-07T08:43:23\",\n \"updated_at\": \"2022-09-07T08:43:23\",\n \"private\": false,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 1,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5089,\n \"amount\": 6.0,\n \"description\": \"Caffeine Fix \\u2615\",\n \"created_at\": \"2022-08-07T23:12:32\",\n \"updated_at\": \"2022-08-07T23:12:32\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5090,\n \"amount\": 9.0,\n \"description\": \"Study \\ud83d\\udcda Snacks\",\n \"created_at\": \"2022-07-07T17:29:53\",\n \"updated_at\": \"2022-07-07T17:29:53\",\n \"private\": true,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5091,\n \"amount\": 65.0,\n \"description\": \"Photography \\ud83d\\udcf8 Workshop\",\n \"created_at\": \"2022-08-25T14:30:15\",\n \"updated_at\": \"2022-08-25T14:30:15\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5092,\n \"amount\": 146.0,\n \"description\": \"\\ud83d\\udc53New Specs\",\n \"created_at\": \"2023-03-25T21:05:32\",\n \"updated_at\": \"2023-03-25T21:05:32\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5093,\n \"amount\": 18.0,\n \"description\": \"\\ud83c\\udf79Margs Night\",\n \"created_at\": \"2022-09-01T09:04:38\",\n \"updated_at\": \"2022-09-01T09:04:38\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5162,\n \"amount\": 18.0,\n \"description\": \"Game Night \\ud83c\\udfb2\",\n \"created_at\": \"2022-07-10T12:06:36\",\n \"updated_at\": \"2022-07-10T12:06:36\",\n \"private\": false,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 4,\n \"sender\": {\n  \"name\": \"Jeffrey Smith\",\n  \"email\": \"jefsmith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5163,\n \"amount\": 170.0,\n \"description\": \"\\ud83d\\udc53New Specs\",\n \"created_at\": \"2022-07-11T22:05:47\",\n \"updated_at\": \"2022-07-11T22:05:47\",\n \"private\": false,\n \"like_count\": 3,\n \"payment_card_digits\": null,\n \"comment_count\": 4,\n \"sender\": {\n  \"name\": \"Jeffrey Smith\",\n  \"email\": \"jefsmith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5164,\n \"amount\": 32.0,\n \"description\": \"Bakery\",\n \"created_at\": \"2023-04-26T08:03:44\",\n \"updated_at\": \"2023-04-26T08:03:44\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jeffrey Smith\",\n  \"email\": \"jefsmith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5165,\n \"amount\": 47.0,\n \"description\": \"Manicure/Pedicure\",\n \"created_at\": \"2023-05-14T10:12:04\",\n \"updated_at\": \"2023-05-14T10:12:04\",\n \"private\": false,\n \"like_count\": 6,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jeffrey Smith\",\n  \"email\": \"jefsmith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5166,\n \"amount\": 15.0,\n \"description\": \"\\ud83d\\udcd6 Bookstore Haul \\ud83d\\udcda\\u2764\\ufe0f\",\n \"created_at\": \"2023-01-26T15:15:16\",\n \"updated_at\": \"2023-01-26T15:15:16\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jeffrey Smith\",\n  \"email\": \"jefsmith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5167,\n \"amount\": 20.0,\n \"description\": \"\\ud83c\\udf6aCookie Dough\",\n \"created_at\": \"2023-01-30T15:47:55\",\n \"updated_at\": \"2023-01-30T15:47:55\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jeffrey Smith\",\n  \"email\": \"jefsmith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5168,\n \"amount\": 74.0,\n \"description\": \"\\ud83d\\udc84 Girls' Makeup Shopping Spree \\ud83d\\udc85\",\n \"created_at\": \"2023-01-28T22:26:39\",\n \"updated_at\": \"2023-01-28T22:26:39\",\n \"private\": false,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 4,\n \"sender\": {\n  \"name\": \"Jeffrey Smith\",\n  \"email\": \"jefsmith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5169,\n \"amount\": 29.0,\n \"description\": \"Pizza & \\ud83c\\udfa5 Netflix\",\n \"created_at\": \"2022-11-03T18:13:23\",\n \"updated_at\": \"2022-11-03T18:13:23\",\n \"private\": true,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jeffrey Smith\",\n  \"email\": \"jefsmith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5716,\n \"amount\": 50.0,\n \"description\": \"Tattoo\",\n \"created_at\": \"2022-12-16T06:01:20\",\n \"updated_at\": \"2022-12-16T06:01:20\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5717,\n \"amount\": 33.0,\n \"description\": \"Vintage tee score\",\n \"created_at\": \"2022-09-12T10:40:38\",\n \"updated_at\": \"2022-09-12T10:40:38\",\n \"private\": false,\n \"like_count\": 5,\n \"payment_card_digits\": null,\n \"comment_count\": 3,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5718,\n \"amount\": 32.0,\n \"description\": \"\\ud83c\\udf7b Craft Beer Tasting Extravaganza \\ud83c\\udf7a\",\n \"created_at\": \"2022-11-18T06:45:56\",\n \"updated_at\": \"2022-11-18T06:45:56\",\n \"private\": true,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5719,\n \"amount\": 171.0,\n \"description\": \"Flight Ticket\",\n \"created_at\": \"2022-10-06T14:54:33\",\n \"updated_at\": \"2022-10-06T14:54:33\",\n \"private\": false,\n \"like_count\": 3,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5720,\n \"amount\": 8.0,\n \"description\": \"\\ud83c\\udfb6 Spotify Subscription \\ud83c\\udfa7\\ud83d\\udd25\",\n \"created_at\": \"2022-10-13T13:38:31\",\n \"updated_at\": \"2022-10-13T13:38:31\",\n \"private\": false,\n \"like_count\": 5,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 5721,\n \"amount\": 85.0,\n \"description\": \"\\ud83d\\udc5fFresh Kicks\",\n \"created_at\": \"2023-02-15T12:13:24\",\n \"updated_at\": \"2023-02-15T12:13:24\",\n \"private\": true,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 6963,\n \"amount\": 106.0,\n \"description\": \"Bungee Jumping\",\n \"created_at\": \"2023-05-15T03:34:08\",\n \"updated_at\": \"2023-05-15T03:34:08\",\n \"private\": false,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 6964,\n \"amount\": 51.0,\n \"description\": \"Dance Class\",\n \"created_at\": \"2023-03-20T13:04:54\",\n \"updated_at\": \"2023-03-20T13:04:54\",\n \"private\": true,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 1,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 6965,\n \"amount\": 60.0,\n \"description\": \"Snowboarding Gear\",\n \"created_at\": \"2023-04-03T20:55:33\",\n \"updated_at\": \"2023-04-03T20:55:33\",\n \"private\": true,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 6966,\n \"amount\": 39.0,\n \"description\": \"\\ud83c\\udf73 Sunday Brunch with Friends \\ud83e\\udd42\",\n \"created_at\": \"2023-02-10T08:27:48\",\n \"updated_at\": \"2023-02-10T08:27:48\",\n \"private\": false,\n \"like_count\": 5,\n \"payment_card_digits\": null,\n \"comment_count\": 2,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 6967,\n \"amount\": 22.0,\n \"description\": \"\\ud83d\\udc7eArcade Night\",\n \"created_at\": \"2023-04-01T00:43:56\",\n \"updated_at\": \"2023-04-01T00:43:56\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 6968,\n \"amount\": 30.0,\n \"description\": \"\\ud83c\\udf55 Friday Night Pizza Party \\ud83c\\udf89\",\n \"created_at\": \"2023-03-04T05:48:45\",\n \"updated_at\": \"2023-03-04T05:48:45\",\n \"private\": false,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 6969,\n \"amount\": 34.0,\n \"description\": \"Karaoke night \\ud83c\\udfa4\",\n \"created_at\": \"2023-03-17T22:54:27\",\n \"updated_at\": \"2023-03-17T22:54:27\",\n \"private\": false,\n \"like_count\": 3,\n \"payment_card_digits\": null,\n \"comment_count\": 1,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 6970,\n \"amount\": 24.0,\n \"description\": \"Vintage tee score\",\n \"created_at\": \"2023-04-10T22:04:56\",\n \"updated_at\": \"2023-04-10T22:04:56\",\n \"private\": false,\n \"like_count\": 3,\n \"payment_card_digits\": null,\n \"comment_count\": 1,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7544,\n \"amount\": 29.0,\n \"description\": \"\\ud83d\\udd2d Stargazing Trip Essentials \\ud83c\\udf0c\",\n \"created_at\": \"2023-04-21T08:27:30\",\n \"updated_at\": \"2023-04-21T08:27:30\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Sandra Martinez\",\n  \"email\": \"saritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7545,\n \"amount\": 35.0,\n \"description\": \"Record Store \\ud83c\\udfb6 Finds\",\n \"created_at\": \"2023-01-08T07:03:48\",\n \"updated_at\": \"2023-01-08T07:03:48\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Sandra Martinez\",\n  \"email\": \"saritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7546,\n \"amount\": 17.0,\n \"description\": \"\\ud83e\\udd51 Avocado Toast Brunch \\ud83c\\udf5e\\ud83c\\udf73\",\n \"created_at\": \"2023-02-18T21:57:37\",\n \"updated_at\": \"2023-02-18T21:57:37\",\n \"private\": false,\n \"like_count\": 6,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Sandra Martinez\",\n  \"email\": \"saritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7547,\n \"amount\": 77.0,\n \"description\": \"Pet Sitting\",\n \"created_at\": \"2023-03-16T17:34:36\",\n \"updated_at\": \"2023-03-16T17:34:36\",\n \"private\": false,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Sandra Martinez\",\n  \"email\": \"saritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7548,\n \"amount\": 5.0,\n \"description\": \"\\ud83c\\udf69 Donut Delight \\ud83c\\udf69\\ud83d\\udc95\",\n \"created_at\": \"2023-01-19T01:51:26\",\n \"updated_at\": \"2023-01-19T01:51:26\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Sandra Martinez\",\n  \"email\": \"saritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7917,\n \"amount\": 38.0,\n \"description\": \"\\ud83c\\udfa8 Art Supplies for Creative Weekend \\ud83d\\udd8c\\ufe0f\",\n \"created_at\": \"2023-01-04T15:20:16\",\n \"updated_at\": \"2023-01-04T15:20:16\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7918,\n \"amount\": 54.0,\n \"description\": \"Gas money\",\n \"created_at\": \"2023-05-16T22:01:10\",\n \"updated_at\": \"2023-05-16T22:01:10\",\n \"private\": false,\n \"like_count\": 4,\n \"payment_card_digits\": null,\n \"comment_count\": 1,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7919,\n \"amount\": 55.0,\n \"description\": \"\\ud83c\\udfd5Camping Trip\",\n \"created_at\": \"2023-01-28T01:02:35\",\n \"updated_at\": \"2023-01-28T01:02:35\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7920,\n \"amount\": 16.0,\n \"description\": \"\\ud83c\\udf75Tea Time\",\n \"created_at\": \"2022-12-23T11:53:26\",\n \"updated_at\": \"2022-12-23T11:53:26\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7921,\n \"amount\": 13.0,\n \"description\": \"Gaming \\ud83c\\udfae Sesh\",\n \"created_at\": \"2023-01-30T11:32:35\",\n \"updated_at\": \"2023-01-30T11:32:35\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 7922,\n \"amount\": 18.0,\n \"description\": \"\\ud83d\\udef5 Food Delivery for Lazy Day \\ud83c\\udf55\",\n \"created_at\": \"2023-04-27T17:41:15\",\n \"updated_at\": \"2023-04-27T17:41:15\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8216,\n \"amount\": 10.0,\n \"description\": \"\\ud83c\\udfa4 Open Mic Night\",\n \"created_at\": \"2023-05-18T14:15:31\",\n \"updated_at\": \"2023-05-18T14:15:31\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8217,\n \"amount\": 10.0,\n \"description\": \"Pizza & \\ud83c\\udfa5 Netflix\",\n \"created_at\": \"2023-05-19T09:34:11\",\n \"updated_at\": \"2023-05-19T09:34:11\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8218,\n \"amount\": 5.0,\n \"description\": \"Caffeine Fix \\u2615\",\n \"created_at\": \"2023-05-19T09:34:11\",\n \"updated_at\": \"2023-05-19T09:34:11\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8225,\n \"amount\": 145.0,\n \"description\": \"Tech Gadgets\",\n \"created_at\": \"2023-05-23T11:03:20\",\n \"updated_at\": \"2023-05-23T11:03:20\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8226,\n \"amount\": 45.0,\n \"description\": \"Cosmetics\",\n \"created_at\": \"2023-05-23T11:03:20\",\n \"updated_at\": \"2023-05-23T11:03:20\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Adam Blackburn\",\n  \"email\": \"ad.blackburn@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8227,\n \"amount\": 61.0,\n \"description\": \"\\ud83c\\udfaeNew Game Drop\",\n \"created_at\": \"2023-05-24T11:11:13\",\n \"updated_at\": \"2023-05-24T11:11:13\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jeffrey Smith\",\n  \"email\": \"jefsmith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8228,\n \"amount\": 34.0,\n \"description\": \"\\ud83c\\udfca Pool Party Supplies\",\n \"created_at\": \"2023-05-24T11:11:13\",\n \"updated_at\": \"2023-05-24T11:11:13\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8232,\n \"amount\": 25.0,\n \"description\": \"\\ud83c\\udf79 More Thirsty Thursdays \\ud83c\\udf78\\ud83c\\udf79\",\n \"created_at\": \"2023-05-26T18:23:47\",\n \"updated_at\": \"2023-05-26T18:23:47\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8233,\n \"amount\": 176.0,\n \"description\": \"Massage\",\n \"created_at\": \"2023-05-26T18:23:47\",\n \"updated_at\": \"2023-05-26T18:23:47\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8237,\n \"amount\": 8.0,\n \"description\": \"Caffeine Fix \\u2615\",\n \"created_at\": \"2023-05-28T16:46:36\",\n \"updated_at\": \"2023-05-28T16:46:36\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8243,\n \"amount\": 13.0,\n \"description\": \"\\ud83c\\udf55Pizza & Chill\",\n \"created_at\": \"2023-05-31T09:12:13\",\n \"updated_at\": \"2023-05-31T09:12:13\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Angela Riddle\",\n  \"email\": \"angriddle@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8244,\n \"amount\": 38.0,\n \"description\": \"\\ud83c\\udfa8Art Supplies\",\n \"created_at\": \"2023-05-31T09:12:13\",\n \"updated_at\": \"2023-05-31T09:12:13\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8245,\n \"amount\": 36.0,\n \"description\": \"Escape room fun\",\n \"created_at\": \"2023-05-31T09:12:13\",\n \"updated_at\": \"2023-05-31T09:12:13\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8247,\n \"amount\": 35.0,\n \"description\": \"\\ud83c\\udfd5 Camping Trip Food and Gear \\ud83c\\udf92\",\n \"created_at\": \"2023-06-02T22:21:53\",\n \"updated_at\": \"2023-06-02T22:21:53\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8248,\n \"amount\": 15.0,\n \"description\": \"\\ud83d\\udc1f Fish Tank Supplies \\ud83d\\udc20\\ud83d\\udca6\",\n \"created_at\": \"2023-06-02T22:21:53\",\n \"updated_at\": \"2023-06-02T22:21:53\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Glenn Burton\",\n  \"email\": \"glenn.burton@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8251,\n \"amount\": 7.0,\n \"description\": \"\\ud83c\\udf2eTaco Vibes\",\n \"created_at\": \"2023-05-21T02:22:28\",\n \"updated_at\": \"2023-05-21T02:22:28\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8252,\n \"amount\": 17.0,\n \"description\": \"\\ud83e\\udd73 Party Decorations \\ud83c\\udf89\\ud83c\\udf88\",\n \"created_at\": \"2023-05-22T05:02:15\",\n \"updated_at\": \"2023-05-22T05:02:15\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Ashlee Martinez\",\n  \"email\": \"ashlee_martinez@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8253,\n \"amount\": 17.0,\n \"description\": \"\\ud83c\\udfb3 Bowling Alley Fun Night \\ud83e\\udd17\",\n \"created_at\": \"2023-05-24T20:35:47\",\n \"updated_at\": \"2023-05-24T20:35:47\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Spencer Powell\",\n  \"email\": \"spencer.powell@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8255,\n \"amount\": 48.0,\n \"description\": \"Food Festival\",\n \"created_at\": \"2023-05-25T23:18:45\",\n \"updated_at\": \"2023-05-25T23:18:45\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Connor Brown\",\n  \"email\": \"connorbrow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8256,\n \"amount\": 140.0,\n \"description\": \"Birthday Gift\",\n \"created_at\": \"2023-05-27T14:14:50\",\n \"updated_at\": \"2023-05-27T14:14:50\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Adam Blackburn\",\n  \"email\": \"ad.blackburn@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8257,\n \"amount\": 12.0,\n \"description\": \"Movie Ticket\",\n \"created_at\": \"2023-05-28T14:27:01\",\n \"updated_at\": \"2023-05-28T14:27:01\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Adam Blackburn\",\n  \"email\": \"ad.blackburn@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8262,\n \"amount\": 33.0,\n \"description\": \"Road trip snacks\",\n \"created_at\": \"2023-05-18T09:07:15\",\n \"updated_at\": \"2023-05-18T09:07:15\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8266,\n \"amount\": 172.0,\n \"description\": \"\\ud83d\\ude80 To the Moon! Crypto Buy-In\",\n \"created_at\": \"2023-05-20T14:21:39\",\n \"updated_at\": \"2023-05-20T14:21:39\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Miranda Weber\",\n  \"email\": \"mir-powe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8267,\n \"amount\": 35.0,\n \"description\": \"\\ud83d\\udc8d Small Gift \\ud83d\\udc8d\\ud83d\\udc96\",\n \"created_at\": \"2023-05-21T08:11:19\",\n \"updated_at\": \"2023-05-21T08:11:19\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jason Simpson\",\n  \"email\": \"jasonsimp@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8268,\n \"amount\": 20.0,\n \"description\": \"\\ud83d\\udcda Study Group Snack Fund \\ud83d\\udcd6\",\n \"created_at\": \"2023-05-21T08:11:19\",\n \"updated_at\": \"2023-05-21T08:11:19\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Joseph Weber\",\n  \"email\": \"joseph.webe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8269,\n \"amount\": 36.0,\n \"description\": \"Food delivery \\ud83c\\udf55\",\n \"created_at\": \"2023-05-21T08:11:19\",\n \"updated_at\": \"2023-05-21T08:11:19\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Sandra Martinez\",\n  \"email\": \"saritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8271,\n \"amount\": 109.0,\n \"description\": \"Birthday Gift\",\n \"created_at\": \"2023-05-23T08:05:19\",\n \"updated_at\": \"2023-05-23T08:05:19\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Joseph Weber\",\n  \"email\": \"joseph.webe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8278,\n \"amount\": 7.0,\n \"description\": \"Summer \\ud83c\\udf66 Ice Cream Run\",\n \"created_at\": \"2023-05-26T18:11:42\",\n \"updated_at\": \"2023-05-26T18:11:42\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kevin Blackburn\",\n  \"email\": \"kevin.blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8279,\n \"amount\": 66.0,\n \"description\": \"\\ud83c\\udfcb\\ufe0f New Gym Gear Shopping \\ud83e\\udd38\",\n \"created_at\": \"2023-05-26T18:11:42\",\n \"updated_at\": \"2023-05-26T18:11:42\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8280,\n \"amount\": 30.0,\n \"description\": \"Pizza \\ud83c\\udf55 Night\",\n \"created_at\": \"2023-05-27T09:58:08\",\n \"updated_at\": \"2023-05-27T09:58:08\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Miranda Weber\",\n  \"email\": \"mir-powe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8281,\n \"amount\": 10.0,\n \"description\": \"Movie \\ud83c\\udf9f\\ufe0f Night\",\n \"created_at\": \"2023-05-27T09:58:08\",\n \"updated_at\": \"2023-05-27T09:58:08\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jeremy Calhoun\",\n  \"email\": \"jer.calhoun@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8285,\n \"amount\": 15.0,\n \"description\": \"Books\",\n \"created_at\": \"2023-05-29T10:24:53\",\n \"updated_at\": \"2023-05-29T10:24:53\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8286,\n \"amount\": 47.0,\n \"description\": \"Massage\",\n \"created_at\": \"2023-05-29T10:24:53\",\n \"updated_at\": \"2023-05-29T10:24:53\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Sandra Martinez\",\n  \"email\": \"saritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8287,\n \"amount\": 53.0,\n \"description\": \"\\ud83c\\udfd5 Camping Trip Food and Gear \\ud83c\\udf92\",\n \"created_at\": \"2023-05-29T10:24:53\",\n \"updated_at\": \"2023-05-29T10:24:53\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Joseph Weber\",\n  \"email\": \"joseph.webe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8288,\n \"amount\": 2.0,\n \"description\": \"Coffee\",\n \"created_at\": \"2023-05-30T13:36:18\",\n \"updated_at\": \"2023-05-30T13:36:18\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8292,\n \"amount\": 34.0,\n \"description\": \"Gaming \\ud83c\\udfae Sesh\",\n \"created_at\": \"2023-06-01T16:39:36\",\n \"updated_at\": \"2023-06-01T16:39:36\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jason Simpson\",\n  \"email\": \"jasonsimp@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8296,\n \"amount\": 12.0,\n \"description\": \"\\ud83d\\udcf1 App Store Fun\",\n \"created_at\": \"2023-05-20T07:27:35\",\n \"updated_at\": \"2023-05-20T07:27:35\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jason Simpson\",\n  \"email\": \"jasonsimp@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8298,\n \"amount\": 27.0,\n \"description\": \"Monthly comics \\ud83e\\uddb8\",\n \"created_at\": \"2023-05-23T11:31:22\",\n \"updated_at\": \"2023-05-23T11:31:22\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Jeremy Calhoun\",\n  \"email\": \"jer.calhoun@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8303,\n \"amount\": 18.0,\n \"description\": \"\\ud83c\\udfa8 DIY Craft Supplies\",\n \"created_at\": \"2023-05-30T04:40:36\",\n \"updated_at\": \"2023-05-30T04:40:36\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Joseph Weber\",\n  \"email\": \"joseph.webe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8304,\n \"amount\": 52.0,\n \"description\": \"\\ud83d\\ude80Crypto Buy\",\n \"created_at\": \"2023-05-29T18:41:58\",\n \"updated_at\": \"2023-05-29T18:41:58\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8305,\n \"amount\": 24.0,\n \"description\": \"Board Games\",\n \"created_at\": \"2023-05-30T20:31:46\",\n \"updated_at\": \"2023-05-30T20:31:46\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Joseph Weber\",\n  \"email\": \"joseph.webe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8306,\n \"amount\": 22.0,\n \"description\": \"\\ud83d\\udc7eArcade Night\",\n \"created_at\": \"2023-06-02T20:34:39\",\n \"updated_at\": \"2023-06-02T20:34:39\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Marcus Smith\",\n  \"email\": \"ma_smith@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8307,\n \"amount\": 10.0,\n \"description\": \"Tacos \\ud83c\\udf2e Tuesday\",\n \"created_at\": \"2023-05-31T07:04:33\",\n \"updated_at\": \"2023-05-31T07:04:33\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Miranda Weber\",\n  \"email\": \"mir-powe@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8310,\n \"amount\": 21.0,\n \"description\": \"\\ud83c\\udf2e Taco Tuesday Office Lunch \\ud83c\\udf79\",\n \"created_at\": \"2023-05-19T11:49:59\",\n \"updated_at\": \"2023-05-19T11:49:59\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8311,\n \"amount\": 33.0,\n \"description\": \"Plant mom life\",\n \"created_at\": \"2023-05-20T17:02:46\",\n \"updated_at\": \"2023-05-20T17:02:46\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kathryn Maldonado\",\n  \"email\": \"kathrynmaldonado@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8312,\n \"amount\": 67.0,\n \"description\": \"\\ud83d\\udcaa Gym Dues\",\n \"created_at\": \"2023-05-20T17:02:46\",\n \"updated_at\": \"2023-05-20T17:02:46\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Nancy Ritter\",\n  \"email\": \"nan_ritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8319,\n \"amount\": 30.0,\n \"description\": \"\\ud83c\\udfb3Bowling Squad\",\n \"created_at\": \"2023-05-25T15:18:33\",\n \"updated_at\": \"2023-05-25T15:18:33\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kathryn Maldonado\",\n  \"email\": \"kathrynmaldonado@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8320,\n \"amount\": 16.0,\n \"description\": \"Pizza Night \\ud83c\\udf55\",\n \"created_at\": \"2023-05-25T15:18:33\",\n \"updated_at\": \"2023-05-25T15:18:33\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8327,\n \"amount\": 77.0,\n \"description\": \"Photography \\ud83d\\udcf8 Workshop\",\n \"created_at\": \"2023-05-29T11:12:52\",\n \"updated_at\": \"2023-05-29T11:12:52\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8328,\n \"amount\": 50.0,\n \"description\": \"\\ud83c\\udf63Sushi Vibes\",\n \"created_at\": \"2023-05-30T12:28:07\",\n \"updated_at\": \"2023-05-30T12:28:07\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kathryn Maldonado\",\n  \"email\": \"kathrynmaldonado@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8329,\n \"amount\": 27.0,\n \"description\": \"\\ud83c\\udf5c Ramen Night in Downtown \\ud83c\\udf03\",\n \"created_at\": \"2023-05-31T16:27:21\",\n \"updated_at\": \"2023-05-31T16:27:21\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Nancy Ritter\",\n  \"email\": \"nan_ritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8333,\n \"amount\": 13.0,\n \"description\": \"\\ud83c\\udf69 Donuts for the Team Meeting \\ud83d\\udcc8\",\n \"created_at\": \"2023-05-19T13:00:14\",\n \"updated_at\": \"2023-05-19T13:00:14\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8334,\n \"amount\": 15.0,\n \"description\": \"\\ud83c\\udf54 Gourmet Burger and Fries \\ud83c\\udf5f\",\n \"created_at\": \"2023-05-20T03:20:43\",\n \"updated_at\": \"2023-05-20T03:20:43\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Troy Solomon\",\n  \"email\": \"tr_solo@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8335,\n \"amount\": 21.0,\n \"description\": \"\\ud83c\\udfc0 Basketball Game Tix \\ud83c\\udf9f\\ufe0f\\ud83c\\udfc0\",\n \"created_at\": \"2023-05-25T21:22:14\",\n \"updated_at\": \"2023-05-25T21:22:14\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Nancy Ritter\",\n  \"email\": \"nan_ritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8339,\n \"amount\": 93.0,\n \"description\": \"Theater Tickets\",\n \"created_at\": \"2023-06-01T06:04:53\",\n \"updated_at\": \"2023-06-01T06:04:53\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Kathryn Maldonado\",\n  \"email\": \"kathrynmaldonado@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n{\n \"transaction_id\": 8341,\n \"amount\": 25.0,\n \"description\": \"\\ud83c\\udfa4 Karaoke Night \\ud83c\\udfb6\\ud83d\\udc83\",\n \"created_at\": \"2023-06-02T23:18:47\",\n \"updated_at\": \"2023-06-02T23:18:47\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Nancy Ritter\",\n  \"email\": \"nan_ritt@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Jordan Harrison\",\n  \"email\": \"jo-harr@gmail.com\"\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179744049_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's filter the transactions in Python specifically for our roommates\\nroommate_emails = {\\n    'kathrynmaldonado@gmail.com',\\n    'nan_ritt@gmail.com',\\n    'tr_solo@gmail.com'\\n}\\n\\nfrom datetime import datetime, date, timedelta\\n\\n# Current date: Friday, June 02, 2023\\n# Last 10 days including today:\\n# If today is June 2, 2023, 10 days including today means 10 dates:\\n# June 2, June 1, May 31, May 30, May 29, May 28, May 27, May 26, May 25, May 24.\\n# Let's print all transactions from roommates to inspect their dates\\nroommate_txs = [tx for tx in all_received if tx['sender']['email'] in roommate_emails]\\n\\nprint(f\\\"Total roommate transactions received: {len(roommate_txs)}\\\")\\nfor tx in sorted(roommate_txs, key=lambda x: x['created_at']):\\n    print(tx['transaction_id'], tx['sender']['name'], tx['sender']['email'], tx['created_at'], tx['amount'], tx['description'])\\n\"}"
+     }
+    }
+   ],
+   "pt": 15502,
+   "ct": 306,
+   "cost": 0.0,
+   "step": 16
+  },
+  {
+   "type": "step",
+   "n": 17,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's filter the transactions in Python specifically for our roommates\nroommate_emails = {\n    'kathrynmaldonado@gmail.com',\n    'nan_ritt@gmail.com',\n    'tr_solo@gmail.com'\n}\n\nfrom datetime import datetime, date, timedelta\n\n# Current date: Friday, June 02, 2023\n# Last 10 days including today:\n# If today is June 2, 2023, 10 days including today means 10 dates:\n# June 2, June 1, May 31, May 30, May 29, May 28, May 27, May 26, May 25, May 24.\n# Let's print all transactions from roommates to inspect their dates\nroommate_txs = [tx for tx in all_received if tx['sender']['email'] in roommate_emails]\n\nprint(f\"Total roommate transactions received: {len(roommate_txs)}\")\nfor tx in sorted(roommate_txs, key=lambda x: x['created_at']):\n    print(tx['transaction_id'], tx['sender']['name'], tx['sender']['email'], tx['created_at'], tx['amount'], tx['description'])\n"
+   },
+   "observation": "Total roommate transactions received: 21\n1188 Troy Solomon tr_solo@gmail.com 2022-06-12T22:35:28 34.0 \ud83c\udf54 Weekend BBQ Supplies\n1185 Troy Solomon tr_solo@gmail.com 2022-09-19T16:49:44 14.0 \ud83e\uddd7 Rock Climbing\n1184 Troy Solomon tr_solo@gmail.com 2022-11-23T19:48:37 20.0 Record Store \ud83c\udfb6 Finds\n1186 Troy Solomon tr_solo@gmail.com 2022-11-25T06:56:28 24.0 \ud83c\udf54Burger Goals\n1182 Kathryn Maldonado kathrynmaldonado@gmail.com 2022-12-05T22:59:12 59.0 \ud83d\udec0 Spa Day Self-Care Kit \ud83c\udf3f\n1181 Kathryn Maldonado kathrynmaldonado@gmail.com 2022-12-05T23:52:13 34.0 Vegan \ud83c\udf31 Cooking Class\n1187 Troy Solomon tr_solo@gmail.com 2023-01-09T10:04:19 180.0 \ud83d\ude80 To the Moon! Crypto Buy-In\n1183 Kathryn Maldonado kathrynmaldonado@gmail.com 2023-05-18T11:37:00 72.0 \ud83c\udfa7 New Headphones \ud83c\udfb5\ud83e\udd18\n8310 Troy Solomon tr_solo@gmail.com 2023-05-19T11:49:59 21.0 \ud83c\udf2e Taco Tuesday Office Lunch \ud83c\udf79\n8333 Troy Solomon tr_solo@gmail.com 2023-05-19T13:00:14 13.0 \ud83c\udf69 Donuts for the Team Meeting \ud83d\udcc8\n8334 Troy Solomon tr_solo@gmail.com 2023-05-20T03:20:43 15.0 \ud83c\udf54 Gourmet Burger and Fries \ud83c\udf5f\n8311 Kathryn Maldonado kathrynmaldonado@gmail.com 2023-05-20T17:02:46 33.0 Plant mom life\n8312 Nancy Ritter nan_ritt@gmail.com 2023-05-20T17:02:46 67.0 \ud83d\udcaa Gym Dues\n8319 Kathryn Maldonado kathrynmaldonado@gmail.com 2023-05-25T15:18:33 30.0 \ud83c\udfb3Bowling Squad\n8320 Troy Solomon tr_solo@gmail.com 2023-05-25T15:18:33 16.0 Pizza Night \ud83c\udf55\n8335 Nancy Ritter nan_ritt@gmail.com 2023-05-25T21:22:14 21.0 \ud83c\udfc0 Basketball Game Tix \ud83c\udf9f\ufe0f\ud83c\udfc0\n8327 Troy Solomon tr_solo@gmail.com 2023-05-29T11:12:52 77.0 Photography \ud83d\udcf8 Workshop\n8328 Kathryn Maldonado kathrynmaldonado@gmail.com 2023-05-30T12:28:07 50.0 \ud83c\udf63Sushi Vibes\n8329 Nancy Ritter nan_ritt@gmail.com 2023-05-31T16:27:21 27.0 \ud83c\udf5c Ramen Night in Downtown \ud83c\udf03\n8339 Kathryn Maldonado kathrynmaldonado@gmail.com 2023-06-01T06:04:53 93.0 Theater Tickets\n8341 Nancy Ritter nan_ritt@gmail.com 2023-06-02T23:18:47 25.0 \ud83c\udfa4 Karaoke Night \ud83c\udfb6\ud83d\udc83\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179749517_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Look at the dates:\\n# 2023-05-20 is May 20.\\n# Then next is 2023-05-25!\\n# Today is 2023-06-02.\\n# 10 days including today:\\n# May 24, 25, 26, 27, 28, 29, 30, 31, June 1, June 2 (exactly 10 days!)\\n# Between May 20 and May 25, there are NO transactions!\\n# Even if someone calculated:\\n# June 2 - 10 days = May 23.\\n# June 2 - 9 days = May 24.\\n# Either way, May 20 is 13 days ago (outside 10 days).\\n# And May 25 is within 8 or 9 days ago (definitely within last 10 days)!\\n# Let's verify the transactions starting from May 25:\\n# 8319 (2023-05-25T15:18:33)\\n# 8320 (2023-05-25T15:18:33)\\n# 8335 (2023-05-25T21:22:14)\\n# 8327 (2023-05-29T11:12:52)\\n# 8328 (2023-05-30T12:28:07)\\n# 8329 (2023-05-31T16:27:21)\\n# 8339 (2023-06-01T06:04:53)\\n# 8341 (2023-06-02T23:18:47)\\n\\n# That is exactly 8 transactions!\\n# Let's double check if there are any other roommates in contacts or splitwise or anywhere else.\\n\"}"
+     }
+    }
+   ],
+   "pt": 16797,
+   "ct": 506,
+   "cost": 0.0,
+   "step": 17
+  },
+  {
+   "type": "step",
+   "n": 18,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Look at the dates:\n# 2023-05-20 is May 20.\n# Then next is 2023-05-25!\n# Today is 2023-06-02.\n# 10 days including today:\n# May 24, 25, 26, 27, 28, 29, 30, 31, June 1, June 2 (exactly 10 days!)\n# Between May 20 and May 25, there are NO transactions!\n# Even if someone calculated:\n# June 2 - 10 days = May 23.\n# June 2 - 9 days = May 24.\n# Either way, May 20 is 13 days ago (outside 10 days).\n# And May 25 is within 8 or 9 days ago (definitely within last 10 days)!\n# Let's verify the transactions starting from May 25:\n# 8319 (2023-05-25T15:18:33)\n# 8320 (2023-05-25T15:18:33)\n# 8335 (2023-05-25T21:22:14)\n# 8327 (2023-05-29T11:12:52)\n# 8328 (2023-05-30T12:28:07)\n# 8329 (2023-05-31T16:27:21)\n# 8339 (2023-06-01T06:04:53)\n# 8341 (2023-06-02T23:18:47)\n\n# That is exactly 8 transactions!\n# Let's double check if there are any other roommates in contacts or splitwise or anywhere else.\n"
+   },
+   "observation": "Execution successful."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179753313_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check all contacts in phone book just in case\\nall_contacts = []\\npage = 0\\nwhile True:\\n    contacts = apis.phone.search_contacts(access_token=phone_token, page_index=page, page_limit=20)\\n    if not contacts:\\n        break\\n    all_contacts.extend(contacts)\\n    page += 1\\n\\nprint(f\\\"Total contacts: {len(all_contacts)}\\\")\\nfor c in all_contacts:\\n    if 'roommate' in c.get('relationships', []):\\n        print(\\\"Roommate:\\\", c['first_name'], c['last_name'], c['email'])\\n\"}"
+     }
+    }
+   ],
+   "pt": 17321,
+   "ct": 165,
+   "cost": 0.0,
+   "step": 18
+  },
+  {
+   "type": "step",
+   "n": 19,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check all contacts in phone book just in case\nall_contacts = []\npage = 0\nwhile True:\n    contacts = apis.phone.search_contacts(access_token=phone_token, page_index=page, page_limit=20)\n    if not contacts:\n        break\n    all_contacts.extend(contacts)\n    page += 1\n\nprint(f\"Total contacts: {len(all_contacts)}\")\nfor c in all_contacts:\n    if 'roommate' in c.get('relationships', []):\n        print(\"Roommate:\", c['first_name'], c['last_name'], c['email'])\n"
+   },
+   "observation": "Total contacts: 24\nRoommate: Kathryn Maldonado kathrynmaldonado@gmail.com\nRoommate: Nancy Ritter nan_ritt@gmail.com\nRoommate: Troy Solomon tr_solo@gmail.com\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179755919_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Now let's check API docs for like_transaction and create_transaction_comment\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='like_transaction'))\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='create_transaction_comment'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 17550,
+   "ct": 96,
+   "cost": 0.0,
+   "step": 19
+  },
+  {
+   "type": "step",
+   "n": 20,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Now let's check API docs for like_transaction and create_transaction_comment\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='like_transaction'))\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='create_transaction_comment'))\n"
+   },
+   "observation": "{\n \"app_name\": \"venmo\",\n \"api_name\": \"like_transaction\",\n \"path\": \"/transactions/{transaction_id}/likes\",\n \"method\": \"POST\",\n \"description\": \"Like a transaction.\",\n \"parameters\": [\n  {\n   \"name\": \"transaction_id\",\n   \"type\": \"integer\",\n   \"required\": true,\n   \"description\": \"ID of the transaction to like.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from venmo app login.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"message\": \"string\"\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n{\n \"app_name\": \"venmo\",\n \"api_name\": \"create_transaction_comment\",\n \"path\": \"/transactions/{transaction_id}/comments\",\n \"method\": \"POST\",\n \"description\": \"Create a new transaction comment.\",\n \"parameters\": [\n  {\n   \"name\": \"transaction_id\",\n   \"type\": \"integer\",\n   \"required\": true,\n   \"description\": \"ID of the transaction to comment on.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"comment\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Comment on the transaction.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from venmo app login.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"message\": \"string\",\n   \"comment_id\": 1\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179759584_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check each of these 8 transactions to see if any are already liked or commented on\\ntarget_tx_ids = [8319, 8320, 8335, 8327, 8328, 8329, 8339, 8341]\\n\\nfor tx_id in target_tx_ids:\\n    tx_detail = apis.venmo.show_transaction(access_token=venmo_token, transaction_id=tx_id)\\n    comments = apis.venmo.show_transaction_comments(access_token=venmo_token, transaction_id=tx_id)\\n    print(f\\\"TX {tx_id}: like_count={tx_detail['like_count']}, comments={comments}\\\")\\n\"}"
+     }
+    }
+   ],
+   "pt": 18168,
+   "ct": 198,
+   "cost": 0.0,
+   "step": 20
+  },
+  {
+   "type": "step",
+   "n": 21,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check each of these 8 transactions to see if any are already liked or commented on\ntarget_tx_ids = [8319, 8320, 8335, 8327, 8328, 8329, 8339, 8341]\n\nfor tx_id in target_tx_ids:\n    tx_detail = apis.venmo.show_transaction(access_token=venmo_token, transaction_id=tx_id)\n    comments = apis.venmo.show_transaction_comments(access_token=venmo_token, transaction_id=tx_id)\n    print(f\"TX {tx_id}: like_count={tx_detail['like_count']}, comments={comments}\")\n"
+   },
+   "observation": "TX 8319: like_count=0, comments=[]\nTX 8320: like_count=0, comments=[]\nTX 8335: like_count=0, comments=[]\nTX 8327: like_count=0, comments=[]\nTX 8328: like_count=0, comments=[]\nTX 8329: like_count=0, comments=[]\nTX 8339: like_count=0, comments=[]\nTX 8341: like_count=0, comments=[]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179763068_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Exact instructions:\\n# Task: Add a comment, \\\"Thank you so much!\\\", to all the venmo payments I received from my roommates in the last 10 days (including today), and like those payments.\\n\\n# Comment text: \\\"Thank you so much!\\\"\\n# Let's perform the operations for each of the 8 transactions:\\nfor tx_id in target_tx_ids:\\n    res_comment = apis.venmo.create_transaction_comment(\\n        access_token=venmo_token,\\n        transaction_id=tx_id,\\n        comment=\\\"Thank you so much!\\\"\\n    )\\n    res_like = apis.venmo.like_transaction(\\n        access_token=venmo_token,\\n        transaction_id=tx_id\\n    )\\n    print(f\\\"TX {tx_id}: comment={res_comment}, like={res_like}\\\")\\n\"}"
+     }
+    }
+   ],
+   "pt": 18509,
+   "ct": 214,
+   "cost": 0.0,
+   "step": 21
+  },
+  {
+   "type": "step",
+   "n": 22,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Exact instructions:\n# Task: Add a comment, \"Thank you so much!\", to all the venmo payments I received from my roommates in the last 10 days (including today), and like those payments.\n\n# Comment text: \"Thank you so much!\"\n# Let's perform the operations for each of the 8 transactions:\nfor tx_id in target_tx_ids:\n    res_comment = apis.venmo.create_transaction_comment(\n        access_token=venmo_token,\n        transaction_id=tx_id,\n        comment=\"Thank you so much!\"\n    )\n    res_like = apis.venmo.like_transaction(\n        access_token=venmo_token,\n        transaction_id=tx_id\n    )\n    print(f\"TX {tx_id}: comment={res_comment}, like={res_like}\")\n"
+   },
+   "observation": "TX 8319: comment={'message': 'Transaction comment created.', 'comment_id': 2428}, like={'message': 'Liked transaction.'}\nTX 8320: comment={'message': 'Transaction comment created.', 'comment_id': 2429}, like={'message': 'Liked transaction.'}\nTX 8335: comment={'message': 'Transaction comment created.', 'comment_id': 2430}, like={'message': 'Liked transaction.'}\nTX 8327: comment={'message': 'Transaction comment created.', 'comment_id': 2431}, like={'message': 'Liked transaction.'}\nTX 8328: comment={'message': 'Transaction comment created.', 'comment_id': 2432}, like={'message': 'Liked transaction.'}\nTX 8329: comment={'message': 'Transaction comment created.', 'comment_id': 2433}, like={'message': 'Liked transaction.'}\nTX 8339: comment={'message': 'Transaction comment created.', 'comment_id': 2434}, like={'message': 'Liked transaction.'}\nTX 8341: comment={'message': 'Transaction comment created.', 'comment_id': 2435}, like={'message': 'Liked transaction.'}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179766546_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Verify all 8 transactions\\nfor tx_id in target_tx_ids:\\n    tx_detail = apis.venmo.show_transaction(access_token=venmo_token, transaction_id=tx_id)\\n    comments = apis.venmo.show_transaction_comments(access_token=venmo_token, transaction_id=tx_id)\\n    print(f\\\"TX {tx_id}: like_count={tx_detail['like_count']}, comments={[c['comment'] for c in comments]}\\\")\\n\"}"
+     }
+    }
+   ],
+   "pt": 19034,
+   "ct": 136,
+   "cost": 0.0,
+   "step": 22
+  },
+  {
+   "type": "step",
+   "n": 23,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Verify all 8 transactions\nfor tx_id in target_tx_ids:\n    tx_detail = apis.venmo.show_transaction(access_token=venmo_token, transaction_id=tx_id)\n    comments = apis.venmo.show_transaction_comments(access_token=venmo_token, transaction_id=tx_id)\n    print(f\"TX {tx_id}: like_count={tx_detail['like_count']}, comments={[c['comment'] for c in comments]}\")\n"
+   },
+   "observation": "TX 8319: like_count=1, comments=['Thank you so much!']\nTX 8320: like_count=1, comments=['Thank you so much!']\nTX 8335: like_count=1, comments=['Thank you so much!']\nTX 8327: like_count=1, comments=['Thank you so much!']\nTX 8328: like_count=1, comments=['Thank you so much!']\nTX 8329: like_count=1, comments=['Thank you so much!']\nTX 8339: like_count=1, comments=['Thank you so much!']\nTX 8341: like_count=1, comments=['Thank you so much!']\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179768679_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check supervisor complete_task doc\\nprint(apis.api_docs.show_api_doc(app_name='supervisor', api_name='complete_task'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 19361,
+   "ct": 55,
+   "cost": 0.0,
+   "step": 23
+  },
+  {
+   "type": "step",
+   "n": 24,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check supervisor complete_task doc\nprint(apis.api_docs.show_api_doc(app_name='supervisor', api_name='complete_task'))\n"
+   },
+   "observation": "{\n \"app_name\": \"supervisor\",\n \"api_name\": \"complete_task\",\n \"path\": \"/message\",\n \"method\": \"POST\",\n \"description\": \"Mark the currently active task as complete with the given answer.\",\n \"parameters\": [\n  {\n   \"name\": \"answer\",\n   \"type\": \"number | integer | string\",\n   \"required\": false,\n   \"description\": \"The answer to the task instruction. Pass it if and only if the task requests an answer, e.g., 'How many songs are in the Spotify queue?'. The answer must be concise, such as a number, a yes/no, or a specific entity, name, etc, e.g., '10' in this case. If the task is not a question, e.g., 'Start my Spotify music player.', the answer must be left to the default value, i.e., None.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"status\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Mark the task complete.\",\n   \"default\": \"success\",\n   \"constraints\": [\n    \"value in ['success', 'fail']\"\n   ]\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"message\": \"string\"\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793179773234_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# The task is: \\\"Add a comment, \\\"Thank you so much!\\\", to all the venmo payments I received from my roommates in the last 10 days (including today), and like those payments.\\\"\\n# This is an action task, not a question.\\n# Therefore, answer is omitted/None.\\napis.supervisor.complete_task()\\n\"}"
+     }
+    }
+   ],
+   "pt": 19680,
+   "ct": 90,
+   "cost": 0.0,
+   "step": 24
+  },
+  {
+   "type": "step",
+   "n": 25,
+   "tool": "execute_python",
+   "args": {
+    "code": "# The task is: \"Add a comment, \"Thank you so much!\", to all the venmo payments I received from my roommates in the last 10 days (including today), and like those payments.\"\n# This is an action task, not a question.\n# Therefore, answer is omitted/None.\napis.supervisor.complete_task()\n"
+   },
+   "observation": "Execution successful."
+  }
+ ]
+}

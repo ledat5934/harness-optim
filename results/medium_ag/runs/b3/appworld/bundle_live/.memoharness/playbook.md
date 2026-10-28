@@ -12,4 +12,4 @@ Current priorities:
 - D6 strategy: Strict schema conformance: raw numeric values and exact target entities
 
 Distilled emphasis:
-- Active guardrails on D2 (preventing finish tool probing) and D4 (bounding speculative querying loops within turn limits).
+- Recent distilled pressure is highest on D4 (5 pattern(s)); keep that dimension under active scrutiny.
