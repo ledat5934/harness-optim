@@ -12,4 +12,4 @@ Current priorities:
 - D6 strategy: Strict schema conformance: raw numeric values and exact target entities
 
 Distilled emphasis:
-- Active scrutiny on D4 turn budget: prevent turn limit exhaustion (40 calls max) by eliminating unnecessary verification queries after successful state mutations.
+- Recent distilled pressure is highest on D4 (5 pattern(s)); keep that dimension under active scrutiny.
