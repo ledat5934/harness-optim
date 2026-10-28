@@ -1,5 +1,5 @@
 {
-  "bundle_version": 2,
+  "bundle_version": 1,
   "config": {
     "D1": {
       "examples": false,
@@ -8,7 +8,7 @@
       "strategy": "Explicit answer formatting and multi-app identity tracking"
     },
     "D2": {
-      "tool_access": "benchmark_tools",
+      "tool_access": "bash",
       "tool_protocol": "native",
       "retrieval_mode": "none",
       "top_k": 0,
@@ -22,7 +22,7 @@
       "strategy": "Deterministic low-temperature decoding"
     },
     "D4": {
-      "workflow": "plan_and_execute",
+      "workflow": "agentic_loop",
       "stop_rule": "env_done_or_accepted_finish_or_max_steps",
       "strategy": "Step-budgeted execution: plan sequence upfront, batch queries, mutate early"
     },
@@ -52,16 +52,13 @@
   "updated_iteration": 1,
   "distilled_patterns": [
     {
-      "pattern_id": "d4-turn-exhaustion",
+      "pattern_id": "llm-pattern-iter0-1",
       "primary_dim": "D4",
-      "description": "Exploratory probing, sequential record inspection, and redundant schema checks exhaust the step budget before performing required mutations.",
-      "effect": "Causes 0.0 reward across complex multi-step tasks; resolved by planning upfront, filtering queries, and executing mutations immediately once targets are found.",
+      "description": "Standard ReAct loop workflow exhausts execution turn limits during multi-step AppWorld tasks when querying and filtering data, leading to incomplete execution without reaching terminal goal state.",
+      "effect": "Causes 0.0 reward across all 6 runs; switch D4 workflow to a plan-and-solve or hierarchical ReAct policy with step budgeting and query filtering.",
       "evidence": [
-        "b0a8eae_1",
-        "b0a8eae_2",
-        "b0a8eae_3",
-        "6104387_3",
-        "afc0fce_1"
+        "d0b1f43_3",
+        "b0a8eae_1"
       ],
       "iteration_range": [
         0,
@@ -69,17 +66,66 @@
       ]
     },
     {
-      "pattern_id": "d6-answer-formatting",
-      "primary_dim": "D6",
-      "description": "Final answers fail validation when scalar outputs include unexpected currency symbols (e.g. '$') or prose wrappers instead of clean numeric values.",
-      "effect": "Evaluator rejects answers despite correct underlying computation; resolved by stripping symbols and outputting raw values.",
+      "pattern_id": "llm-pattern-iter0-1",
+      "primary_dim": "D4",
+      "description": "AppWorld tasks fail consistently under D4 due to turn limit exhaustion, caused by the naive react_loop getting trapped in exploratory probing, redundant trial executions, and unbatched iterative queries.",
+      "effect": "All 3 cases score 0.0 across all attempts. Transition D4 workflow from 'react_loop' to 'plan_and_solve' or structured multi-action planning to eliminate turn budget waste.",
       "evidence": [
-        "d0b1f43_1",
-        "76f2c72_3"
+        "d0b1f43_3",
+        "b0a8eae_1",
+        "b0a8eae_2"
       ],
       "iteration_range": [
         0,
         0
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter0-1",
+      "primary_dim": "D4",
+      "description": "AppWorld tasks consistently hit step and turn limits during reactive execution. The standard react_loop workflow causes the agent to spend its entire turn budget on exploratory trial queries and unguided iteration over large result sets without completing the core task requirements.",
+      "effect": "Causes 100% failure across all 4 benchmark cases (reward 0.0). Transition D4 workflow from react_loop to plan_and_solve or hierarchical_react, or adjust execution limits and query filtering constraints.",
+      "evidence": [
+        "d0b1f43_3",
+        "b0a8eae_1",
+        "b0a8eae_2",
+        "b0a8eae_3"
+      ],
+      "iteration_range": [
+        0,
+        0
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter0-1",
+      "primary_dim": "D4",
+      "description": "AppWorld tasks fail due to step limit exhaustion under the standard ReAct loop. The agent consumes available turns on unconstrained exploratory probing, trial executions, and exhaustive queries over large datasets without completing the core task requirements.",
+      "effect": "Causes 100% persistent failure across all 4 cases. Migrate D4 workflow from react_loop to plan_and_execute or two_stage_planner to structure multi-stage filtering and prevent turn exhaustion.",
+      "evidence": [
+        "d0b1f43_3",
+        "b0a8eae_1",
+        "b0a8eae_2",
+        "b0a8eae_3"
+      ],
+      "iteration_range": [
+        0,
+        0
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter1-1",
+      "primary_dim": "D4",
+      "description": "AppWorld agents consistently hit execution step limits within the react_loop due to inefficient exploratory probing, trial executions, and exhaustive linear querying of large result sets without batched filtering.",
+      "effect": "Causes 100% failure rate across 12 evaluation episodes. Update D4 workflow to an agentic loop with upfront plan-and-solve budgeting, batch queries, and strict limits on exploratory calls.",
+      "evidence": [
+        "b0a8eae_1",
+        "b0a8eae_2",
+        "b0a8eae_3",
+        "d0b1f43_3"
+      ],
+      "iteration_range": [
+        0,
+        1
       ]
     }
   ]

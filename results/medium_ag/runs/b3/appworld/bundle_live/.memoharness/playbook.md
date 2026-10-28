@@ -1,13 +1,15 @@
-# AppWorld Execution Playbook
+# Repo Playbook
 
-Use `./policy.json` as the authoritative D1-D6 configuration.
+Use `./policy.json` as the authoritative D1-D6 summary.
+Use this file for stable MemoHarness execution heuristics that should survive iteration-to-iteration.
 
-## Operational Directives
-- **D4 Workflow (Budget Conservation)**:
-  - Form an end-to-end action sequence before calling tools.
-  - Avoid iterative sequential item inspection; use batch/filter parameters.
-  - Execute mutations as soon as parameters are resolved to avoid turn timeouts.
-- **D1 Instruction & Context**:
-  - Carry account IDs and requester tokens consistently across multi-app workflows.
-- **D6 Output Validation**:
-  - Verify that scalar responses (currency amounts, counts) are pure numbers without formatting symbols unless requested.
+Current priorities:
+- Read `./policy.json` first, then use this playbook for stable execution heuristics.
+- D1 strategy: Explicit answer formatting and multi-app identity tracking
+- D2 strategy: Direct targeted API tool invocations without exploratory trial calls
+- D4 strategy: Step-budgeted execution: plan sequence upfront, batch queries, mutate early
+- D5 strategy: Sliding window of 30 turns to retain execution context
+- D6 strategy: Strict schema conformance: raw numeric values without currency symbols
+
+Distilled emphasis:
+- Recent distilled pressure is highest on D4 (5 pattern(s)); keep that dimension under active scrutiny.

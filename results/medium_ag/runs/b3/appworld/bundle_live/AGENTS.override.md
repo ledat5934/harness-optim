@@ -15,3 +15,8 @@
   - Return the raw scalar value directly.
   - Do not prepend currency signs (e.g., use `45.50`, not `$45.50`) unless explicitly required.
   - Strip explanatory commentary or conversational filler.
+
+Bundle contract:
+- Read `./policy.json` for the authoritative D1-D6 summary before using playbook or memory notes.
+- Treat `./.memoharness/playbook.md` as stable repo heuristics and `./.memoharness/memory.md` as rolling distilled notes.
+
