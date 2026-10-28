@@ -27,7 +27,7 @@ def main():
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--protocol", default="smoke", choices=sorted(C.PROTOCOLS))
     ap.add_argument("--redo-errors", action="store_true",
-                    help="re-run only the tasks of this phase/roll whose latest record has an infra error")
+                    help="re-run only the tasks of this phase/roll with no record or whose latest record has an infra error")
     args = ap.parse_args()
     cfg = C.PROTOCOLS[args.protocol]
     C.use_protocol(cfg)
@@ -43,7 +43,7 @@ def main():
             r = json.loads(line)
             if r.get("phase") == args.phase and r.get("roll", 1) == args.roll:
                 latest[r["task_id"]] = r
-        ids = [t for t in ids if latest.get(t, {}).get("error")]
+        ids = [t for t in ids if t not in latest or latest[t].get("error")]  # missing: run killed mid-phase
         if not ids:
             print(f"{args.bench} {args.phase} roll{args.roll}: no infra-error records to redo")
             return
