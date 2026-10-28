@@ -5,14 +5,14 @@
       "examples": false,
       "structured_instruction": true,
       "compression": "none",
-      "strategy": "concise_direct_target_entity"
+      "strategy": "strict_canonical_entity_extraction"
     },
     "D2": {
-      "tool_access": "benchmark_tools",
+      "tool_access": "bash",
       "tool_protocol": "native",
       "retrieval_mode": "search_then_inspect",
       "top_k": 5,
-      "strategy": "keyword_dense_queries_with_active_page_inspection"
+      "strategy": "broad_noun_queries_with_active_page_inspection"
     },
     "D3": {
       "temperature": 0.0,
@@ -22,20 +22,20 @@
       "strategy": "deterministic_factual_generation"
     },
     "D4": {
-      "workflow": "search_inspect_synthesize",
+      "workflow": "agentic_loop",
       "stop_rule": "env_done_or_accepted_finish_or_max_steps",
-      "strategy": "budget_bounded_early_convergence"
+      "strategy": "hard_step_cap_with_fallback_convergence"
     },
     "D5": {
       "memory_policy": "sliding_window",
-      "history_keep": 30,
+      "history_keep": 25,
       "strategy": "rolling_window_with_distilled_heuristics"
     },
     "D6": {
       "postprocess": "direct_entity",
       "validator": "verifier_slot",
       "fallback": "best_grounded_candidate",
-      "strategy": "clean_target_extraction_no_narrative"
+      "strategy": "strict_isolated_entity_no_narrative"
     }
   },
   "runtime_files": {
@@ -49,31 +49,57 @@
     "reasoning_effort": "medium",
     "reasoning_summary": "auto"
   },
-  "updated_iteration": 1,
+  "updated_iteration": 2,
   "distilled_patterns": [
     {
-      "pattern_id": "browsecomp-d2-inspect-pages",
-      "primary_dim": "D2",
-      "description": "Agent repeatedly executes superficial search queries with quotes or complex clauses without reading candidate document text, causing search loops and timeouts.",
-      "effect": "Use concise keyword queries and inspect candidate document pages immediately upon retrieval.",
-      "evidence": ["793", "794", "796", "811", "815", "821", "822", "830", "833"],
-      "iteration_range": [0, 1]
+      "pattern_id": "llm-pattern-iter1-d6-narrative-truncation",
+      "primary_dim": "D6",
+      "description": "Agent embeds conversational prefaces or narrative explanatory text inside the answer call, which exceeds evaluation boundaries or truncates the target entity.",
+      "effect": "Caused 9 out of 14 failures in Iteration 1 (including flipping task 778). Enforce strict isolated entity output with zero commentary or markdown wrappers.",
+      "evidence": [
+        "770",
+        "772",
+        "773",
+        "775",
+        "778",
+        "783",
+        "784",
+        "787",
+        "791"
+      ],
+      "iteration_range": [
+        1,
+        1
+      ]
     },
     {
-      "pattern_id": "browsecomp-d4-step-budget",
+      "pattern_id": "llm-pattern-iter1-d4-budget-exhaustion",
       "primary_dim": "D4",
-      "description": "Agent exhausts step budget (24-25 steps) in ungrounded searches instead of converging on identified evidence by step 15-18.",
-      "effect": "Enforce step budget awareness: synthesize and conclude with best available grounded answer before step limit.",
-      "evidence": ["797", "802", "805", "819", "821", "822", "827", "828", "832", "836"],
-      "iteration_range": [0, 1]
+      "description": "Agent repeatedly issues non-productive queries past step 15, exhausting the turn budget without converging on an answer.",
+      "effect": "Caused 4 failures (including flipping task 805). Impose hard convergence stop by step 15-18 to submit best grounded candidate.",
+      "evidence": [
+        "794",
+        "796",
+        "797",
+        "805"
+      ],
+      "iteration_range": [
+        1,
+        1
+      ]
     },
     {
-      "pattern_id": "browsecomp-d1-d6-exact-format",
-      "primary_dim": "D1",
-      "description": "Model outputs narrative explanations or conversational text instead of concise target values, or fails to cleanly invoke finish action.",
-      "effect": "Constrain outputs to direct target value without conversational framing.",
-      "evidence": ["809", "826"],
-      "iteration_range": [0, 1]
+      "pattern_id": "llm-pattern-iter1-d2-rigid-query-spinning",
+      "primary_dim": "D2",
+      "description": "Search queries with overly narrow phrases or quotation marks fail to return snippets, leading to query cycling instead of page inspection.",
+      "effect": "Stalls retrieval; broad 2-4 noun queries and immediate candidate page inspection prevent zero-result loops.",
+      "evidence": [
+        "769"
+      ],
+      "iteration_range": [
+        1,
+        1
+      ]
     }
   ]
 }

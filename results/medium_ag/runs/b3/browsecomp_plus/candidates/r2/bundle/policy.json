@@ -1,0 +1,105 @@
+{
+  "bundle_version": 2,
+  "config": {
+    "D1": {
+      "examples": false,
+      "structured_instruction": true,
+      "compression": "none",
+      "strategy": "strict_canonical_entity_extraction"
+    },
+    "D2": {
+      "tool_access": "bash",
+      "tool_protocol": "native",
+      "retrieval_mode": "search_then_inspect",
+      "top_k": 5,
+      "strategy": "broad_noun_queries_with_active_page_inspection"
+    },
+    "D3": {
+      "temperature": 0.0,
+      "max_tokens": 2048,
+      "top_p": 1.0,
+      "candidate_count": 1,
+      "strategy": "deterministic_factual_generation"
+    },
+    "D4": {
+      "workflow": "agentic_loop",
+      "stop_rule": "env_done_or_accepted_finish_or_max_steps",
+      "strategy": "hard_step_cap_with_fallback_convergence"
+    },
+    "D5": {
+      "memory_policy": "sliding_window",
+      "history_keep": 25,
+      "strategy": "rolling_window_with_distilled_heuristics"
+    },
+    "D6": {
+      "postprocess": "direct_entity",
+      "validator": "verifier_slot",
+      "fallback": "best_grounded_candidate",
+      "strategy": "strict_isolated_entity_no_narrative"
+    }
+  },
+  "runtime_files": {
+    "agents": "AGENTS.override.md",
+    "policy": "policy.json",
+    "memory": ".memoharness/memory.md",
+    "playbook": ".memoharness/playbook.md"
+  },
+  "codex": {
+    "model": "",
+    "reasoning_effort": "medium",
+    "reasoning_summary": "auto"
+  },
+  "updated_iteration": 2,
+  "distilled_patterns": [
+    {
+      "pattern_id": "llm-pattern-iter1-d6-narrative-truncation",
+      "primary_dim": "D6",
+      "description": "Agent embeds conversational prefaces or narrative explanatory text inside the answer call, which exceeds evaluation boundaries or truncates the target entity.",
+      "effect": "Caused 9 out of 14 failures in Iteration 1 (including flipping task 778). Enforce strict isolated entity output with zero commentary or markdown wrappers.",
+      "evidence": [
+        "770",
+        "772",
+        "773",
+        "775",
+        "778",
+        "783",
+        "784",
+        "787",
+        "791"
+      ],
+      "iteration_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter1-d4-budget-exhaustion",
+      "primary_dim": "D4",
+      "description": "Agent repeatedly issues non-productive queries past step 15, exhausting the turn budget without converging on an answer.",
+      "effect": "Caused 4 failures (including flipping task 805). Impose hard convergence stop by step 15-18 to submit best grounded candidate.",
+      "evidence": [
+        "794",
+        "796",
+        "797",
+        "805"
+      ],
+      "iteration_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter1-d2-rigid-query-spinning",
+      "primary_dim": "D2",
+      "description": "Search queries with overly narrow phrases or quotation marks fail to return snippets, leading to query cycling instead of page inspection.",
+      "effect": "Stalls retrieval; broad 2-4 noun queries and immediate candidate page inspection prevent zero-result loops.",
+      "evidence": [
+        "769"
+      ],
+      "iteration_range": [
+        1,
+        1
+      ]
+    }
+  ]
+}

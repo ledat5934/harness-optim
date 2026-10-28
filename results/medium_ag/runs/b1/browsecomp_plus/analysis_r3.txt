@@ -1,0 +1,152 @@
+STATE: H0 baseline pass rate: 36.7%; r1 improved to 46.7% (+10.0%) using retrieval heuristics in context_mgmt; r2 dropped back to 36.7% due to overly prescriptive anti-stagnation rules causing query drift.
+Analysis of r1 vs r2 shows r1's search guidance is much stronger, but examining failed trajectories (e.g. 851, 856, 861, 865, 869, 872, 875, 219, 221) reveals a major recurring flaw:
+When the model executes `search`, it only receives 100-200 character snippets. Crucially, when it calls `get_document(docid)` (like in 851 with docid 80040, or 219 with 35891), `tool_policy.format_observation` and `context_mgmt` truncate documents to 8000/6000 chars without any pagination or targeted reading tool, OR worse, the model calls `search` repeatedly with quotes and never sees the key document contents because BM25 exact match misses.
+Even more critical: on multi-hop questions, when the agent finds a candidate document (e.g., in 219, docid 35891 Gamer Symphony Orchestra program), the document text is truncated or the model doesn't fetch other top retrieved documents! In 867, it found docid 36547 (Andrea Arnold) and searched for "chair", but the interview wasn't on her main wiki page; it needed to find the interviewee/novel author.
+Most importantly, look at the tool execution in `agent_loop`: when `remaining <= budget_nudge_steps (2)`, the agent is forced to guess on step 24/25. In almost ALL failed tasks (851, 856, 861, 865, 867, 869, 872, 873, 875, 219, 221, 223), the agent hits step 24/25 and emits an unverified, truncated or hallucinated answer.
+Why? Because 25 steps is the hard task limit, and 1 tool call per turn means exactly 23 searches/reads before being forced to answer.
+Notice that the model often gets 0 results or unhelpful results because it puts multiple quoted phrases together like `search({"query":"\"fruit tree\" \"point of origin\" architecture"})`.
+In browsecomp_plus, BM25 / lexical search is strict: boolean quotes require exact string matches! When queries have quotes around arbitrary paraphrased query phrases (which the prompt paraphrased!), 0 relevant documents match.
+Furthermore, in `variants/context_mgmt/default.py` (parent r1), `extra_system` told the model: "Avoid wrapping full sentences in quotes". But the model STILL put multiple 2-3 word quotes like `"fruit tree"` and `"point of origin"`.
+If we enhance `context_mgmt` with the proven r1 foundation, emphasizing that BM25 search requires unquoted keyword stems or relaxed queries when quotes return empty/few results, AND in `agent_loop`, budget awareness nudging gives a structured synthesis prompt instead of just "Call finish now with your best final answer based on the evidence gathered so far".
+
+Wait! The design principle says: "One mechanism per candidate."
+Let's choose the highest-leverage single mechanism.
+Look at parent r1: r1 achieved 46.7% by editing `variants/context_mgmt/default.py`.
+What was r1's exact text?
+```python
+_DEFAULT_EXTRA_SYSTEM = (
+    "Effective exploration and information retrieval guidelines:\n"
+    "- Query formulation: Use concise key entities and specific search terms. Avoid wrapping full sentences in quotes or using long rigid queries that return no results.\n"
+    "- Multi-hop decomposition: Break down complex questions step-by-step. Identify intermediate entities or facts first.\n"
+    "- Thorough inspection: When search snippets or listings offer relevant leads or document IDs, inspect the full document or content (e.g. using get_document if available) to extract complete, verified details.\n"
+    "- Precision: Double-check answers against evidence before submitting final answers."
+)
+```
+Why did r1 fail on tasks like 851, 861, 865, 869, 872, 875?
+Look at 861:
+CALLS: search({"query":"\"fruit tree\" \"point of origin\""}) -> 1 result, irrelevant.
+search({"query":"\"that which is essential is handled with care\""}) -> 0 relevant.
+search({"query":"\"that which is unnecessary is removed\" architecture"}) -> 0 relevant.
+The model repeatedly used exact quotes `""` around exact phrases from the question prompt!
+In BrowseComp, the question prompt is DELIBERATELY paraphrased from the source documents (e.g. "a fruit tree at the center, which forms the design's point of origin", "that which is unnecessary is removed, and that which is essential is handled with care"). Quoting those paraphrased phrases in search guarantees 0 relevant documents!
+Trajectory 875:
+CALLS: search({"query":"\"named after the birthplace of one of\""}) -> 10 identical failed queries!
+Trajectory 872:
+CALLS: search({"query":"\"challenging and never boring\""}) -> 5 queries repeated with quotes!
+Trajectory 869:
+CALLS: search({"query":"\"assaulted his sister\""}) -> Repeated with quotes!
+Trajectory 851:
+CALLS: search({"query":"\"offspring of immigrants\" hired"}) -> The prompt says "an offspring of immigrants was hired". The source document probably says "son of Polish immigrants" or similar.
+
+This is the number 1 pathology across almost EVERY single failed run:
+The agent quotes verbatim phrases from the user prompt, which are paraphrased descriptions, yielding zero or noisy BM25 hits, and it loops on variations of those quoted prompt phrases.
+If we instruct the agent in `context_mgmt`:
+1. Benchmark queries often rephrase or summarize source text: NEVER search verbatim sentence fragments from the prompt in quotation marks. Reserve quotes ONLY for proper names or specific confirmed titles.
+2. Search with keywords/synonyms without quotes first to let the retrieval engine score relevance.
+3. Fallback when queries return poor snippets: strip quotes and broaden keywords.
+
+Let's test this hypothesis! Parent: r1. Candidate name: `paraphrase_aware_retrieval`.
+
+HYPOTHESIS: Prompt questions in BrowseComp intentionally paraphrase source text; agents that put multi-word question phrases in quotation marks fail to retrieve relevant documents. Instructing the agent in `context_mgmt` to treat question descriptions as paraphrases, never quote question phrasing verbatim (reserving quotation marks solely for verified proper nouns/titles), and search with flexible unquoted keywords will drastically reduce zero-hit query loops and increase validation pass rate from 46.7% to >=53.3%.
+
+Let's verify the parent: r1 is the best candidate in frontier_val (46.7%).
+We will edit `variants/context_mgmt/default.py`.
+
+Let's check the code for `variants/context_mgmt/default.py`:
+Keep imports, class, and `register(reg)`.
+
+STATE: Current frontier best is r1 at 46.7% (H0: 36.7%, r2: 36.7%). Average turns ~20.8.
+Trarajectories show the primary cause of failure across 851, 861, 869, 872, 875 is quoting paraphrased phrases from the prompt verbatim (e.g. "named after the birthplace", "fruit tree at the center", "challenging and never boring", "offspring of immigrants"), which BM25 fails to match.
+Parent r1 provided general search guidance, but did not warn that question text is paraphrased and that verbatim quotation of prompt phrases destroys BM25 recall.
+
+HYPOTHESIS: Because benchmark questions deliberately paraphrase source text, instructing the agent in context_mgmt to never search multi-word prompt descriptions in quotes (reserving quotation marks strictly for known proper names, acronyms, or exact titles) and to use broad, unquoted topical keywords will eliminate zero-hit search loops and improve validation pass rate from 46.7% to >=53.3%.
+CANDIDATE: name=paraphrase_aware_retrieval, changes="Update context_mgmt/default.py default extra_system to explicitly instruct that benchmark questions paraphrase source text, forbid verbatim quotation of prompt descriptive phrases, restrict quotes to verified proper nouns, and emphasize unquoted keyword combinations.", prediction="Validation pass rate increases from 46.7% to >=53.3% with fewer wasted turns on zero-hit queries."
+PARENT: r1
+
+### FILE: variants/context_mgmt/default.py
+```python
+"""context_mgmt/default: system prompt + guidance + memory notes, pinned task message, sliding window.
+
+Keeps the first user message (task) pinned and the most recent `keep_turns` assistant turns, together with the
+tool/user replies that belong to them, so native tool-call pairing is never broken. When older turns are
+dropped, a one-line marker says how many were elided. Each tool observation is also capped at `max_obs_chars`
+inside the context. This matches the simplified AppWorld agent's `trimmed_messages` (drop the oldest
+non-instruction messages when too long) and MemoHarness's stabilized default (sliding window that pins the
+instruction).
+"""
+from __future__ import annotations
+
+_DEFAULT_EXTRA_SYSTEM = (
+    "Effective exploration and information retrieval guidelines:\n"
+    "- Paraphrase awareness: Question descriptions and clues are almost always paraphrased summaries of source documents, not exact quotes. NEVER wrap prompt sentences, descriptive clauses, or multi-word clues (e.g., 'named after the birthplace', 'challenging and never boring', 'offspring of immigrants') in quotation marks.\n"
+    "- Query formulation: Use concise, unquoted keywords and entity names. Reserve quotation marks strictly for proper nouns, distinctive publication titles, or acronyms where exact matching is necessary.\n"
+    "- Multi-hop decomposition: Break down complex questions step-by-step. Identify intermediate entities or facts first.\n"
+    "- Thorough inspection: When search snippets or listings offer relevant leads or document IDs, inspect the full document or content (e.g. using get_document if available) to extract complete, verified details.\n"
+    "- Precision: Double-check answers against evidence before submitting final answers."
+)
+
+
+class SlidingWindow:
+    def __init__(self, keep_turns: int = 30, max_obs_chars: int = 6000, extra_system: str = _DEFAULT_EXTRA_SYSTEM):
+        self.keep_turns, self.max_obs_chars, self.extra_system = keep_turns, max_obs_chars, extra_system
+
+    def build(self, system, task, history, memory_notes):
+        sys_parts = [system]
+        if task.guidance:
+            sys_parts.append(task.guidance)
+        if self.extra_system:
+            sys_parts.append(self.extra_system)
+        if memory_notes:
+            sys_parts.append("Notes from previous experience:\n" + memory_notes)
+        msgs = [{"role": "system", "content": "\n\n".join(sys_parts)}]
+        if not history:
+            return msgs
+        head, rest = history[0], history[1:]
+        # group: an assistant message followed by its tool/user replies
+        groups, cur = [], []
+        for m in rest:
+            if m["role"] == "assistant" and cur:
+                groups.append(cur)
+                cur = []
+            cur.append(m)
+        if cur:
+            groups.append(cur)
+        dropped = max(0, len(groups) - self.keep_turns)
+        kept = groups[dropped:]
+        msgs.append(head)
+        if dropped:
+            msgs.append({"role": "user", "content": f"[{dropped} earlier steps omitted from context]"})
+        for g in kept:
+            for m in g:
+                if m["role"] == "tool" and len(m.get("content") or "") > self.max_obs_chars:
+                    c = m["content"]
+                    m = {**m, "content": c[: self.max_obs_chars] + f"\n...[truncated {len(c) - self.max_obs_chars} chars]"}
+                msgs.append(m)
+        return msgs
+
+
+def register(reg):
+    reg.register("context_mgmt", "default", lambda c: SlidingWindow(**c),
+                 "System prompt + benchmark guidance + memory notes; task message pinned; sliding window over "
+                 "the last 30 assistant turns (tool pairs kept intact); observations capped at 6000 chars.",
+                 config_schema={"keep_turns": "int (default 30)", "max_obs_chars": "int (default 6000)",
+                                "extra_system": "str appended to the system prompt (default search/retrieval guidelines)"},
+                 niche={"strategy": "sliding_window", "summarize": "no"})
+```
+
+```json
+{
+  "iteration": 3,
+  "candidates": [
+    {
+      "name": "paraphrase_aware_retrieval",
+      "parent": "r1",
+      "hypothesis": "Because benchmark questions deliberately paraphrase source text, instructing the agent in context_mgmt to treat question clues as paraphrases and avoid wrapping descriptive clauses in quotation marks (reserving quotes only for proper nouns) will eliminate zero-hit search loops and improve pass rate.",
+      "changes": "Updated context_mgmt/default.py _DEFAULT_EXTRA_SYSTEM with explicit guidance on paraphrase awareness and unquoted keyword formulation.",
+      "expected_efficiency": "Faster document discovery, reducing turns on difficult retrieval tasks and increasing pass rate from 46.7% to >=53.3%."
+    }
+  ]
+}
+```
+
+CANDIDATES: paraphrase_aware_retrieval

@@ -1,0 +1,102 @@
+{
+ "method": "b1",
+ "bench": "appworld",
+ "rounds": [
+  {
+   "round": 1,
+   "candidate": "auth_and_budget_guidance",
+   "parent": "h0",
+   "hypothesis": "Adding general API authentication parameter handling guidance and universal step-budget awareness will prevent turning into reverse-engineering rabbit holes and step-budget timeouts, increasing pass rate to 100% on val and reducing wasted turns.",
+   "changes": "Added general API guidance in context_mgmt on passing explicit access_token from login and checking doc on 401s; updated agent_loop to nudge on low remaining step budget even when finish_tool is not set.",
+   "implement": {
+    "ok": true,
+    "written": [
+     "variants/agent_loop/default.py",
+     "variants/context_mgmt/default.py"
+    ],
+    "gate": "ok"
+   },
+   "val": 0.9,
+   "smoke": 1.0,
+   "tokens_val": 5196281,
+   "result": "kept incumbent"
+  },
+  {
+   "round": 2,
+   "candidate": "protect_env_state",
+   "parent": "h0",
+   "hypothesis": "Adding general programming hygiene guidance to never overwrite the root environment objects (`apis`) and providing proactive guidance on handling paginated API endpoints will prevent catastrophic state loss and task timeouts, improving val pass rate to 100% while reducing wasted exploratory steps.",
+   "changes": "Added general execution guidance in context_mgmt/default.py warning against overwriting environment globals like `apis`, reminding about pagination in listing endpoints, and checking parameter docs.",
+   "implement": {
+    "ok": true,
+    "written": [
+     "variants/context_mgmt/default.py"
+    ],
+    "gate": "ok"
+   },
+   "val": 0.9,
+   "smoke": 1.0,
+   "tokens_val": 6025196,
+   "result": "kept incumbent"
+  },
+  {
+   "round": 3,
+   "candidate": "budget_aware_react",
+   "parent": "h0",
+   "hypothesis": "Providing a step budget warning when remaining steps are low (<= 4) for all tasks reminds the agent to finalize state changes and mark the task complete before running out of turns, preventing max_steps timeouts.",
+   "changes": "In variants/agent_loop/default.py, generalize the budget nudge so that if remaining steps <= budget_nudge_steps and not nudged, a message warns of the remaining steps and instructs finalizing actions and calling the task completion API/tool.",
+   "implement": {
+    "ok": true,
+    "written": [
+     "variants/agent_loop/default.py"
+    ],
+    "gate": "ok"
+   },
+   "val": 0.9333333333333333,
+   "smoke": 1.0,
+   "tokens_val": 5940353,
+   "result": "kept incumbent"
+  },
+  {
+   "round": 4,
+   "candidate": "robust_message_sanitizer",
+   "parent": "h0",
+   "hypothesis": "In agent_loop/default.py, ensuring assistant messages never contain completely empty content when no tool calls are present will eliminate Gemini Flash HTTP 400 INVALID_ARGUMENT crashes, recovering dropped tasks (530b157_2, df61dc5_1) and achieving 100% pass rate.",
+   "changes": "In agent_loop/default.py, ensure assistant messages always have non-empty content if tool_calls is empty, preventing provider API HTTP 400 invalid argument rejections.",
+   "implement": {
+    "ok": true,
+    "written": [
+     "variants/agent_loop/default.py"
+    ],
+    "gate": "ok"
+   },
+   "val": 0.8666666666666667,
+   "smoke": 1.0,
+   "tokens_val": 6364912,
+   "result": "kept incumbent"
+  },
+  {
+   "round": 5,
+   "candidate": "auth_recovery_obs",
+   "parent": "h0",
+   "hypothesis": "When API tools return 401 Unauthorized / missing access token errors, agents frequently waste 15-20 turns reverse-engineering SDK internals and session state, leading to step budget timeouts. Augmenting 401 observation returns in tool_policy with explicit guidance to pass access_token directly and re-authenticate if expired will eliminate wasted turns and recover failed tasks.",
+   "changes": "In variants/tool_policy/default.py, format_observation appends actionable authentication guidance whenever a tool response contains a 401 Unauthorized / access token error.",
+   "implement": {
+    "ok": true,
+    "written": [
+     "variants/tool_policy/default.py"
+    ],
+    "gate": "ok"
+   },
+   "val": 0.9,
+   "smoke": 1.0,
+   "tokens_val": 6884485,
+   "result": "kept incumbent"
+  }
+ ],
+ "final": "/home/user/harness-optim/h0",
+ "test": {
+  "success": 0.8484848484848485,
+  "n": 99
+ }
+}

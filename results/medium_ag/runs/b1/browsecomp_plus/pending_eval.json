@@ -1,12 +1,12 @@
 {
- "iteration": 2,
+ "iteration": 3,
  "candidates": [
   {
-   "name": "stagnation_avoidance_search",
+   "name": "paraphrase_aware_retrieval",
    "parent": "r1",
-   "hypothesis": "Guiding the agent in context_mgmt to detect search query stagnation\u2014specifically prompting it to avoid repeating failed query formulations, to pivot orthogonal clues when a search direction produces irrelevant or repetitive documents, and to search for distinctive single entities/phrases rather than overcrowded conjunctions\u2014will reduce wasted turns on dead ends and increase pass rate from 46.7% to >=53.3%.",
-   "changes": "Augment context_mgmt extra_system with explicit anti-stagnation heuristics: pivot orthogonal clues when top results repeat or are irrelevant, avoid query repetition, and avoid stuffing more than 2-3 constraints into a single query.",
-   "expected_efficiency": "Reduces mean turns from ~20.8 to <19 by cutting loops on unproductive queries, saving token usage on stalled episodes."
+   "hypothesis": "Because benchmark questions deliberately paraphrase source text, instructing the agent in context_mgmt to treat question clues as paraphrases and avoid wrapping descriptive clauses in quotation marks (reserving quotes only for proper nouns) will eliminate zero-hit search loops and improve pass rate.",
+   "changes": "Updated context_mgmt/default.py _DEFAULT_EXTRA_SYSTEM with explicit guidance on paraphrase awareness and unquoted keyword formulation.",
+   "expected_efficiency": "Faster document discovery, reducing turns on difficult retrieval tasks and increasing pass rate from 46.7% to >=53.3%."
   }
  ]
 }

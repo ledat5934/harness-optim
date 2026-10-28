@@ -4,12 +4,14 @@ Use `./policy.json` as the authoritative D1-D6 summary.
 Use this file for stable MemoHarness execution heuristics that should survive iteration-to-iteration.
 
 Current priorities:
-- D1 strategy: enforce direct entity output without unprompted conversational explanation
-- D2 strategy: keyword search followed by document inspection; avoid quote-restricted search loops
-- D4 strategy: budget-aware convergence; synthesize by step 15-18 rather than exhausting step budget
-- D5 strategy: keep rolling memory compact and evidence-backed
-- D6 strategy: clean finish invocation with direct target value
+- Read `./policy.json` first, then use this playbook for stable execution heuristics.
+- D1 strategy: strict_canonical_entity_extraction
+- D2 strategy: broad_noun_queries_with_active_page_inspection
+- D4 strategy: hard_step_cap_with_fallback_convergence
+- D5 strategy: rolling_window_with_distilled_heuristics
+- D6 strategy: strict_isolated_entity_no_narrative
 
 Distilled emphasis:
-- High priority on D2: document inspection prevents repetitive search loops.
-- High priority on D4: step budget cap prevents timeouts on tasks that already located candidate documents.
+- Primary failure mode in iteration 1 was D6 (9 cases): verbose prefaces and explanations submitted inside the answer field resulted in truncation. Enforce isolated target entity output.
+- Secondary failure mode was D4 (4 cases): turn limit exhaustion. Enforce hard step cap and early convergence by step 15-18.
+- Retrieval discipline on D2: avoid quotation marks and query cycling; inspect candidate pages directly.
