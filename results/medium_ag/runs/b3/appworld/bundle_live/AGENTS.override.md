@@ -1,18 +1,18 @@
 # AppWorld Agent Execution Guide
 
-## 1. Tool Discipline & Session Safety (Priority D2 & D4)
-- **No Finish Probing**: Never call completion or finish tools to inspect state or trigger tracebacks; completion tool calls permanently end the session. Invoke finish only when all operations and answers are complete.
-- **Bound Search Loops**: Avoid speculative repeated querying. If initial search returns no matches, attempt at most one alternative filter or index before taking the next best action.
-- **Targeted Querying**: Use specific search filters (sender, recipient, dates, account IDs) rather than paginating or inspecting broad collections sequentially.
-- **Early Mutation**: Execute required state mutations (transfers, status updates, message sends) immediately once target entity identifiers are resolved.
+## 1. Tool Discipline & Turn Budget (Priority D2 & D4)
+- **Fast Finalization**: Complete tasks within minimal steps. Once all required mutations succeed or target data is retrieved, synthesize the answer and call finish immediately.
+- **No Redundant Verification**: Never perform follow-up read queries or cross-app verification checks to confirm a successful mutation unless explicitly mandated by the user. Trust successful tool return values.
+- **No Finish Probing**: Finish/completion tools end the session permanently. Never invoke finish for testing, schema discovery, or state inspection.
+- **Bounded Targeted Search**: Query with specific parameters (name, phone, dates, IDs). If initial search yields no matches, attempt at most one alternative filter before selecting the next best path. Avoid exhaustive sequential pagination.
 
 ## 2. Multi-App Identity & Entity Resolution (Priority D1)
-- Maintain consistent requester context across app boundaries (e.g. mapping phone/email in contacts to payment or chat accounts).
-- Map entity references directly to target internal IDs before invoking transactional APIs.
+- Map cross-app identifiers directly (e.g. resolve contact name/email to account ID in one step) and use the first unambiguous match.
+- Pass resolved internal IDs directly into transactional API calls.
 
 ## 3. Output Formatting & Answer Conformance (Priority D1 & D6)
-- For informational queries, output the exact scalar value or identifier without conversational phrasing.
-- For monetary or numeric values, emit raw numeric digits without currency signs or unit suffixes unless requested.
+- For informational queries, emit only the requested scalar or entity value without conversational boilerplate.
+- For monetary or numeric outputs, provide raw digits without currency symbols or unit labels unless requested.
 - For action tasks, complete all required mutations, then finish.
 
 Bundle contract:

@@ -7,9 +7,9 @@ Current priorities:
 - Read `./policy.json` first, then use this playbook for stable execution heuristics.
 - D1 strategy: Direct final answer formatting and precise multi-app entity resolution
 - D2 strategy: Direct targeted API tool invocations; never invoke completion tool for probing
-- D4 strategy: Step-budgeted execution: bound search retry loops, batch queries, mutate early
+- D4 strategy: Strict turn budgeting: eliminate redundant post-mutation verification and finalize immediately
 - D5 strategy: Sliding window of 30 turns to retain execution context
 - D6 strategy: Strict schema conformance: raw numeric values and exact target entities
 
 Distilled emphasis:
-- Recent distilled pressure is highest on D4 (5 pattern(s)); keep that dimension under active scrutiny.
+- Active scrutiny on D4 turn budget: prevent turn limit exhaustion (40 calls max) by eliminating unnecessary verification queries after successful state mutations.

@@ -24,7 +24,7 @@
     "D4": {
       "workflow": "agentic_loop",
       "stop_rule": "env_done_or_accepted_finish_or_max_steps",
-      "strategy": "Step-budgeted execution: bound search retry loops, batch queries, mutate early"
+      "strategy": "Strict turn budgeting: eliminate redundant post-mutation verification and finalize immediately"
     },
     "D5": {
       "memory_policy": "sliding_window",
@@ -49,83 +49,22 @@
     "reasoning_effort": "medium",
     "reasoning_summary": "auto"
   },
-  "updated_iteration": 3,
+  "updated_iteration": 4,
   "distilled_patterns": [
     {
-      "pattern_id": "llm-pattern-iter0-1",
+      "pattern_id": "llm-pattern-iter3-budget",
       "primary_dim": "D4",
-      "description": "AppWorld tasks consistently hit step and turn limits during reactive execution. The standard react_loop workflow causes the agent to spend its entire turn budget on exploratory trial queries and unguided iteration over large result sets without completing the core task requirements.",
-      "effect": "Causes 100% failure across all 4 benchmark cases (reward 0.0). Transition D4 workflow from react_loop to plan_and_solve or hierarchical_react, or adjust execution limits and query filtering constraints.",
+      "description": "Tasks exhaust the 40-turn execution ceiling when conducting redundant post-mutation verification, broad cross-referencing across apps, or multi-turn validation loops before calling completion.",
+      "effect": "Eliminates turn-budget timeouts (seen in 6104387_1/2/3, afc0fce_2, d0b1f43_2) by trusting successful mutation responses and immediately concluding without follow-up re-querying.",
       "evidence": [
-        "d0b1f43_3",
-        "b0a8eae_1",
-        "b0a8eae_2",
-        "b0a8eae_3"
+        "6104387_1",
+        "6104387_2",
+        "6104387_3",
+        "afc0fce_2",
+        "d0b1f43_2"
       ],
       "iteration_range": [
-        0,
-        0
-      ]
-    },
-    {
-      "pattern_id": "llm-pattern-iter0-1",
-      "primary_dim": "D4",
-      "description": "AppWorld tasks fail due to step limit exhaustion under the standard ReAct loop. The agent consumes available turns on unconstrained exploratory probing, trial executions, and exhaustive queries over large datasets without completing the core task requirements.",
-      "effect": "Causes 100% persistent failure across all 4 cases. Migrate D4 workflow from react_loop to plan_and_execute or two_stage_planner to structure multi-stage filtering and prevent turn exhaustion.",
-      "evidence": [
-        "d0b1f43_3",
-        "b0a8eae_1",
-        "b0a8eae_2",
-        "b0a8eae_3"
-      ],
-      "iteration_range": [
-        0,
-        0
-      ]
-    },
-    {
-      "pattern_id": "llm-pattern-iter1-1",
-      "primary_dim": "D4",
-      "description": "AppWorld agents consistently hit execution step limits within the react_loop due to inefficient exploratory probing, trial executions, and exhaustive linear querying of large result sets without batched filtering.",
-      "effect": "Causes 100% failure rate across 12 evaluation episodes. Update D4 workflow to an agentic loop with upfront plan-and-solve budgeting, batch queries, and strict limits on exploratory calls.",
-      "evidence": [
-        "b0a8eae_1",
-        "b0a8eae_2",
-        "b0a8eae_3",
-        "d0b1f43_3"
-      ],
-      "iteration_range": [
-        0,
-        1
-      ]
-    },
-    {
-      "pattern_id": "llm-pattern-iter2-1",
-      "primary_dim": "D4",
-      "description": "Agents consistently exhaust turn limits in AppWorld tasks under the basic react_loop workflow due to excessive trial exploratory probing and unguided, exhaustive data retrieval without staged execution.",
-      "effect": "Eliminates 100% failure rate across these tasks; switch D4 workflow from react_loop to plan_and_solve or hierarchical_react to impose structured planning and prevent step-limit exhaustion.",
-      "evidence": [
-        "b0a8eae_1",
-        "b0a8eae_2",
-        "b0a8eae_3"
-      ],
-      "iteration_range": [
-        0,
-        2
-      ]
-    },
-    {
-      "pattern_id": "llm-pattern-iter3-1",
-      "primary_dim": "D4",
-      "description": "Agents in AppWorld exhaust turn limits within the standard ReAct loop due to unguided trial probing and sequential queries over large state spaces without structured planning.",
-      "effect": "Causes 100% failure rate (reward 0.00) across all cases via step limit exhaustion. Transition D4 workflow from react_loop to plan_and_solve or introduce hierarchical planning.",
-      "evidence": [
-        "b0a8eae_1",
-        "b0a8eae_2",
-        "b0a8eae_3"
-      ],
-      "iteration_range": [
-        0,
+        3,
         3
       ]
     }
