@@ -163,7 +163,8 @@ class LLM:
         self.api_key = os.environ.get("OPENROUTER_API_KEY")
         if not self.api_key:
             raise LLMError("OPENROUTER_API_KEY not set (put it in .env)")
-        self.timeout = timeout
+        # long generations on slower gateway models (antigravity gemini flash: ~6k tokens in 75-120 s) outlast 120 s
+        self.timeout = float(os.environ.get("LLM_TIMEOUT", timeout))
         # rate limits (HTTP 429) under many parallel processes outlast 5 retries (~30 s); LLM_MAX_RETRIES raises
         # the count (backoff 1, 2, 4, ... capped at 60 s, so 8 retries wait about 3 minutes in total)
         self.max_retries = int(os.environ.get("LLM_MAX_RETRIES", max_retries))

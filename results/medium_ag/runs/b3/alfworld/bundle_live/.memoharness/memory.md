@@ -1,10 +1,11 @@
 # Rolling Memory
 
-Updated after iteration 2 (30/30 tasks solved, 100% pass rate).
+Updated after iteration 4.
 
-- Read `./policy.json` first and use this file only for recent distilled lessons.
-- Both previously flipping tasks (`pick_clean_then_place_in_recep-Apple-None-DiningTable-19` and `pick_heat_then_place_in_recep-Cup-None-Cabinet-15`) passed consistently.
-- Key factors for stability:
-  1. Opening containers (cabinets, microwave, fridge) before taking or placing items prevents invalid receptacle interactions.
-  2. The 45-turn history window prevents search cycles across multi-step transform-and-place tasks.
-  3. Deterministic greedy tool calling (T=0.0) avoids hallucinated actions.
+- All 30 tasks in iteration 4 passed (100% win rate), confirming the phased exploration hierarchy (open surfaces -> appliances -> closed containers) and history_keep=45 configuration.
+- Flipping tasks stabilized:
+  - `pick_clean_then_place_in_recep-Apple-None-DiningTable-19`: Succeeded cleanly in 15 turns without search looping by checking open surfaces before appliances and maintaining direct navigation to sinkbasin.
+  - `pick_heat_then_place_in_recep-Cup-None-Cabinet-15`: Succeeded cleanly in 8 turns; remembered to open closed target cabinet before placement.
+- Key invariants:
+  - Deliver items sequentially in two-object tasks.
+  - Never repeat checks of visited receptacles.

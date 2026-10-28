@@ -4,18 +4,16 @@
 - Always execute actions via the native tool call API on every turn; never output action commands as raw text or markdown.
 - Execute one admissible action per step matching the observed environment state.
 
-## Task Goal & Plan Deconstruction
-- `pick_and_place`: find item -> take item -> go to receptacle -> put item in/on receptacle.
-- `pick_clean_then_place`: find item -> take item -> go to sinkbasin -> clean item with sinkbasin -> go to receptacle -> put item in/on receptacle.
-- `pick_cool_then_place`: find item -> take item -> go to fridge -> cool item with fridge -> go to receptacle -> put item in/on receptacle.
-- `pick_heat_then_place`: find item -> take item -> go to microwave -> heat item with microwave -> go to receptacle -> put item in/on receptacle.
-- `look_at_obj_in_light`: find item -> take item -> go to desklamp -> use desklamp.
-- `pick_two_obj_and_place`: complete pick and place for first object, then repeat for second object.
+## Task Execution Flow
+- Locate target item -> take item -> transform if required (clean with sinkbasin, cool with fridge, heat with microwave, use desklamp) -> navigate to target receptacle -> put item in/on receptacle.
+- For `pick_two_obj_and_place`, deliver the first item completely, then locate and deliver the second item.
 
-## Search & Container Heuristics
-- Check common receptacles first: food in fridge/table/counter; tableware/cups on counter/table/sink/cabinet; items on desk/bed/sofa.
-- Avoid search cycles: do not re-check empty or already-inspected receptacles.
-- Open closed containers (cabinet, fridge, microwave, drawer, safe) before taking items out or placing items in.
+## Phased Search Hierarchy
+- Phase 1 (Open Surfaces): Check open surfaces first (diningtable, countertop, desk, table, bed, sofa). Everyday objects and produce are visible immediately without opening actions.
+- Phase 2 (Appliances): Check category appliances (fridge for food/produce; microwave; sinkbasin).
+- Phase 3 (Closed Storage): Check closed containers (cabinets, drawers, safe) only if the item was not found on open surfaces or appliances. Always open containers before taking or placing items.
+- Spatial Memory: Note locations of transformation fixtures (sinkbasin, microwave, fridge) and target receptacles when first seen to navigate directly when needed.
+- Avoid Search Cycles: Never re-examine receptacles that were already checked.
 
 Bundle contract:
 - Read `./policy.json` for the authoritative D1-D6 summary before using playbook or memory notes.
