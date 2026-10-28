@@ -1,0 +1,1150 @@
+{
+ "benchmark": "appworld",
+ "task_id": "d18139b_3",
+ "run_tag": "b2_appworld_test",
+ "wall_s": 166.44,
+ "tokens": 560257,
+ "cost": 0.0,
+ "llm_calls": 41,
+ "steps": 40,
+ "success": false,
+ "error": null,
+ "eval_info": {
+  "success": false,
+  "num_tests": 7,
+  "passes": 6,
+  "failures": 1,
+  "task_completed": false
+ },
+ "outcome": {
+  "stopped": "max_steps",
+  "steps": 40,
+  "final_answer": null,
+  "llm_calls": 41
+ },
+ "events": [
+  {
+   "type": "task",
+   "instruction": "My name is: Nicholas Weber. My personal email is nicholas.weber@gmail.com and phone number is 9503658964.\nTask: Approve all venmo payment requests from my roommates from this calendar month.",
+   "max_steps": 40
+  },
+  {
+   "type": "harness",
+   "root": "/home/user/harness-optim/results/medium_ag/runs/b2/appworld/candidates/r1",
+   "bundle": {
+    "agent_loop": {
+     "name": "default",
+     "config": {}
+    },
+    "context_mgmt": {
+     "name": "default",
+     "config": {}
+    },
+    "tool_policy": {
+     "name": "default",
+     "config": {}
+    },
+    "memory": {
+     "name": "default",
+     "config": {}
+    },
+    "verifier": {
+     "name": "default",
+     "config": {}
+    }
+   },
+   "meta": {
+    "composer": "custom"
+   }
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198649228_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Check current date and time\\nnow_res = apis.phone.get_current_date_and_time()\\nprint(\\\"Current date and time:\\\", now_res)\\n\\n# Let's explore supervisor profile / addresses to see roommates or info\\nprint(\\\"Supervisor show_api_descriptions:\\\")\\nprint(apis.api_docs.show_api_descriptions(app_name='supervisor'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 3357,
+   "ct": 100,
+   "cost": 0.0,
+   "step": 0
+  },
+  {
+   "type": "step",
+   "n": 1,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Check current date and time\nnow_res = apis.phone.get_current_date_and_time()\nprint(\"Current date and time:\", now_res)\n\n# Let's explore supervisor profile / addresses to see roommates or info\nprint(\"Supervisor show_api_descriptions:\")\nprint(apis.api_docs.show_api_descriptions(app_name='supervisor'))\n"
+   },
+   "observation": "Current date and time: {'date': 'Sunday, June 25, 2023', 'time': '03:22 PM'}\nSupervisor show_api_descriptions:\n[\n {\n  \"name\": \"show_active_task\",\n  \"description\": \"Show the currently active task assigned to you by the supervisor.\"\n },\n {\n  \"name\": \"complete_task\",\n  \"description\": \"Mark the currently active task as complete with the given answer.\"\n },\n {\n  \"name\": \"show_profile\",\n  \"description\": \"Show your supervisor's profile information.\"\n },\n {\n  \"name\": \"show_addresses\",\n  \"description\": \"Show your supervisor's addresses.\"\n },\n {\n  \"name\": \"show_payment_cards\",\n  \"description\": \"Show your supervisor's payment_cards.\"\n },\n {\n  \"name\": \"show_account_passwords\",\n  \"description\": \"Show your supervisor's app account passwords.\"\n }\n]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198652950_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Check supervisor profile and addresses\\nprint(\\\"Profile:\\\", apis.supervisor.show_profile())\\nprint(\\\"Addresses:\\\", apis.supervisor.show_addresses())\\n\\n# Check phone API docs\\nprint(\\\"Phone APIs:\\\", apis.api_docs.show_api_descriptions(app_name='phone'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 3577,
+   "ct": 81,
+   "cost": 0.0,
+   "step": 1
+  },
+  {
+   "type": "step",
+   "n": 2,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Check supervisor profile and addresses\nprint(\"Profile:\", apis.supervisor.show_profile())\nprint(\"Addresses:\", apis.supervisor.show_addresses())\n\n# Check phone API docs\nprint(\"Phone APIs:\", apis.api_docs.show_api_descriptions(app_name='phone'))\n"
+   },
+   "observation": "Profile: {'first_name': 'Nicholas', 'last_name': 'Weber', 'email': 'nicholas.weber@gmail.com', 'phone_number': '9503658964', 'birthday': '1986-10-19', 'sex': 'male'}\nAddresses: [{'name': 'Home', 'street_address': '247 Salinas Pines Suite 668', 'city': 'Seattle', 'state': 'Washington', 'country': 'United States', 'zip_code': 11799}, {'name': 'Work', 'street_address': '716 White Drive Suite 52', 'city': 'Seattle', 'state': 'Washington', 'country': 'United States', 'zip_code': 47529}]\nPhone APIs: [{'name': 'show_account', 'description': 'Show your account information. Unlike show_profile, this includes private information.'}, {'name': 'signup', 'description': 'Sign up to create account.'}, {'name': 'delete_account', 'description': 'Delete your account.'}, {'name': 'update_account_name', 'description': 'Update your first or last name in the account profile.'}, {'name': 'login', 'description': 'Login to your account.'}, {'name': 'logout', 'description': 'Logout from your account.'}, {'name': 'send_password_reset_code', 'description': 'Send password reset code to your phone number.'}, {'name': 'reset_password', 'description': 'Reset your password using the password reset code sent to your email address.'}, {'name': 'show_profile', 'description': 'Show public profile information of a user.'}, {'name': 'show_contact_relationships', 'description': 'Get a list of all relationships available in your contact book.'}, {'name': 'search_contacts', 'description': \"Search your contact book for relatives' information.\"}, {'name': 'add_contact', 'description': 'Add a new contact.'}, {'name': 'delete_contact', 'description': 'Delete contact information.'}, {'name': 'update_contact', 'description': 'Update contact information.'}, {'name': 'show_text_message_window', 'description': 'Show text messages with a contact around a given date and time.'}, {'name': 'search_text_messages', 'description': 'Show or search your text messages.'}, {'name': 'show_text_message', 'description': 'Show text message details.'}, {'name': 'delete_text_message', 'description': 'Delete a text message.'}, {'name': 'send_text_message', 'description': 'Send a text message on the given phone number.'}, {'name': 'show_alarms', 'description': 'Get a list of alarms.'}, {'name': 'create_alarm', 'description': 'Create a new alarm.'}, {'name': 'show_alarm', 'description': 'Show alarm details.'}, {'name': 'delete_alarm', 'description': 'Delete an alarm.'}, {'name': 'update_alarm', 'description': \"Update an alarm's settings.\"}, {'name': 'show_voice_message_window', 'description': 'Show voice messages with a contact around a given date and time.'}, {'name': 'search_voice_messages', 'description': 'Show or search text voice_messages between the user and a contact.'}, {'name': 'show_voice_message', 'description': 'Show voice message details.'}, {'name': 'delete_voice_message', 'description': 'Delete a voice message.'}, {'name': 'send_voice_message', 'description': 'Send a voice message on the given phone number.'}, {'name': 'get_current_date_and_time', 'description': 'Show current date and time.'}]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198657812_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"print(apis.phone.show_contact_relationships())\\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='search_contacts'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 4539,
+   "ct": 57,
+   "cost": 0.0,
+   "step": 2
+  },
+  {
+   "type": "step",
+   "n": 3,
+   "tool": "execute_python",
+   "args": {
+    "code": "print(apis.phone.show_contact_relationships())\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='search_contacts'))\n"
+   },
+   "observation": "Execution failed. Traceback:\n  File \"<python-input>\", line 1, in <module>\n    print(apis.phone.show_contact_relationships())\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nException: Response status code is 401:\n{\"message\":\"You are either not authorized to access this phone API endpoint or your access token is missing, invalid or expired.\"}"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198660732_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Phone requires login! Let's check passwords in supervisor\\npasswords = apis.supervisor.show_account_passwords()\\nprint(\\\"Passwords:\\\", passwords)\\n\"}"
+     }
+    }
+   ],
+   "pt": 4542,
+   "ct": 51,
+   "cost": 0.0,
+   "step": 3
+  },
+  {
+   "type": "step",
+   "n": 4,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Phone requires login! Let's check passwords in supervisor\npasswords = apis.supervisor.show_account_passwords()\nprint(\"Passwords:\", passwords)\n"
+   },
+   "observation": "Passwords: [{'account_name': 'amazon', 'password': '4+VWe8b'}, {'account_name': 'file_system', 'password': 'Ia$)7$5'}, {'account_name': 'gmail', 'password': '_!L[Nre'}, {'account_name': 'phone', 'password': 'ox6SqF4'}, {'account_name': 'simple_note', 'password': '*_C4I1G'}, {'account_name': 'splitwise', 'password': '&)IS{6r'}, {'account_name': 'spotify', 'password': '@S-xYvd'}, {'account_name': 'todoist', 'password': 'DiAe#XN'}, {'account_name': 'venmo', 'password': 'W]!$p+I'}]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198662679_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"print(apis.api_docs.show_api_doc(app_name='phone', api_name='login'))\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='login'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 4785,
+   "ct": 70,
+   "cost": 0.0,
+   "step": 4
+  },
+  {
+   "type": "step",
+   "n": 5,
+   "tool": "execute_python",
+   "args": {
+    "code": "print(apis.api_docs.show_api_doc(app_name='phone', api_name='login'))\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='login'))\n"
+   },
+   "observation": "{\n \"app_name\": \"phone\",\n \"api_name\": \"login\",\n \"path\": \"/auth/token\",\n \"method\": \"POST\",\n \"description\": \"Login to your account.\",\n \"parameters\": [\n  {\n   \"name\": \"username\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Your account phone_number.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"password\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Your account password.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"access_token\": \"string\",\n   \"token_type\": \"string\"\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n{\n \"app_name\": \"venmo\",\n \"api_name\": \"login\",\n \"path\": \"/auth/token\",\n \"method\": \"POST\",\n \"description\": \"Login to your account.\",\n \"parameters\": [\n  {\n   \"name\": \"username\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Your account email.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"password\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Your account password.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"access_token\": \"string\",\n   \"token_type\": \"string\"\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198664717_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Login to phone and venmo\\napis.phone.login(username='9503658964', password='ox6SqF4')\\napis.venmo.login(username='nicholas.weber@gmail.com', password='W]!$p+I')\\nprint(\\\"Logged into phone and venmo successfully.\\\")\\n\"}"
+     }
+    }
+   ],
+   "pt": 5301,
+   "ct": 92,
+   "cost": 0.0,
+   "step": 5
+  },
+  {
+   "type": "step",
+   "n": 6,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Login to phone and venmo\napis.phone.login(username='9503658964', password='ox6SqF4')\napis.venmo.login(username='nicholas.weber@gmail.com', password='W]!$p+I')\nprint(\"Logged into phone and venmo successfully.\")\n"
+   },
+   "observation": "Logged into phone and venmo successfully.\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198667263_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Show contact relationships\\nprint(\\\"Relationships:\\\", apis.phone.show_contact_relationships())\\n\\n# Show all contacts\\ncontacts = []\\npage = 1\\nwhile True:\\n    res = apis.phone.search_contacts(page_index=page)\\n    if not res:\\n        break\\n    contacts.extend(res)\\n    page += 1\\n\\nprint(f\\\"Total contacts: {len(contacts)}\\\")\\nfor c in contacts:\\n    print(c)\\n\"}"
+     }
+    }
+   ],
+   "pt": 5417,
+   "ct": 121,
+   "cost": 0.0,
+   "step": 6
+  },
+  {
+   "type": "step",
+   "n": 7,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Show contact relationships\nprint(\"Relationships:\", apis.phone.show_contact_relationships())\n\n# Show all contacts\ncontacts = []\npage = 1\nwhile True:\n    res = apis.phone.search_contacts(page_index=page)\n    if not res:\n        break\n    contacts.extend(res)\n    page += 1\n\nprint(f\"Total contacts: {len(contacts)}\")\nfor c in contacts:\n    print(c)\n"
+   },
+   "observation": "Execution failed. Traceback:\n  File \"<python-input>\", line 2, in <module>\n    print(\"Relationships:\", apis.phone.show_contact_relationships())\n                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nException: Response status code is 401:\n{\"message\":\"You are either not authorized to access this phone API endpoint or your access token is missing, invalid or expired.\"}"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198669639_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Wait, let's see why phone login failed or what token it returned\\nres_phone = apis.phone.login(username='9503658964', password='ox6SqF4')\\nprint(\\\"Phone login res:\\\", res_phone)\\n\"}"
+     }
+    }
+   ],
+   "pt": 5644,
+   "ct": 76,
+   "cost": 0.0,
+   "step": 7
+  },
+  {
+   "type": "step",
+   "n": 8,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Wait, let's see why phone login failed or what token it returned\nres_phone = apis.phone.login(username='9503658964', password='ox6SqF4')\nprint(\"Phone login res:\", res_phone)\n"
+   },
+   "observation": "Phone login res: {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwaG9uZSs5NTAzNjU4OTY0IiwiZXhwIjoxNjg3NzA4MDc4fQ.TGtRYM-UFVKoDITxhpjNfQwWd_NPBcpSpTCTwZW0WIg', 'token_type': 'Bearer'}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198672126_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Now let's try calling search_contacts or show_account\\nprint(apis.phone.show_account())\\n\"}"
+     }
+    }
+   ],
+   "pt": 5846,
+   "ct": 41,
+   "cost": 0.0,
+   "step": 8
+  },
+  {
+   "type": "step",
+   "n": 9,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Now let's try calling search_contacts or show_account\nprint(apis.phone.show_account())\n"
+   },
+   "observation": "Execution failed. Traceback:\n  File \"<python-input>\", line 2, in <module>\n    print(apis.phone.show_account())\n          ^^^^^^^^^^^^^^^^^^^^^^^^^\nException: Response status code is 401:\n{\"message\":\"You are either not authorized to access this phone API endpoint or your access token is missing, invalid or expired.\"}"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198674840_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Wait, why did phone login return 401 on subsequent calls? Let's inspect apis.phone\\nprint(dir(apis.phone))\\n\"}"
+     }
+    }
+   ],
+   "pt": 5984,
+   "ct": 49,
+   "cost": 0.0,
+   "step": 9
+  },
+  {
+   "type": "step",
+   "n": 10,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Wait, why did phone login return 401 on subsequent calls? Let's inspect apis.phone\nprint(dir(apis.phone))\n"
+   },
+   "observation": "[\n \"add_contact\",\n \"create_alarm\",\n \"delete_account\",\n \"delete_alarm\",\n \"delete_contact\",\n \"delete_text_message\",\n \"delete_voice_message\",\n \"get_current_date_and_time\",\n \"login\",\n \"logout\",\n \"reset_password\",\n \"search_contacts\",\n \"search_text_messages\",\n \"search_voice_messages\",\n \"send_password_reset_code\",\n \"send_text_message\",\n \"send_voice_message\",\n \"show_account\",\n \"show_alarm\",\n \"show_alarms\",\n \"show_contact_relationships\",\n \"show_profile\",\n \"show_text_message\",\n \"show_text_message_window\",\n \"show_voice_message\",\n \"show_voice_message_window\",\n \"signup\",\n \"update_account_name\",\n \"update_alarm\",\n \"update_contact\"\n]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198677219_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Wait, when login to venmo was called immediately after phone login, did it overwrite the auth token in the session if they share a session/client?\\n# Let's check!\\nlogin_res = apis.phone.login(username='9503658964', password='ox6SqF4')\\nprint(\\\"Login res:\\\", login_res)\\nprint(\\\"Account:\\\", apis.phone.show_account())\\n\"}"
+     }
+    }
+   ],
+   "pt": 6256,
+   "ct": 112,
+   "cost": 0.0,
+   "step": 10
+  },
+  {
+   "type": "step",
+   "n": 11,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Wait, when login to venmo was called immediately after phone login, did it overwrite the auth token in the session if they share a session/client?\n# Let's check!\nlogin_res = apis.phone.login(username='9503658964', password='ox6SqF4')\nprint(\"Login res:\", login_res)\nprint(\"Account:\", apis.phone.show_account())\n"
+   },
+   "observation": "Execution failed. Traceback:\n  File \"<python-input>\", line 5, in <module>\n    print(\"Account:\", apis.phone.show_account())\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^\nException: Response status code is 401:\n{\"message\":\"You are either not authorized to access this phone API endpoint or your access token is missing, invalid or expired.\"}"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198679262_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's see how apis is configured or how tokens are stored.\\nimport inspect\\nprint(inspect.getsource(apis.phone.login))\\n\"}"
+     }
+    }
+   ],
+   "pt": 6468,
+   "ct": 49,
+   "cost": 0.0,
+   "step": 11
+  },
+  {
+   "type": "step",
+   "n": 12,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's see how apis is configured or how tokens are stored.\nimport inspect\nprint(inspect.getsource(apis.phone.login))\n"
+   },
+   "observation": "Execution failed. Traceback:\nUsage of the following module is not allowed: inspect."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198681878_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Inspect attributes of apis.phone\\nprint([attr for attr in dir(apis.phone) if not attr.startswith('__')])\\nprint(type(apis.phone))\\n\"}"
+     }
+    }
+   ],
+   "pt": 6550,
+   "ct": 54,
+   "cost": 0.0,
+   "step": 12
+  },
+  {
+   "type": "step",
+   "n": 13,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Inspect attributes of apis.phone\nprint([attr for attr in dir(apis.phone) if not attr.startswith('__')])\nprint(type(apis.phone))\n"
+   },
+   "observation": "[\n \"add_contact\",\n \"create_alarm\",\n \"delete_account\",\n \"delete_alarm\",\n \"delete_contact\",\n \"delete_text_message\",\n \"delete_voice_message\",\n \"get_current_date_and_time\",\n \"login\",\n \"logout\",\n \"reset_password\",\n \"search_contacts\",\n \"search_text_messages\",\n \"search_voice_messages\",\n \"send_password_reset_code\",\n \"send_text_message\",\n \"send_voice_message\",\n \"show_account\",\n \"show_alarm\",\n \"show_alarms\",\n \"show_contact_relationships\",\n \"show_profile\",\n \"show_text_message\",\n \"show_text_message_window\",\n \"show_voice_message\",\n \"show_voice_message_window\",\n \"signup\",\n \"update_account_name\",\n \"update_alarm\",\n \"update_contact\"\n]\n<class 'appworld.common.utils.CustomErrorMessageMunch.build.<locals>._CustomErrorMessageMunch'>\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198683689_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check apis.venmo\\nprint(apis.api_docs.show_api_descriptions(app_name='venmo'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 6862,
+   "ct": 48,
+   "cost": 0.0,
+   "step": 13
+  },
+  {
+   "type": "step",
+   "n": 14,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check apis.venmo\nprint(apis.api_docs.show_api_descriptions(app_name='venmo'))\n"
+   },
+   "observation": "[\n {\n  \"name\": \"show_account\",\n  \"description\": \"Show your account information. Unlike show_profile, this includes private information.\"\n },\n {\n  \"name\": \"signup\",\n  \"description\": \"Sign up to create account.\"\n },\n {\n  \"name\": \"delete_account\",\n  \"description\": \"Delete your account.\"\n },\n {\n  \"name\": \"update_account_name\",\n  \"description\": \"Update your first or last name in the account profile.\"\n },\n {\n  \"name\": \"login\",\n  \"description\": \"Login to your account.\"\n },\n {\n  \"name\": \"logout\",\n  \"description\": \"Logout from your account.\"\n },\n {\n  \"name\": \"send_verification_code\",\n  \"description\": \"Send account verification code to your email address.\"\n },\n {\n  \"name\": \"verify_account\",\n  \"description\": \"Verify your account using the verification code sent to your email address.\"\n },\n {\n  \"name\": \"send_password_reset_code\",\n  \"description\": \"Send password reset code to your email address.\"\n },\n {\n  \"name\": \"reset_password\",\n  \"description\": \"Reset your password using the password reset code sent to your email address.\"\n },\n {\n  \"name\": \"show_profile\",\n  \"description\": \"Show public profile information of a user, including your friendship status with them.\"\n },\n {\n  \"name\": \"search_users\",\n  \"description\": \"Search Venmo users by name or email address.\"\n },\n {\n  \"name\": \"search_friends\",\n  \"description\": \"Search your or others' friends by name or email address.\"\n },\n {\n  \"name\": \"add_friend\",\n  \"description\": \"Add a friend to your friend list.\"\n },\n {\n  \"name\": \"remove_friend\",\n  \"description\": \"Remove a friend from your friend list.\"\n },\n {\n  \"name\": \"show_venmo_balance\",\n  \"description\": \"Show your Venmo balance.\"\n },\n {\n  \"name\": \"add_to_venmo_balance\",\n  \"description\": \"Add money to your Venmo balance.\"\n },\n {\n  \"name\": \"withdraw_from_venmo_balance\",\n  \"description\": \"Withdraw money from your Venmo balance.\"\n },\n {\n  \"name\": \"show_bank_transfer_history\",\n  \"description\": \"Show histroy of money transfer from Venmo to payment card and vice versa.\"\n },\n {\n  \"name\": \"download_bank_transfer_receipt\",\n  \"description\": \"Download the receipt of money transfer from Venmo to payment card or vice versa.\"\n },\n {\n  \"name\": \"show_transaction\",\n  \"description\": \"Show transaction details.\"\n },\n {\n  \"name\": \"update_transaction\",\n  \"description\": \"Update transaction information.\"\n },\n {\n  \"name\": \"show_transactions\",\n  \"description\": \"Get a list of your transactions.\"\n },\n {\n  \"name\": \"create_transaction\",\n  \"description\": \"Send money to a user.\"\n },\n {\n  \"name\": \"download_transaction_receipt\",\n  \"description\": \"Download the receipt of a transaction (money sent from one user to another).\"\n },\n {\n  \"name\": \"like_transaction\",\n  \"description\": \"Like a transaction.\"\n },\n {\n  \"name\": \"unlike_transaction\",\n  \"description\": \"Unlike a transaction.\"\n },\n {\n  \"name\": \"show_transaction_comments\",\n  \"description\": \"Get a list of transaction comments.\"\n },\n {\n  \"name\": \"create_transaction_comment\",\n  \"description\": \"Create a new transaction comment.\"\n },\n {\n  \"name\": \"show_transaction_comment\",\n  \"description\": \"Show detailed information about a transaction comment.\"\n },\n {\n  \"name\": \"delete_transaction_comment\",\n  \"description\": \"Delete a transaction comment.\"\n },\n {\n  \"name\": \"update_transaction_comment\",\n  \"description\": \"Update a transaction comment.\"\n },\n {\n  \"name\": \"like_transaction_comment\",\n  \"description\": \"Like a transaction comment.\"\n },\n {\n  \"name\": \"unlike_transaction_comment\",\n  \"description\": \"Unlike a previously liked transaction comment.\"\n },\n {\n  \"name\": \"show_payment_card\",\n  \"description\": \"Get details of a payment card.\"\n },\n {\n  \"name\": \"delete_payment_card\",\n  \"description\": \"Delete payment card information.\"\n },\n {\n  \"name\": \"update_payment_card\",\n  \"description\": \"Update payment card information.\"\n },\n {\n  \"name\": \"show_payment_cards\",\n  \"description\": \"Get a list of users payment cards.\"\n },\n {\n  \"name\": \"add_payment_card\",\n  \"description\": \"Add a new payment card.\"\n },\n {\n  \"name\": \"show_received_payment_requests\",\n  \"description\": \"Get a list of payment requests you have received from others.\"\n },\n {\n  \"name\": \"show_sent_payment_requests\",\n  \"description\": \"Get a list of payment requests you have sent to others.\"\n },\n {\n  \"name\": \"create_payment_request\",\n  \"description\": \"Send a payment request.\"\n },\n {\n  \"name\": \"delete_payment_request\",\n  \"description\": \"Delete a payment request.\"\n },\n {\n  \"name\": \"update_payment_request\",\n  \"description\": \"Update payment request information.\"\n },\n {\n  \"name\": \"approve_payment_request\",\n  \"description\": \"Approve a payment request.\"\n },\n {\n  \"name\": \"deny_payment_request\",\n  \"description\": \"Deny a payment request.\"\n },\n {\n  \"name\": \"remind_payment_request\",\n  \"description\": \"Send a reminder to a user via notification about this payment request.\"\n },\n {\n  \"name\": \"show_social_feed\",\n  \"description\": \"Show your social feed (transactions of your friends).\"\n },\n {\n  \"name\": \"show_notifications\",\n  \"description\": \"Get a list of your notifications.\"\n },\n {\n  \"name\": \"delete_notifications\",\n  \"description\": \"Delete all of your notifications.\"\n },\n {\n  \"name\": \"mark_notifications\",\n  \"description\": \"Mark all notifications as read or unread.\"\n },\n {\n  \"name\": \"show_notifications_count\",\n  \"description\": \"Get the count of your notifications.\"\n },\n {\n  \"name\": \"delete_notification\",\n  \"description\": \"Delete a notification.\"\n },\n {\n  \"name\": \"mark_notification\",\n  \"description\": \"Mark a notification as read or unread.\"\n }\n]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198688065_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"try:\\n    print(\\\"Venmo account:\\\", apis.venmo.show_account())\\nexcept Exception as e:\\n    print(\\\"Venmo error:\\\", e)\\n\"}"
+     }
+    }
+   ],
+   "pt": 8217,
+   "ct": 52,
+   "cost": 0.0,
+   "step": 14
+  },
+  {
+   "type": "step",
+   "n": 15,
+   "tool": "execute_python",
+   "args": {
+    "code": "try:\n    print(\"Venmo account:\", apis.venmo.show_account())\nexcept Exception as e:\n    print(\"Venmo error:\", e)\n"
+   },
+   "observation": "Venmo error: Response status code is 401:\n{\"message\":\"You are either not authorized to access this venmo API endpoint or your access token is missing, invalid or expired.\"}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198690890_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Wait! Why did both login return access_token, but subsequent calls returned 401?\\n# Let's check how login works or what the parameters are!\\n# Look at login doc again:\\n# \\\"parameters\\\": [{\\\"name\\\": \\\"username\\\", ...}, {\\\"name\\\": \\\"password\\\", ...}]\\n# But wait, when you call apis.phone.login(...), where does the token go?\\n# Let's check show_account doc!\\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='show_account'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 8238,
+   "ct": 143,
+   "cost": 0.0,
+   "step": 15
+  },
+  {
+   "type": "step",
+   "n": 16,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Wait! Why did both login return access_token, but subsequent calls returned 401?\n# Let's check how login works or what the parameters are!\n# Look at login doc again:\n# \"parameters\": [{\"name\": \"username\", ...}, {\"name\": \"password\", ...}]\n# But wait, when you call apis.phone.login(...), where does the token go?\n# Let's check show_account doc!\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='show_account'))\n"
+   },
+   "observation": "{\n \"app_name\": \"phone\",\n \"api_name\": \"show_account\",\n \"path\": \"/account\",\n \"method\": \"GET\",\n \"description\": \"Show your account information. Unlike show_profile, this includes private information.\",\n \"parameters\": [\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from phone app login.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"first_name\": \"string\",\n   \"last_name\": \"string\",\n   \"phone_number\": \"string\",\n   \"registered_at\": \"2019-01-01T00:00:00\",\n   \"last_logged_in\": \"2019-01-01T00:00:00\"\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198693002_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Look at that! access_token is a required parameter for the APIs!\\n# Let's check search_contacts doc\\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='search_contacts'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 8575,
+   "ct": 71,
+   "cost": 0.0,
+   "step": 16
+  },
+  {
+   "type": "step",
+   "n": 17,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Look at that! access_token is a required parameter for the APIs!\n# Let's check search_contacts doc\nprint(apis.api_docs.show_api_doc(app_name='phone', api_name='search_contacts'))\n"
+   },
+   "observation": "{\n \"app_name\": \"phone\",\n \"api_name\": \"search_contacts\",\n \"path\": \"/contacts\",\n \"method\": \"GET\",\n \"description\": \"Search your contact book for relatives' information.\",\n \"parameters\": [\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from phone app login.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"query\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Search query for the contacts list.\",\n   \"default\": \"\",\n   \"constraints\": []\n  },\n  {\n   \"name\": \"relationship\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Relationship with the person in the contacts list to filter by.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"page_index\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"The index of the page to return.\",\n   \"default\": 0,\n   \"constraints\": [\n    \"value >= 0.0\"\n   ]\n  },\n  {\n   \"name\": \"page_limit\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"The maximum number of results to return per page.\",\n   \"default\": 5,\n   \"constraints\": [\n    \"value >= 1.0, <= 20.0\"\n   ]\n  }\n ],\n \"response_schemas\": {\n  \"success\": [\n   {\n    \"contact_id\": 1,\n    \"first_name\": \"string\",\n    \"last_name\": \"string\",\n    \"email\": \"user@example.com\",\n    \"phone_number\": \"string\",\n    \"relationships\": [\n     \"string\"\n    ],\n    \"birthday\": \"string\",\n    \"home_address\": \"string\",\n    \"work_address\": \"string\",\n    \"created_at\": \"2019-01-01T00:00:00\"\n   }\n  ],\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198696386_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Aha! access_token must be passed to the API methods explicitly!\\n# Let's get phone access token\\nphone_token = apis.phone.login(username='9503658964', password='ox6SqF4')['access_token']\\nprint(\\\"Phone token:\\\", phone_token[:15])\\n\\n# Now let's check relationships\\nprint(\\\"Relationships:\\\", apis.phone.show_contact_relationships(access_token=phone_token))\\n\\n# And search contacts with relationship='roommate' or list all contacts\\ncontacts = []\\npage = 0\\nwhile True:\\n    res = apis.phone.search_contacts(access_token=phone_token, page_index=page)\\n    if not res:\\n        break\\n    contacts.extend(res)\\n    page += 1\\n\\nprint(f\\\"Total contacts: {len(contacts)}\\\")\\nroommates = [c for c in contacts if 'roommate' in [r.lower() for r in c.get('relationships', [])]]\\nprint(\\\"Roommates from contacts:\\\")\\nfor r in roommates:\\n    print(r)\\n\"}"
+     }
+    }
+   ],
+   "pt": 9029,
+   "ct": 265,
+   "cost": 0.0,
+   "step": 17
+  },
+  {
+   "type": "step",
+   "n": 18,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Aha! access_token must be passed to the API methods explicitly!\n# Let's get phone access token\nphone_token = apis.phone.login(username='9503658964', password='ox6SqF4')['access_token']\nprint(\"Phone token:\", phone_token[:15])\n\n# Now let's check relationships\nprint(\"Relationships:\", apis.phone.show_contact_relationships(access_token=phone_token))\n\n# And search contacts with relationship='roommate' or list all contacts\ncontacts = []\npage = 0\nwhile True:\n    res = apis.phone.search_contacts(access_token=phone_token, page_index=page)\n    if not res:\n        break\n    contacts.extend(res)\n    page += 1\n\nprint(f\"Total contacts: {len(contacts)}\")\nroommates = [c for c in contacts if 'roommate' in [r.lower() for r in c.get('relationships', [])]]\nprint(\"Roommates from contacts:\")\nfor r in roommates:\n    print(r)\n"
+   },
+   "observation": "Phone token: eyJhbGciOiJIUzI\nRelationships: ['brother', 'coworker', 'father', 'friend', 'manager', 'mother', 'parent', 'roommate', 'sibling', 'sister']\nTotal contacts: 20\nRoommates from contacts:\n{\n \"contact_id\": 997,\n \"first_name\": \"Anthony\",\n \"last_name\": \"Harrison\",\n \"email\": \"an-harrison@gmail.com\",\n \"phone_number\": \"2466064078\",\n \"relationships\": [\n  \"roommate\"\n ],\n \"birthday\": \"1990-06-09\",\n \"home_address\": \"247 Salinas Pines Suite 668\\nSeattle\\nWashington\\nUnited States\\n11799\",\n \"work_address\": \"96967 Fox Loop Suite 397\\nSeattle\\nWashington\\nUnited States\\n86832\",\n \"created_at\": \"2022-09-23T00:04:03\"\n}\n{\n \"contact_id\": 996,\n \"first_name\": \"Anita\",\n \"last_name\": \"Burch\",\n \"email\": \"anita.burch@gmail.com\",\n \"phone_number\": \"3643463570\",\n \"relationships\": [\n  \"roommate\"\n ],\n \"birthday\": \"1997-03-10\",\n \"home_address\": \"247 Salinas Pines Suite 668\\nSeattle\\nWashington\\nUnited States\\n11799\",\n \"work_address\": \"7844 Joshua Shore Suite 460\\nSeattle\\nWashington\\nUnited States\\n46946\",\n \"created_at\": \"2022-09-23T00:04:03\"\n}\n{\n \"contact_id\": 998,\n \"first_name\": \"Melissa\",\n \"last_name\": \"Bailey\",\n \"email\": \"mel.bailey@gmail.com\",\n \"phone_number\": \"3383946795\",\n \"relationships\": [\n  \"roommate\"\n ],\n \"birthday\": \"1986-08-02\",\n \"home_address\": \"247 Salinas Pines Suite 668\\nSeattle\\nWashington\\nUnited States\\n11799\",\n \"work_address\": \"774 Samuel Cape Suite 202\\nSeattle\\nWashington\\nUnited States\\n16844\",\n \"created_at\": \"2022-09-23T00:04:03\"\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198699774_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Roommates are:\\n# 1. Anthony Harrison (an-harrison@gmail.com, 2466064078)\\n# 2. Anita Burch (anita.burch@gmail.com, 3643463570)\\n# 3. Melissa Bailey (mel.bailey@gmail.com, 3383946795)\\n\\n# Also notice they all share the home address: 247 Salinas Pines Suite 668, Seattle, Washington! Exactly Nicholas's home address!\\n\\n# Now let's check venmo APIs for payment requests\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='show_received_payment_requests'))\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='approve_payment_request'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 9949,
+   "ct": 222,
+   "cost": 0.0,
+   "step": 18
+  },
+  {
+   "type": "step",
+   "n": 19,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Roommates are:\n# 1. Anthony Harrison (an-harrison@gmail.com, 2466064078)\n# 2. Anita Burch (anita.burch@gmail.com, 3643463570)\n# 3. Melissa Bailey (mel.bailey@gmail.com, 3383946795)\n\n# Also notice they all share the home address: 247 Salinas Pines Suite 668, Seattle, Washington! Exactly Nicholas's home address!\n\n# Now let's check venmo APIs for payment requests\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='show_received_payment_requests'))\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='approve_payment_request'))\n"
+   },
+   "observation": "{\n \"app_name\": \"venmo\",\n \"api_name\": \"show_received_payment_requests\",\n \"path\": \"/received_payment_requests\",\n \"method\": \"GET\",\n \"description\": \"Get a list of payment requests you have received from others.\",\n \"parameters\": [\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from venmo app login.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"status\",\n   \"type\": \"string\",\n   \"required\": false,\n   \"description\": \"Filter payment requests by status. Will skip filtering if not passed.\",\n   \"default\": null,\n   \"constraints\": [\n    \"value in ['pending', 'approved', 'denied']\"\n   ]\n  },\n  {\n   \"name\": \"page_index\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"The index of the page to return.\",\n   \"default\": 0,\n   \"constraints\": [\n    \"value >= 0.0\"\n   ]\n  },\n  {\n   \"name\": \"page_limit\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"The maximum number of results to return per page.\",\n   \"default\": 5,\n   \"constraints\": [\n    \"value >= 1.0, <= 20.0\"\n   ]\n  }\n ],\n \"response_schemas\": {\n  \"success\": [\n   {\n    \"payment_request_id\": 1,\n    \"amount\": 0.0,\n    \"description\": \"string\",\n    \"created_at\": \"2019-01-01T00:00:00\",\n    \"updated_at\": \"2019-01-01T00:00:00\",\n    \"approved_at\": \"2019-01-01T00:00:00\",\n    \"denied_at\": \"2019-01-01T00:00:00\",\n    \"private\": true,\n    \"sender\": {\n     \"name\": \"string\",\n     \"email\": \"user@example.com\"\n    },\n    \"receiver\": {\n     \"name\": \"string\",\n     \"email\": \"user@example.com\"\n    }\n   }\n  ],\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n{\n \"app_name\": \"venmo\",\n \"api_name\": \"approve_payment_request\",\n \"path\": \"/payment_requests/{payment_request_id}/approve\",\n \"method\": \"POST\",\n \"description\": \"Approve a payment request.\",\n \"parameters\": [\n  {\n   \"name\": \"payment_request_id\",\n   \"type\": \"integer\",\n   \"required\": true,\n   \"description\": \"ID of the payment request to approve.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from venmo app login.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"payment_card_id\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"ID of the payment card to use for approving the payment request. If not passed, Venmo balance will be used.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"message\": \"string\"\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198702007_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's get venmo access token and inspect received payment requests\\nvenmo_token = apis.venmo.login(username='nicholas.weber@gmail.com', password='W]!$p+I')['access_token']\\n\\nreqs = []\\npage = 0\\nwhile True:\\n    res = apis.venmo.show_received_payment_requests(access_token=venmo_token, page_index=page)\\n    if not res:\\n        break\\n    reqs.extend(res)\\n    page += 1\\n\\nprint(f\\\"Total received payment requests: {len(reqs)}\\\")\\nimport json\\nfor r in reqs:\\n    print(r)\\n\"}"
+     }
+    }
+   ],
+   "pt": 11105,
+   "ct": 173,
+   "cost": 0.0,
+   "step": 19
+  },
+  {
+   "type": "step",
+   "n": 20,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's get venmo access token and inspect received payment requests\nvenmo_token = apis.venmo.login(username='nicholas.weber@gmail.com', password='W]!$p+I')['access_token']\n\nreqs = []\npage = 0\nwhile True:\n    res = apis.venmo.show_received_payment_requests(access_token=venmo_token, page_index=page)\n    if not res:\n        break\n    reqs.extend(res)\n    page += 1\n\nprint(f\"Total received payment requests: {len(reqs)}\")\nimport json\nfor r in reqs:\n    print(r)\n"
+   },
+   "observation": "Total received payment requests: 127\n{\n \"payment_request_id\": 6251,\n \"amount\": 59.0,\n \"description\": \"\\ud83c\\udf64 Seafood Dinner\",\n \"created_at\": \"2023-06-25T11:25:03\",\n \"updated_at\": \"2023-06-25T11:25:03\",\n \"approved_at\": \"2023-06-25T14:26:33\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6252,\n \"amount\": 18.0,\n \"description\": \"\\ud83c\\udf79 Happy Hour Fund\",\n \"created_at\": \"2023-06-25T11:25:03\",\n \"updated_at\": \"2023-06-25T11:25:03\",\n \"approved_at\": \"2023-06-25T12:47:15\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6253,\n \"amount\": 20.0,\n \"description\": \"\\ud83d\\udc8a Pharmacy Stuff \\ud83c\\udf21\\ufe0f\\ud83d\\udc8a\",\n \"created_at\": \"2023-06-25T11:25:03\",\n \"updated_at\": \"2023-06-25T11:25:03\",\n \"approved_at\": \"2023-06-25T12:45:48\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6247,\n \"amount\": 84.0,\n \"description\": \"Dance Class\",\n \"created_at\": \"2023-06-23T14:32:29\",\n \"updated_at\": \"2023-06-23T14:32:29\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-25T15:22:27\",\n \"private\": true,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6248,\n \"amount\": 25.0,\n \"description\": \"\\ud83c\\udf5cRamen Night\",\n \"created_at\": \"2023-06-23T14:32:29\",\n \"updated_at\": \"2023-06-23T14:32:29\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Andrew Brown\",\n  \"email\": \"andrew_brow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6249,\n \"amount\": 38.0,\n \"description\": \"\\ud83c\\udfca Pool Party Supplies\",\n \"created_at\": \"2023-06-23T14:32:29\",\n \"updated_at\": \"2023-06-23T14:32:29\",\n \"approved_at\": \"2023-06-24T15:57:02\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6171,\n \"amount\": 19.0,\n \"description\": \"\\ud83d\\udc7eArcade Night\",\n \"created_at\": \"2023-06-23T13:12:31\",\n \"updated_at\": \"2023-06-23T13:12:31\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-25T03:01:31\",\n \"private\": true,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6172,\n \"amount\": 20.0,\n \"description\": \"\\ud83c\\udfa4 Karaoke Night Entry Fees \\ud83c\\udfb6\",\n \"created_at\": \"2023-06-23T13:12:31\",\n \"updated_at\": \"2023-06-23T13:12:31\",\n \"approved_at\": \"2023-06-25T07:04:32\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6246,\n \"amount\": 14.0,\n \"description\": \"\\ud83c\\udf2eTaco Vibes\",\n \"created_at\": \"2023-06-22T18:53:01\",\n \"updated_at\": \"2023-06-22T18:53:01\",\n \"approved_at\": \"2023-06-22T19:38:30\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6170,\n \"amount\": 16.0,\n \"description\": \"Dim Sum \\ud83e\\udd5f Brunch\",\n \"created_at\": \"2023-06-22T09:45:01\",\n \"updated_at\": \"2023-06-22T09:45:01\",\n \"approved_at\": \"2023-06-23T02:29:35\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6169,\n \"amount\": 58.0,\n \"description\": \"\\ud83c\\udfb8 Music Lessons\",\n \"created_at\": \"2023-06-21T16:01:40\",\n \"updated_at\": \"2023-06-21T16:01:40\",\n \"approved_at\": \"2023-06-23T17:21:18\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6242,\n \"amount\": 56.0,\n \"description\": \"Skincare glow-up\",\n \"created_at\": \"2023-06-20T14:47:08\",\n \"updated_at\": \"2023-06-20T14:47:08\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-22T18:21:08\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6243,\n \"amount\": 25.0,\n \"description\": \"Pizza Night \\ud83c\\udf55\",\n \"created_at\": \"2023-06-20T14:47:08\",\n \"updated_at\": \"2023-06-20T14:47:08\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-23T18:56:08\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6166,\n \"amount\": 20.0,\n \"description\": \"Bakery\",\n \"created_at\": \"2023-06-20T08:30:59\",\n \"updated_at\": \"2023-06-20T08:30:59\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-21T12:49:59\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6167,\n \"amount\": 22.0,\n \"description\": \"\\ud83c\\udf79Margs Night\",\n \"created_at\": \"2023-06-20T08:30:59\",\n \"updated_at\": \"2023-06-20T08:30:59\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-23T07:15:59\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6168,\n \"amount\": 26.0,\n \"description\": \"Mani-pedi day \\ud83d\\udc85\",\n \"created_at\": \"2023-06-20T08:30:59\",\n \"updated_at\": \"2023-06-20T08:30:59\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6237,\n \"amount\": 30.0,\n \"description\": \"\\ud83d\\udc7b Haunted House Adventure \\ud83c\\udf83\",\n \"created_at\": \"2023-06-18T10:26:48\",\n \"updated_at\": \"2023-06-18T10:26:48\",\n \"approved_at\": \"2023-06-18T19:27:26\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Valerie Blackburn\",\n  \"email\": \"va-blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6238,\n \"amount\": 185.0,\n \"description\": \"Sporting Event\",\n \"created_at\": \"2023-06-18T10:26:48\",\n \"updated_at\": \"2023-06-18T10:26:48\",\n \"approved_at\": \"2023-06-19T16:29:05\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6232,\n \"amount\": 130.0,\n \"description\": \"Skydiving\",\n \"created_at\": \"2023-06-16T09:09:33\",\n \"updated_at\": \"2023-06-16T09:09:33\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6233,\n \"amount\": 94.0,\n \"description\": \"Workshop Fees\",\n \"created_at\": \"2023-06-16T09:09:33\",\n \"updated_at\": \"2023-06-16T09:09:33\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6234,\n \"amount\": 50.0,\n \"description\": \"\\ud83c\\udfbcVinyl Records\",\n \"created_at\": \"2023-06-16T09:09:33\",\n \"updated_at\": \"2023-06-16T09:09:33\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-19T23:25:33\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6230,\n \"amount\": 56.0,\n \"description\": \"Haircut\",\n \"created_at\": \"2023-06-14T14:39:33\",\n \"updated_at\": \"2023-06-14T14:39:33\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6152,\n \"amount\": 121.0,\n \"description\": \"Musical Instruments\",\n \"created_at\": \"2023-06-13T12:45:07\",\n \"updated_at\": \"2023-06-13T12:45:07\",\n \"approved_at\": \"2023-06-14T07:26:08\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6153,\n \"amount\": 79.0,\n \"description\": \"Electronics\",\n \"created_at\": \"2023-06-13T12:45:07\",\n \"updated_at\": \"2023-06-13T12:45:07\",\n \"approved_at\": \"2023-06-14T08:02:59\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6149,\n \"amount\": 28.0,\n \"description\": \"Craft beers \\ud83c\\udf7a\",\n \"created_at\": \"2023-06-12T08:00:59\",\n \"updated_at\": \"2023-06-12T08:00:59\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6150,\n \"amount\": 31.0,\n \"description\": \"Custom phone case\",\n \"created_at\": \"2023-06-12T08:00:59\",\n \"updated_at\": \"2023-06-12T08:00:59\",\n \"approved_at\": \"2023-06-13T10:13:20\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6151,\n \"amount\": 12.0,\n \"description\": \"\\ud83c\\udf33 Park Picnic Snacks\",\n \"created_at\": \"2023-06-12T08:00:59\",\n \"updated_at\": \"2023-06-12T08:00:59\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6223,\n \"amount\": 102.0,\n \"description\": \"Boat Rental\",\n \"created_at\": \"2023-06-11T15:00:40\",\n \"updated_at\": \"2023-06-11T15:00:40\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6224,\n \"amount\": 69.0,\n \"description\": \"Sporting Event\",\n \"created_at\": \"2023-06-11T15:00:40\",\n \"updated_at\": \"2023-06-11T15:00:40\",\n \"approved_at\": \"2023-06-11T21:13:54\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6145,\n \"amount\": 8.0,\n \"description\": \"\\ud83e\\uddfc Laundry Day \\ud83e\\uddfa\\ud83d\\udca6\",\n \"created_at\": \"2023-06-10T09:00:02\",\n \"updated_at\": \"2023-06-10T09:00:02\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6146,\n \"amount\": 13.0,\n \"description\": \"Taco Tuesday!\",\n \"created_at\": \"2023-06-10T09:00:02\",\n \"updated_at\": \"2023-06-10T09:00:02\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-13T10:14:02\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6147,\n \"amount\": 171.0,\n \"description\": \"Hotel Stay\",\n \"created_at\": \"2023-06-10T09:00:02\",\n \"updated_at\": \"2023-06-10T09:00:02\",\n \"approved_at\": \"2023-06-12T03:44:51\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6143,\n \"amount\": 116.0,\n \"description\": \"Musical Instruments\",\n \"created_at\": \"2023-06-08T15:35:15\",\n \"updated_at\": \"2023-06-08T15:35:15\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6137,\n \"amount\": 497.0,\n \"description\": \"Tech upgrade\",\n \"created_at\": \"2023-06-06T12:14:52\",\n \"updated_at\": \"2023-06-06T12:14:52\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6138,\n \"amount\": 5.0,\n \"description\": \"Summer \\ud83c\\udf66 Ice Cream Run\",\n \"created_at\": \"2023-06-06T12:14:52\",\n \"updated_at\": \"2023-06-06T12:14:52\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6139,\n \"amount\": 15.0,\n \"description\": \"Baking \\ud83e\\uddc1 Supplies\",\n \"created_at\": \"2023-06-06T12:14:52\",\n \"updated_at\": \"2023-06-06T12:14:52\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6133,\n \"amount\": 14.0,\n \"description\": \"Taxi Fare\",\n \"created_at\": \"2023-06-04T12:48:45\",\n \"updated_at\": \"2023-06-04T12:48:45\",\n \"approved_at\": \"2023-06-06T20:08:26\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6134,\n \"amount\": 135.0,\n \"description\": \"Gym Membership\",\n \"created_at\": \"2023-06-04T12:48:45\",\n \"updated_at\": \"2023-06-04T12:48:45\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-05T19:35:45\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6135,\n \"amount\": 75.0,\n \"description\": \"Festival \\ud83c\\udfb6 Tickets & Snacks\",\n \"created_at\": \"2023-06-04T12:48:45\",\n \"updated_at\": \"2023-06-04T12:48:45\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-06T11:14:45\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6212,\n \"amount\": 37.0,\n \"description\": \"Cheat day eats\",\n \"created_at\": \"2023-06-04T09:09:08\",\n \"updated_at\": \"2023-06-04T09:09:08\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-06T20:31:08\",\n \"private\": true,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6213,\n \"amount\": 16.0,\n \"description\": \"\\ud83c\\udfac Movie Marathon Night \\ud83c\\udf7f\",\n \"created_at\": \"2023-06-04T09:09:08\",\n \"updated_at\": \"2023-06-04T09:09:08\",\n \"approved_at\": \"2023-06-06T21:01:41\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Valerie Blackburn\",\n  \"email\": \"va-blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6214,\n \"amount\": 37.0,\n \"description\": \"Vegan Dinner \\ud83c\\udf31\\ud83d\\udc9a\",\n \"created_at\": \"2023-06-04T09:09:08\",\n \"updated_at\": \"2023-06-04T09:09:08\",\n \"approved_at\": \"2023-06-04T09:55:07\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6130,\n \"amount\": 8.0,\n \"description\": \"\\ud83e\\uddfc Laundry Day \\ud83e\\uddfa\\ud83d\\udca6\",\n \"created_at\": \"2023-06-03T14:32:33\",\n \"updated_at\": \"2023-06-03T14:32:33\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-04T19:31:33\",\n \"private\": true,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6131,\n \"amount\": 44.0,\n \"description\": \"\\ud83c\\udf9f\\ufe0f Amusement Park Day Pass \\ud83c\\udfa2\",\n \"created_at\": \"2023-06-03T14:32:33\",\n \"updated_at\": \"2023-06-03T14:32:33\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6132,\n \"amount\": 23.0,\n \"description\": \"\\ud83d\\udc90 Flower Shop \\ud83c\\udf39\\ud83c\\udf37\",\n \"created_at\": \"2023-06-03T14:32:33\",\n \"updated_at\": \"2023-06-03T14:32:33\",\n \"approved_at\": \"2023-06-05T13:28:19\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6123,\n \"amount\": 40.0,\n \"description\": \"\\ud83c\\udf38 Springtime Flower Garden Project \\ud83c\\udf37\",\n \"created_at\": \"2023-05-30T11:27:22\",\n \"updated_at\": \"2023-05-30T11:27:22\",\n \"approved_at\": null,\n \"denied_at\": \"2023-06-03T07:03:22\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6124,\n \"amount\": 9.0,\n \"description\": \"Study \\ud83d\\udcda Snacks\",\n \"created_at\": \"2023-05-30T11:27:22\",\n \"updated_at\": \"2023-05-30T11:27:22\",\n \"approved_at\": \"2023-05-30T20:40:43\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6122,\n \"amount\": 19.0,\n \"description\": \"Dim Sum \\ud83e\\udd5f Brunch\",\n \"created_at\": \"2023-05-29T13:18:12\",\n \"updated_at\": \"2023-05-29T13:18:12\",\n \"approved_at\": \"2023-05-31T19:05:17\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6199,\n \"amount\": 47.0,\n \"description\": \"Plants\",\n \"created_at\": \"2023-05-29T10:36:17\",\n \"updated_at\": \"2023-05-29T10:36:17\",\n \"approved_at\": \"2023-05-30T06:36:10\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6119,\n \"amount\": 39.0,\n \"description\": \"Crafternoon \\ud83e\\uddf6\",\n \"created_at\": \"2023-05-28T08:21:49\",\n \"updated_at\": \"2023-05-28T08:21:49\",\n \"approved_at\": \"2023-05-30T02:37:11\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6120,\n \"amount\": 15.0,\n \"description\": \"\\ud83c\\udf31Plant Babies\",\n \"created_at\": \"2023-05-28T08:21:49\",\n \"updated_at\": \"2023-05-28T08:21:49\",\n \"approved_at\": \"2023-05-28T18:04:42\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6121,\n \"amount\": 115.0,\n \"description\": \"Wine\",\n \"created_at\": \"2023-05-28T08:21:49\",\n \"updated_at\": \"2023-05-28T08:21:49\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6117,\n \"amount\": 36.0,\n \"description\": \"\\ud83d\\udcdaBook Club Fund\",\n \"created_at\": \"2023-05-27T15:00:27\",\n \"updated_at\": \"2023-05-27T15:00:27\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6118,\n \"amount\": 23.0,\n \"description\": \"\\ud83c\\udfacMovie Snacks\",\n \"created_at\": \"2023-05-27T15:00:27\",\n \"updated_at\": \"2023-05-27T15:00:27\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6195,\n \"amount\": 42.0,\n \"description\": \"Record Store \\ud83c\\udfb6 Finds\",\n \"created_at\": \"2023-05-27T14:52:32\",\n \"updated_at\": \"2023-05-27T14:52:32\",\n \"approved_at\": null,\n \"denied_at\": \"2023-05-31T06:41:32\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6196,\n \"amount\": 12.0,\n \"description\": \"Netflix binge weekend\",\n \"created_at\": \"2023-05-27T14:52:32\",\n \"updated_at\": \"2023-05-27T14:52:32\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6197,\n \"amount\": 93.0,\n \"description\": \"\\ud83d\\udecd Outlet Shopping\",\n \"created_at\": \"2023-05-27T14:52:32\",\n \"updated_at\": \"2023-05-27T14:52:32\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6192,\n \"amount\": 45.0,\n \"description\": \"Concert tix \\ud83c\\udfb6\",\n \"created_at\": \"2023-05-26T12:03:32\",\n \"updated_at\": \"2023-05-26T12:03:32\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6193,\n \"amount\": 25.0,\n \"description\": \"\\ud83c\\udf81 Birthday Surprise Gift Fund \\ud83c\\udf88\",\n \"created_at\": \"2023-05-26T12:03:32\",\n \"updated_at\": \"2023-05-26T12:03:32\",\n \"approved_at\": \"2023-05-27T22:09:58\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6194,\n \"amount\": 17.0,\n \"description\": \"\\ud83d\\udc1f Fish Tank Supplies \\ud83d\\udc20\\ud83d\\udca6\",\n \"created_at\": \"2023-05-26T12:03:32\",\n \"updated_at\": \"2023-05-26T12:03:32\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Valerie Blackburn\",\n  \"email\": \"va-blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6111,\n \"amount\": 24.0,\n \"description\": \"\\ud83c\\udf55Pizza & Chill\",\n \"created_at\": \"2023-05-25T17:26:26\",\n \"updated_at\": \"2023-05-25T17:26:26\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6112,\n \"amount\": 26.0,\n \"description\": \"\\ud83d\\udc7eArcade Night\",\n \"created_at\": \"2023-05-25T17:26:26\",\n \"updated_at\": \"2023-05-25T17:26:26\",\n \"approved_at\": \"2023-05-25T18:01:35\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6113,\n \"amount\": 210.0,\n \"description\": \"Utilities\",\n \"created_at\": \"2023-05-25T17:26:26\",\n \"updated_at\": \"2023-05-25T17:26:26\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6110,\n \"amount\": 59.0,\n \"description\": \"\\ud83d\\udec0 Spa Day Self-Care Kit \\ud83c\\udf3f\",\n \"created_at\": \"2023-05-24T11:25:21\",\n \"updated_at\": \"2023-05-24T11:25:21\",\n \"approved_at\": \"2023-05-25T15:11:11\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6187,\n \"amount\": 21.0,\n \"description\": \"\\ud83d\\udc57 Thrift Store Fashion Finds \\ud83d\\udc5a\",\n \"created_at\": \"2023-05-23T14:21:09\",\n \"updated_at\": \"2023-05-23T14:21:09\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Valerie Blackburn\",\n  \"email\": \"va-blac@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6188,\n \"amount\": 22.0,\n \"description\": \"\\ud83c\\udf7bBeers & Cheers\",\n \"created_at\": \"2023-05-23T14:21:09\",\n \"updated_at\": \"2023-05-23T14:21:09\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6189,\n \"amount\": 53.0,\n \"description\": \"\\ud83c\\udf9f\\ufe0f Amusement Park Day Pass \\ud83c\\udfa2\",\n \"created_at\": \"2023-05-23T14:21:09\",\n \"updated_at\": \"2023-05-23T14:21:09\",\n \"approved_at\": \"2023-05-24T07:23:46\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Andrew Brown\",\n  \"email\": \"andrew_brow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6181,\n \"amount\": 187.0,\n \"description\": \"Cleaning Services\",\n \"created_at\": \"2023-05-21T13:23:45\",\n \"updated_at\": \"2023-05-21T13:23:45\",\n \"approved_at\": null,\n \"denied_at\": \"2023-05-22T04:05:45\",\n \"private\": true,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6182,\n \"amount\": 49.0,\n \"description\": \"Wine\",\n \"created_at\": \"2023-05-21T13:23:45\",\n \"updated_at\": \"2023-05-21T13:23:45\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6183,\n \"amount\": 9.0,\n \"description\": \"Study \\ud83d\\udcda Snacks\",\n \"created_at\": \"2023-05-21T13:23:45\",\n \"updated_at\": \"2023-05-21T13:23:45\",\n \"approved_at\": \"2023-05-22T07:52:45\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Andrew Brown\",\n  \"email\": \"andrew_brow@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6100,\n \"amount\": 59.0,\n \"description\": \"\\ud83d\\udc53New Specs\",\n \"created_at\": \"2023-05-20T15:02:49\",\n \"updated_at\": \"2023-05-20T15:02:49\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Anita Burch\",\n  \"email\": \"anita.burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6101,\n \"amount\": 95.0,\n \"description\": \"Electronics\",\n \"created_at\": \"2023-05-20T15:02:49\",\n \"updated_at\": \"2023-05-20T15:02:49\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6102,\n \"amount\": 33.0,\n \"description\": \"Spooky \\ud83d\\udc7b Halloween Costumes\",\n \"created_at\": \"2023-05-20T15:02:49\",\n \"updated_at\": \"2023-05-20T15:02:49\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6099,\n \"amount\": 6.0,\n \"description\": \"Bubble Tea \\ud83e\\uddcb Run\",\n \"created_at\": \"2023-05-19T16:00:55\",\n \"updated_at\": \"2023-05-19T16:00:55\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Anthony Harrison\",\n  \"email\": \"an-harrison@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 6176,\n \"amount\": 10.0,\n \"description\": \"Summer \\ud83c\\udf66 Ice Cream Run\",\n \"created_at\": \"2023-05-18T14:01:51\",\n \"updated_at\": \"2023-05-18T14:01:51\",\n \"approved_at\": \"2023-05-20T08:53:08\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1947,\n \"amount\": 25.0,\n \"description\": \"\\ud83e\\udd73 Party Decorations \\ud83c\\udf89\\ud83c\\udf88\",\n \"created_at\": \"2023-05-15T08:08:20\",\n \"updated_at\": \"2023-05-15T08:08:20\",\n \"approved_at\": \"2023-05-16T08:09:23\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 2991,\n \"amount\": 17.0,\n \"description\": \"Bike ride fuel\",\n \"created_at\": \"2023-05-11T03:03:59\",\n \"updated_at\": \"2023-05-11T03:03:59\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1952,\n \"amount\": 28.0,\n \"description\": \"\\ud83d\\udef5 Weekend Scooter Rental \\ud83c\\udf06\",\n \"created_at\": \"2023-04-17T12:31:28\",\n \"updated_at\": \"2023-04-17T12:31:28\",\n \"approved_at\": \"2023-04-18T11:20:07\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1953,\n \"amount\": 16.0,\n \"description\": \"\\ud83c\\udf6aCookie Dough\",\n \"created_at\": \"2023-04-12T18:35:30\",\n \"updated_at\": \"2023-04-12T18:35:30\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 2992,\n \"amount\": 17.0,\n \"description\": \"Board Games \\ud83c\\udfb2\",\n \"created_at\": \"2023-04-12T14:56:23\",\n \"updated_at\": \"2023-04-12T14:56:23\",\n \"approved_at\": \"2023-04-12T18:32:26\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1344,\n \"amount\": 24.0,\n \"description\": \"Beach day fund\",\n \"created_at\": \"2023-04-12T03:33:22\",\n \"updated_at\": \"2023-04-12T03:33:22\",\n \"approved_at\": null,\n \"denied_at\": \"2023-04-15T00:37:22\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1343,\n \"amount\": 26.0,\n \"description\": \"Astrology Reading\",\n \"created_at\": \"2023-04-03T19:48:23\",\n \"updated_at\": \"2023-04-03T19:48:23\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1345,\n \"amount\": 68.0,\n \"description\": \"Treat Yo' Self \\ud83d\\udc86\",\n \"created_at\": \"2023-04-02T09:40:34\",\n \"updated_at\": \"2023-04-02T09:40:34\",\n \"approved_at\": \"2023-04-05T08:04:19\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1950,\n \"amount\": 15.0,\n \"description\": \"\\ud83c\\udf55Pizza & Chill\",\n \"created_at\": \"2023-04-02T02:20:09\",\n \"updated_at\": \"2023-04-02T02:20:09\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 2994,\n \"amount\": 53.0,\n \"description\": \"Birthday \\ud83c\\udf82\\ud83c\\udf89 Celebration\",\n \"created_at\": \"2023-03-29T00:27:29\",\n \"updated_at\": \"2023-03-29T00:27:29\",\n \"approved_at\": \"2023-03-29T01:31:38\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1951,\n \"amount\": 19.0,\n \"description\": \"\\ud83d\\udeb4 Biking Trail Snack Fund \\ud83c\\udf33\",\n \"created_at\": \"2023-03-25T18:41:20\",\n \"updated_at\": \"2023-03-25T18:41:20\",\n \"approved_at\": \"2023-03-25T19:14:45\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 5385,\n \"amount\": 53.0,\n \"description\": \"\\ud83c\\udf63 Sushi and Sake Night Out \\ud83c\\udf76\",\n \"created_at\": \"2023-03-25T07:56:09\",\n \"updated_at\": \"2023-03-25T07:56:09\",\n \"approved_at\": \"2023-03-25T13:20:41\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4591,\n \"amount\": 292.0,\n \"description\": \"Weekend getaway\",\n \"created_at\": \"2023-03-24T18:21:28\",\n \"updated_at\": \"2023-03-24T18:21:28\",\n \"approved_at\": null,\n \"denied_at\": \"2023-03-28T02:39:28\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1346,\n \"amount\": 256.0,\n \"description\": \"Language Classes\",\n \"created_at\": \"2023-03-19T13:39:24\",\n \"updated_at\": \"2023-03-19T13:39:24\",\n \"approved_at\": \"2023-03-21T06:08:34\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 362,\n \"amount\": 30.0,\n \"description\": \"\\ud83c\\udf64 Seafood Dinner\",\n \"created_at\": \"2023-03-18T11:41:54\",\n \"updated_at\": \"2023-03-18T11:41:54\",\n \"approved_at\": \"2023-03-19T07:58:32\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Katherine Smith\",\n  \"email\": \"ka_ball@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 2997,\n \"amount\": 10.0,\n \"description\": \"Room Service\",\n \"created_at\": \"2023-03-16T17:27:33\",\n \"updated_at\": \"2023-03-16T17:27:33\",\n \"approved_at\": null,\n \"denied_at\": \"2023-03-19T21:12:33\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 2989,\n \"amount\": 22.0,\n \"description\": \"\\ud83c\\udf2e Taco Tuesday Office Lunch \\ud83c\\udf79\",\n \"created_at\": \"2023-03-07T22:16:12\",\n \"updated_at\": \"2023-03-07T22:16:12\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1948,\n \"amount\": 47.0,\n \"description\": \"Online courses\",\n \"created_at\": \"2023-03-01T22:39:25\",\n \"updated_at\": \"2023-03-01T22:39:25\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 2995,\n \"amount\": 67.0,\n \"description\": \"\\ud83c\\udfb8 Music Lessons for the Month \\ud83c\\udfb5\",\n \"created_at\": \"2023-02-26T11:17:21\",\n \"updated_at\": \"2023-02-26T11:17:21\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 2990,\n \"amount\": 24.0,\n \"description\": \"\\ud83d\\ude95Lyft Home\",\n \"created_at\": \"2023-02-22T07:51:21\",\n \"updated_at\": \"2023-02-22T07:51:21\",\n \"approved_at\": \"2023-02-23T01:53:42\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4474,\n \"amount\": 87.0,\n \"description\": \"Cookware\",\n \"created_at\": \"2023-02-17T13:37:26\",\n \"updated_at\": \"2023-02-17T13:37:26\",\n \"approved_at\": \"2023-02-21T08:00:22\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1949,\n \"amount\": 14.0,\n \"description\": \"\\ud83c\\udfb3Bowling Squad\",\n \"created_at\": \"2023-02-15T15:54:41\",\n \"updated_at\": \"2023-02-15T15:54:41\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1946,\n \"amount\": 51.0,\n \"description\": \"\\ud83c\\udf64 Seafood Dinner\",\n \"created_at\": \"2023-02-12T14:54:36\",\n \"updated_at\": \"2023-02-12T14:54:36\",\n \"approved_at\": \"2023-02-14T06:01:12\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4594,\n \"amount\": 25.0,\n \"description\": \"\\ud83c\\udfe0 Housewarming Party Gifts \\ud83c\\udf81\",\n \"created_at\": \"2023-02-09T11:24:12\",\n \"updated_at\": \"2023-02-09T11:24:12\",\n \"approved_at\": null,\n \"denied_at\": \"2023-02-13T04:33:12\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1342,\n \"amount\": 53.0,\n \"description\": \"Mani-pedi day \\ud83d\\udc85\",\n \"created_at\": \"2023-02-09T07:09:06\",\n \"updated_at\": \"2023-02-09T07:09:06\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1348,\n \"amount\": 78.0,\n \"description\": \"\\ud83e\\uddf3 Travel Fund \\ud83c\\udf0d\\u2708\\ufe0f\",\n \"created_at\": \"2023-02-01T10:52:43\",\n \"updated_at\": \"2023-02-01T10:52:43\",\n \"approved_at\": \"2023-02-03T21:37:50\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1944,\n \"amount\": 40.0,\n \"description\": \"Podcast Subscription\",\n \"created_at\": \"2023-02-01T07:54:53\",\n \"updated_at\": \"2023-02-01T07:54:53\",\n \"approved_at\": \"2023-02-01T19:50:21\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1945,\n \"amount\": 152.0,\n \"description\": \"Massage\",\n \"created_at\": \"2023-01-31T22:15:11\",\n \"updated_at\": \"2023-01-31T22:15:11\",\n \"approved_at\": null,\n \"denied_at\": \"2023-02-01T16:44:11\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Chelsea Burch\",\n  \"email\": \"chelsea-burch@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1349,\n \"amount\": 16.0,\n \"description\": \"Dim Sum \\ud83e\\udd5f Brunch\",\n \"created_at\": \"2023-01-22T09:16:33\",\n \"updated_at\": \"2023-01-22T09:16:33\",\n \"approved_at\": \"2023-01-22T16:18:34\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 2993,\n \"amount\": 89.0,\n \"description\": \"Podcast gear\",\n \"created_at\": \"2023-01-19T02:37:51\",\n \"updated_at\": \"2023-01-19T02:37:51\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4475,\n \"amount\": 20.0,\n \"description\": \"\\ud83c\\udf47Smoothie Time\",\n \"created_at\": \"2023-01-14T17:31:00\",\n \"updated_at\": \"2023-01-14T17:31:00\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 5384,\n \"amount\": 77.0,\n \"description\": \"\\ud83c\\udfa7Podcast Mic \\ud83c\\udfa4\",\n \"created_at\": \"2023-01-05T23:35:49\",\n \"updated_at\": \"2023-01-05T23:35:49\",\n \"approved_at\": \"2023-01-07T20:24:41\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 357,\n \"amount\": 49.0,\n \"description\": \"Video Games\",\n \"created_at\": \"2023-01-05T17:03:51\",\n \"updated_at\": \"2023-01-05T17:03:51\",\n \"approved_at\": \"2023-01-06T15:32:10\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Katherine Smith\",\n  \"email\": \"ka_ball@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 2996,\n \"amount\": 18.0,\n \"description\": \"Art \\ud83c\\udfa8 Supplies\",\n \"created_at\": \"2022-12-14T22:33:47\",\n \"updated_at\": \"2022-12-14T22:33:47\",\n \"approved_at\": \"2022-12-15T14:43:59\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Kyle Moore\",\n  \"email\": \"kyl_moor@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 359,\n \"amount\": 7.0,\n \"description\": \"Caffeine Fix \\u2615\",\n \"created_at\": \"2022-12-13T00:17:18\",\n \"updated_at\": \"2022-12-13T00:17:18\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Katherine Smith\",\n  \"email\": \"ka_ball@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 358,\n \"amount\": 38.0,\n \"description\": \"\\ud83c\\udfd6 Beach Trip\",\n \"created_at\": \"2022-12-09T17:12:18\",\n \"updated_at\": \"2022-12-09T17:12:18\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Katherine Smith\",\n  \"email\": \"ka_ball@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4595,\n \"amount\": 12.0,\n \"description\": \"Monthly \\ud83d\\udcda Book Club\",\n \"created_at\": \"2022-12-08T03:35:48\",\n \"updated_at\": \"2022-12-08T03:35:48\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 1347,\n \"amount\": 23.0,\n \"description\": \"\\ud83d\\ude97 Weekend Road Trip Snacks \\ud83c\\udf6b\",\n \"created_at\": \"2022-11-09T16:12:41\",\n \"updated_at\": \"2022-11-09T16:12:41\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4592,\n \"amount\": 54.0,\n \"description\": \"New \\ud83c\\udfae Game Purchase\",\n \"created_at\": \"2022-11-03T04:04:38\",\n \"updated_at\": \"2022-11-03T04:04:38\",\n \"approved_at\": \"2022-11-03T20:01:52\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4477,\n \"amount\": 8.0,\n \"description\": \"Skate park fees\",\n \"created_at\": \"2022-11-01T01:07:50\",\n \"updated_at\": \"2022-11-01T01:07:50\",\n \"approved_at\": null,\n \"denied_at\": \"2022-11-04T00:48:50\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 360,\n \"amount\": 53.0,\n \"description\": \"\\ud83c\\udf93 Graduation Gift \\ud83c\\udf89\\ud83c\\udf81\",\n \"created_at\": \"2022-10-22T15:37:05\",\n \"updated_at\": \"2022-10-22T15:37:05\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Katherine Smith\",\n  \"email\": \"ka_ball@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4478,\n \"amount\": 73.0,\n \"description\": \"Theme Park\",\n \"created_at\": \"2022-10-16T03:34:22\",\n \"updated_at\": \"2022-10-16T03:34:22\",\n \"approved_at\": \"2022-10-17T17:51:08\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 5381,\n \"amount\": 20.0,\n \"description\": \"Roller Skating Night \\ud83d\\udefc\",\n \"created_at\": \"2022-10-14T10:20:31\",\n \"updated_at\": \"2022-10-14T10:20:31\",\n \"approved_at\": \"2022-10-16T05:10:42\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4473,\n \"amount\": 57.0,\n \"description\": \"\\ud83c\\udfc4 Weekend Beach Surfing Adventure \\ud83c\\udf0a\",\n \"created_at\": \"2022-10-02T09:56:23\",\n \"updated_at\": \"2022-10-02T09:56:23\",\n \"approved_at\": \"2022-10-04T00:27:39\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4476,\n \"amount\": 37.0,\n \"description\": \"Escape room fun\",\n \"created_at\": \"2022-09-12T13:45:10\",\n \"updated_at\": \"2022-09-12T13:45:10\",\n \"approved_at\": null,\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4472,\n \"amount\": 15.0,\n \"description\": \"\\ud83c\\udfbcVinyl Records\",\n \"created_at\": \"2022-09-06T09:01:10\",\n \"updated_at\": \"2022-09-06T09:01:10\",\n \"approved_at\": \"2022-09-06T14:22:35\",\n \"denied_at\": null,\n \"private\": true,\n \"sender\": {\n  \"name\": \"Eric Bailey\",\n  \"email\": \"eric.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 361,\n \"amount\": 39.0,\n \"description\": \"\\ud83d\\udcbbOnline Game Pass\",\n \"created_at\": \"2022-09-01T02:56:43\",\n \"updated_at\": \"2022-09-01T02:56:43\",\n \"approved_at\": null,\n \"denied_at\": \"2022-09-02T21:46:43\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Katherine Smith\",\n  \"email\": \"ka_ball@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 5386,\n \"amount\": 17.0,\n \"description\": \"Zoo Tickets\",\n \"created_at\": \"2022-08-30T12:21:57\",\n \"updated_at\": \"2022-08-30T12:21:57\",\n \"approved_at\": null,\n \"denied_at\": \"2022-09-02T04:19:57\",\n \"private\": true,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 4593,\n \"amount\": 11.0,\n \"description\": \"\\ud83e\\udd51Avocado Toast\",\n \"created_at\": \"2022-08-01T13:07:58\",\n \"updated_at\": \"2022-08-01T13:07:58\",\n \"approved_at\": \"2022-08-02T20:47:33\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Melissa Bailey\",\n  \"email\": \"mel.bailey@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 5380,\n \"amount\": 12.0,\n \"description\": \"\\ud83c\\udfb3Bowling Squad\",\n \"created_at\": \"2022-07-20T06:32:26\",\n \"updated_at\": \"2022-07-20T06:32:26\",\n \"approved_at\": null,\n \"denied_at\": \"2022-07-21T21:33:26\",\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 5383,\n \"amount\": 189.0,\n \"description\": \"Cleaning Services\",\n \"created_at\": \"2022-07-17T05:49:58\",\n \"updated_at\": \"2022-07-17T05:49:58\",\n \"approved_at\": \"2022-07-17T10:41:58\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"payment_request_id\": 5382,\n \"amount\": 42.0,\n \"description\": \"\\ud83c\\udfb6 Live Concert Experience \\ud83c\\udfa4\",\n \"created_at\": \"2022-07-09T05:11:06\",\n \"updated_at\": \"2022-07-09T05:11:06\",\n \"approved_at\": \"2022-07-09T06:25:21\",\n \"denied_at\": null,\n \"private\": false,\n \"sender\": {\n  \"name\": \"Patricia Ritter\",\n  \"email\": \"pa_ritter@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [],
+   "pt": 14268,
+   "ct": 0,
+   "cost": 0.0,
+   "step": 20
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198716973_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"roommate_emails = {\\n    'an-harrison@gmail.com',\\n    'anita.burch@gmail.com',\\n    'mel.bailey@gmail.com'\\n}\\n\\n# Find all requests from roommates in June 2023\\njune_roommate_reqs = []\\nfor r in reqs:\\n    sender_email = r.get('sender', {}).get('email')\\n    created_at = r.get('created_at', '')\\n    if sender_email in roommate_emails and created_at.startswith('2023-06'):\\n        june_roommate_reqs.append(r)\\n\\nprint(f\\\"Total June roommate requests: {len(june_roommate_reqs)}\\\")\\nfor r in june_roommate_reqs:\\n    status = 'pending'\\n    if r.get('approved_at'):\\n        status = 'approved'\\n    elif r.get('denied_at'):\\n        status = 'denied'\\n    print(f\\\"ID: {r['payment_request_id']}, Sender: {r['sender']['name']} ({r['sender']['email']}), Amount: {r['amount']}, Status: {status}, Created: {r['created_at']}, Desc: {r['description']}\\\")\\n\"}"
+     }
+    }
+   ],
+   "pt": 14461,
+   "ct": 307,
+   "cost": 0.0,
+   "step": 20
+  },
+  {
+   "type": "step",
+   "n": 21,
+   "tool": "execute_python",
+   "args": {
+    "code": "roommate_emails = {\n    'an-harrison@gmail.com',\n    'anita.burch@gmail.com',\n    'mel.bailey@gmail.com'\n}\n\n# Find all requests from roommates in June 2023\njune_roommate_reqs = []\nfor r in reqs:\n    sender_email = r.get('sender', {}).get('email')\n    created_at = r.get('created_at', '')\n    if sender_email in roommate_emails and created_at.startswith('2023-06'):\n        june_roommate_reqs.append(r)\n\nprint(f\"Total June roommate requests: {len(june_roommate_reqs)}\")\nfor r in june_roommate_reqs:\n    status = 'pending'\n    if r.get('approved_at'):\n        status = 'approved'\n    elif r.get('denied_at'):\n        status = 'denied'\n    print(f\"ID: {r['payment_request_id']}, Sender: {r['sender']['name']} ({r['sender']['email']}), Amount: {r['amount']}, Status: {status}, Created: {r['created_at']}, Desc: {r['description']}\")\n"
+   },
+   "observation": "Total June roommate requests: 25\nID: 6171, Sender: Anita Burch (anita.burch@gmail.com), Amount: 19.0, Status: denied, Created: 2023-06-23T13:12:31, Desc: \ud83d\udc7eArcade Night\nID: 6172, Sender: Melissa Bailey (mel.bailey@gmail.com), Amount: 20.0, Status: approved, Created: 2023-06-23T13:12:31, Desc: \ud83c\udfa4 Karaoke Night Entry Fees \ud83c\udfb6\nID: 6170, Sender: Melissa Bailey (mel.bailey@gmail.com), Amount: 16.0, Status: approved, Created: 2023-06-22T09:45:01, Desc: Dim Sum \ud83e\udd5f Brunch\nID: 6169, Sender: Melissa Bailey (mel.bailey@gmail.com), Amount: 58.0, Status: approved, Created: 2023-06-21T16:01:40, Desc: \ud83c\udfb8 Music Lessons\nID: 6166, Sender: Anita Burch (anita.burch@gmail.com), Amount: 20.0, Status: denied, Created: 2023-06-20T08:30:59, Desc: Bakery\nID: 6167, Sender: Anthony Harrison (an-harrison@gmail.com), Amount: 22.0, Status: denied, Created: 2023-06-20T08:30:59, Desc: \ud83c\udf79Margs Night\nID: 6168, Sender: Melissa Bailey (mel.bailey@gmail.com), Amount: 26.0, Status: pending, Created: 2023-06-20T08:30:59, Desc: Mani-pedi day \ud83d\udc85\nID: 6152, Sender: Anita Burch (anita.burch@gmail.com), Amount: 121.0, Status: approved, Created: 2023-06-13T12:45:07, Desc: Musical Instruments\nID: 6153, Sender: Anthony Harrison (an-harrison@gmail.com), Amount: 79.0, Status: approved, Created: 2023-06-13T12:45:07, Desc: Electronics\nID: 6149, Sender: Melissa Bailey (mel.bailey@gmail.com), Amount: 28.0, Status: pending, Created: 2023-06-12T08:00:59, Desc: Craft beers \ud83c\udf7a\nID: 6150, Sender: Anita Burch (anita.burch@gmail.com), Amount: 31.0, Status: approved, Created: 2023-06-12T08:00:59, Desc: Custom phone case\nID: 6151, Sender: Anthony Harrison (an-harrison@gmail.com), Amount: 12.0, Status: pending, Created: 2023-06-12T08:00:59, Desc: \ud83c\udf33 Park Picnic Snacks\nID: 6145, Sender: Anita Burch (anita.burch@gmail.com), Amount: 8.0, Status: pending, Created: 2023-06-10T09:00:02, Desc: \ud83e\uddfc Laundry Day \ud83e\uddfa\ud83d\udca6\nID: 6146, Sender: Melissa Bailey (mel.bailey@gmail.com), Amount: 13.0, Status: denied, Created: 2023-06-10T09:00:02, Desc: Taco Tuesday!\nID: 6147, Sender: Anthony Harrison (an-harrison@gmail.com), Amount: 171.0, Status: approved, Created: 2023-06-10T09:00:02, Desc: Hotel Stay\nID: 6143, Sender: Anthony Harrison (an-harrison@gmail.com), Amount: 116.0, Status: pending, Created: 2023-06-08T15:35:15, Desc: Musical Instruments\nID: 6137, Sender: Melissa Bailey (mel.bailey@gmail.com), Amount: 497.0, Status: pending, Created: 2023-06-06T12:14:52, Desc: Tech upgrade\nID: 6138, Sender: Anthony Harrison (an-harrison@gmail.com), Amount: 5.0, Status: pending, Created: 2023-06-06T12:14:52, Desc: Summer \ud83c\udf66 Ice Cream Run\nID: 6139, Sender: Anita Burch (anita.burch@gmail.com), Amount: 15.0, Status: pending, Created: 2023-06-06T12:14:52, Desc: Baking \ud83e\uddc1 Supplies\nID: 6133, Sender: Melissa Bailey (mel.bailey@gmail.com), Amount: 14.0, Status: approved, Created: 2023-06-04T12:48:45, Desc: Taxi Fare\nID: 6134, Sender: Anita Burch (anita.burch@gmail.com), Amount: 135.0, Status: denied, Created: 2023-06-04T12:48:45, Desc: Gym Membership\nID: 6135, Sender: Anthony Harrison (an-harrison@gmail.com), Amount: 75.0, Status: denied, Created: 2023-06-04T12:48:45, Desc: Festival \ud83c\udfb6 Tickets & Snacks\nID: 6130, Sender: Melissa Bailey (mel.bailey@gmail.com), Amount: 8.0, Status: denied, Created: 2023-06-03T14:32:33, Desc: \ud83e\uddfc Laundry Day \ud83e\uddfa\ud83d\udca6\nID: 6131, Sender: Anthony Harrison (an-harrison@gmail.com), Amount: 44.0, Status: pending, Created: 2023-06-03T14:32:33, Desc: \ud83c\udf9f\ufe0f Amusement Park Day Pass \ud83c\udfa2\nID: 6132, Sender: Anita Burch (anita.burch@gmail.com), Amount: 23.0, Status: approved, Created: 2023-06-03T14:32:33, Desc: \ud83d\udc90 Flower Shop \ud83c\udf39\ud83c\udf37\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198721295_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check payment cards or venmo balance to see how approval should be funded.\\nprint(apis.venmo.show_venmo_balance(access_token=venmo_token))\\nprint(apis.venmo.show_payment_cards(access_token=venmo_token))\\n\"}"
+     }
+    }
+   ],
+   "pt": 16232,
+   "ct": 82,
+   "cost": 0.0,
+   "step": 21
+  },
+  {
+   "type": "step",
+   "n": 22,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check payment cards or venmo balance to see how approval should be funded.\nprint(apis.venmo.show_venmo_balance(access_token=venmo_token))\nprint(apis.venmo.show_payment_cards(access_token=venmo_token))\n"
+   },
+   "observation": "{\"venmo_balance\": 551.0}\n[\n {\n  \"payment_card_id\": 216,\n  \"card_name\": \"Discover\",\n  \"owner_name\": \"Nicholas Weber\",\n  \"card_number\": 9832458809315956,\n  \"expiry_year\": 2022,\n  \"expiry_month\": 8,\n  \"cvv_number\": 729\n },\n {\n  \"payment_card_id\": 217,\n  \"card_name\": \"Visa\",\n  \"owner_name\": \"Nicholas Weber\",\n  \"card_number\": 9228490382699282,\n  \"expiry_year\": 2024,\n  \"expiry_month\": 1,\n  \"cvv_number\": 290\n },\n {\n  \"payment_card_id\": 218,\n  \"card_name\": \"Chase\",\n  \"owner_name\": \"Nicholas Weber\",\n  \"card_number\": 3765118917061094,\n  \"expiry_year\": 2024,\n  \"expiry_month\": 1,\n  \"cvv_number\": 393\n },\n {\n  \"payment_card_id\": 219,\n  \"card_name\": \"Wells Fargo\",\n  \"owner_name\": \"Nicholas Weber\",\n  \"card_number\": 8815119833112314,\n  \"expiry_year\": 2022,\n  \"expiry_month\": 11,\n  \"cvv_number\": 309\n }\n]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198723643_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check supervisor cards to see valid cards\\nprint(apis.supervisor.show_payment_cards())\\n\"}"
+     }
+    }
+   ],
+   "pt": 16745,
+   "ct": 40,
+   "cost": 0.0,
+   "step": 22
+  },
+  {
+   "type": "step",
+   "n": 23,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check supervisor cards to see valid cards\nprint(apis.supervisor.show_payment_cards())\n"
+   },
+   "observation": "[\n {\n  \"owner_name\": \"Nicholas Weber\",\n  \"card_name\": \"Discover\",\n  \"card_number\": 9832458809315956,\n  \"expiry_year\": 2022,\n  \"expiry_month\": 8,\n  \"cvv_number\": 729\n },\n {\n  \"owner_name\": \"Nicholas Weber\",\n  \"card_name\": \"Visa\",\n  \"card_number\": 9228490382699282,\n  \"expiry_year\": 2024,\n  \"expiry_month\": 1,\n  \"cvv_number\": 290\n },\n {\n  \"owner_name\": \"Nicholas Weber\",\n  \"card_name\": \"Chase\",\n  \"card_number\": 3765118917061094,\n  \"expiry_year\": 2024,\n  \"expiry_month\": 1,\n  \"cvv_number\": 393\n },\n {\n  \"owner_name\": \"Nicholas Weber\",\n  \"card_name\": \"Wells Fargo\",\n  \"card_number\": 8815119833112314,\n  \"expiry_year\": 2022,\n  \"expiry_month\": 11,\n  \"cvv_number\": 309\n }\n]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198728064_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check: can a denied request be approved? Or does the task mean approve the pending requests?\\n# \\\"Approve all venmo payment requests from my roommates from this calendar month.\\\"\\n# Let's check approve_payment_request api doc again:\\n# parameters: payment_request_id, access_token, payment_card_id\\n# If payment_card_id is not passed, Venmo balance will be used.\\n# But wait! Total amount of pending requests:\\npending_reqs = [r for r in june_roommate_reqs if not r.get('approved_at') and not r.get('denied_at')]\\nprint(f\\\"Pending requests count: {len(pending_reqs)}\\\")\\ntotal_pending_amount = sum(r['amount'] for r in pending_reqs)\\nprint(f\\\"Total pending amount: {total_pending_amount}\\\")\\nfor r in pending_reqs:\\n    print(r['payment_request_id'], r['amount'], r['sender']['name'])\\n\"}"
+     }
+    }
+   ],
+   "pt": 17062,
+   "ct": 245,
+   "cost": 0.0,
+   "step": 23
+  },
+  {
+   "type": "step",
+   "n": 24,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check: can a denied request be approved? Or does the task mean approve the pending requests?\n# \"Approve all venmo payment requests from my roommates from this calendar month.\"\n# Let's check approve_payment_request api doc again:\n# parameters: payment_request_id, access_token, payment_card_id\n# If payment_card_id is not passed, Venmo balance will be used.\n# But wait! Total amount of pending requests:\npending_reqs = [r for r in june_roommate_reqs if not r.get('approved_at') and not r.get('denied_at')]\nprint(f\"Pending requests count: {len(pending_reqs)}\")\ntotal_pending_amount = sum(r['amount'] for r in pending_reqs)\nprint(f\"Total pending amount: {total_pending_amount}\")\nfor r in pending_reqs:\n    print(r['payment_request_id'], r['amount'], r['sender']['name'])\n"
+   },
+   "observation": "Pending requests count: 9\nTotal pending amount: 751.0\n6168 26.0 Melissa Bailey\n6149 28.0 Melissa Bailey\n6151 12.0 Anthony Harrison\n6145 8.0 Anita Burch\n6143 116.0 Anthony Harrison\n6137 497.0 Melissa Bailey\n6138 5.0 Anthony Harrison\n6139 15.0 Anita Burch\n6131 44.0 Anthony Harrison\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198732232_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Notice total pending amount is $751, but Venmo balance is $551.\\n# What happens if we try to approve when balance is insufficient, or can we pass a payment_card_id?\\n# Let's check card 217 or 218 (Visa or Chase, both expire 2024).\\n# What if we can use payment_card_id, or what if venmo automatically pulls or errors?\\n# Let's test approving one small request or check doc.\\n# Wait, can already denied requests be approved? Let's check if denied requests can even be approved or if the API rejects it.\\n# But wait, what does \\\"Approve all venmo payment requests from my roommates from this calendar month\\\" mean?\\n# Usually, in payments, \\\"approve payment requests\\\" means the ones that are pending approval (or requests awaiting action).\\n# Can a denied request be approved? Let's test if an API allows approving a denied request, or if it raises an error.\\n# But let's check one of the denied requests on someone else first to see behavior, or inspect error message.\\n# Wait, let's search if there's any other denied request not related to our roommates, e.g. 6247:\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='approve_payment_request'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 17448,
+   "ct": 325,
+   "cost": 0.0,
+   "step": 24
+  },
+  {
+   "type": "step",
+   "n": 25,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Notice total pending amount is $751, but Venmo balance is $551.\n# What happens if we try to approve when balance is insufficient, or can we pass a payment_card_id?\n# Let's check card 217 or 218 (Visa or Chase, both expire 2024).\n# What if we can use payment_card_id, or what if venmo automatically pulls or errors?\n# Let's test approving one small request or check doc.\n# Wait, can already denied requests be approved? Let's check if denied requests can even be approved or if the API rejects it.\n# But wait, what does \"Approve all venmo payment requests from my roommates from this calendar month\" mean?\n# Usually, in payments, \"approve payment requests\" means the ones that are pending approval (or requests awaiting action).\n# Can a denied request be approved? Let's test if an API allows approving a denied request, or if it raises an error.\n# But let's check one of the denied requests on someone else first to see behavior, or inspect error message.\n# Wait, let's search if there's any other denied request not related to our roommates, e.g. 6247:\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='approve_payment_request'))\n"
+   },
+   "observation": "{\n \"app_name\": \"venmo\",\n \"api_name\": \"approve_payment_request\",\n \"path\": \"/payment_requests/{payment_request_id}/approve\",\n \"method\": \"POST\",\n \"description\": \"Approve a payment request.\",\n \"parameters\": [\n  {\n   \"name\": \"payment_request_id\",\n   \"type\": \"integer\",\n   \"required\": true,\n   \"description\": \"ID of the payment request to approve.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from venmo app login.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"payment_card_id\",\n   \"type\": \"integer\",\n   \"required\": false,\n   \"description\": \"ID of the payment card to use for approving the payment request. If not passed, Venmo balance will be used.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"message\": \"string\"\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198738614_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# What if we pass payment_card_id?\\n# Note: \\\"ID of the payment card to use for approving the payment request. If not passed, Venmo balance will be used.\\\"\\n# If payment_card_id is passed, does it charge the card directly?\\n# Let's check card 217 or 218. Card 217 is Visa (exp 2024).\\n# But wait! If Venmo balance is 551, and we don't pass payment_card_id, what happens if balance is not enough?\\n# Also, does user prefer using a card or venmo balance, or card 217?\\n# Let's check instructions:\\n# \\\"When I omit details, choose any valid value. Avoid collateral damage: only do what I explicitly ask.\\\"\\n# But wait! If we approve pending requests with a payment card (e.g. 217 or 218), or venmo balance?\\n# Wait, can we add to venmo balance? Or does approving with payment_card_id work directly without needing venmo balance?\\n# Let's check what happens if we approve a pending request with payment_card_id=217, or without payment_card_id.\\n# Wait, let's see how much balance is needed: 751.0 total.\\n# Let's test approving one small pending request, e.g. 6138 (amount 5.0).\\n# If we don't pass payment_card_id, it uses Venmo balance (551 - 5 = 546).\\n# But wait, what if we have 497 + 116 + 44 + 28 + 26 + 15 + 12 + 8 + 5 = 751?\\n# If we use venmo balance for first few, then balance becomes insufficient for 497!\\n# Wait, what if we use payment_card_id for all of them? Or what if payment_card_id is optional?\\n# Wait! Can we check how payment_cards work or what happens when approving?\\n\"}"
+     }
+    }
+   ],
+   "pt": 17996,
+   "ct": 492,
+   "cost": 0.0,
+   "step": 25
+  },
+  {
+   "type": "step",
+   "n": 26,
+   "tool": "execute_python",
+   "args": {
+    "code": "# What if we pass payment_card_id?\n# Note: \"ID of the payment card to use for approving the payment request. If not passed, Venmo balance will be used.\"\n# If payment_card_id is passed, does it charge the card directly?\n# Let's check card 217 or 218. Card 217 is Visa (exp 2024).\n# But wait! If Venmo balance is 551, and we don't pass payment_card_id, what happens if balance is not enough?\n# Also, does user prefer using a card or venmo balance, or card 217?\n# Let's check instructions:\n# \"When I omit details, choose any valid value. Avoid collateral damage: only do what I explicitly ask.\"\n# But wait! If we approve pending requests with a payment card (e.g. 217 or 218), or venmo balance?\n# Wait, can we add to venmo balance? Or does approving with payment_card_id work directly without needing venmo balance?\n# Let's check what happens if we approve a pending request with payment_card_id=217, or without payment_card_id.\n# Wait, let's see how much balance is needed: 751.0 total.\n# Let's test approving one small pending request, e.g. 6138 (amount 5.0).\n# If we don't pass payment_card_id, it uses Venmo balance (551 - 5 = 546).\n# But wait, what if we have 497 + 116 + 44 + 28 + 26 + 15 + 12 + 8 + 5 = 751?\n# If we use venmo balance for first few, then balance becomes insufficient for 497!\n# Wait, what if we use payment_card_id for all of them? Or what if payment_card_id is optional?\n# Wait! Can we check how payment_cards work or what happens when approving?\n"
+   },
+   "observation": "Execution successful."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198743360_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check past transactions to see how payments or payment requests were handled\\ntransactions = []\\npage = 0\\nwhile True:\\n    res = apis.venmo.show_transactions(access_token=venmo_token, page_index=page)\\n    if not res:\\n        break\\n    transactions.extend(res)\\n    page += 1\\n\\nprint(f\\\"Total transactions: {len(transactions)}\\\")\\nfor t in transactions[:5]:\\n    print(t)\\n\"}"
+     }
+    }
+   ],
+   "pt": 18585,
+   "ct": 124,
+   "cost": 0.0,
+   "step": 26
+  },
+  {
+   "type": "step",
+   "n": 27,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check past transactions to see how payments or payment requests were handled\ntransactions = []\npage = 0\nwhile True:\n    res = apis.venmo.show_transactions(access_token=venmo_token, page_index=page)\n    if not res:\n        break\n    transactions.extend(res)\n    page += 1\n\nprint(f\"Total transactions: {len(transactions)}\")\nfor t in transactions[:5]:\n    print(t)\n"
+   },
+   "observation": "Total transactions: 387\n{\n \"transaction_id\": 176,\n \"amount\": 39.0,\n \"description\": \"Pet Vaccination\",\n \"created_at\": \"2023-03-13T02:06:54\",\n \"updated_at\": \"2023-03-13T02:06:54\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"transaction_id\": 177,\n \"amount\": 20.0,\n \"description\": \"\\ud83c\\udfc0 Basketball Game Tix \\ud83c\\udf9f\\ufe0f\\ud83c\\udfc0\",\n \"created_at\": \"2023-02-12T16:56:11\",\n \"updated_at\": \"2023-02-12T16:56:11\",\n \"private\": false,\n \"like_count\": 1,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"transaction_id\": 178,\n \"amount\": 88.0,\n \"description\": \"Dinner\",\n \"created_at\": \"2022-11-03T00:44:54\",\n \"updated_at\": \"2022-11-03T00:44:54\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"transaction_id\": 179,\n \"amount\": 41.0,\n \"description\": \"Children's Toys\",\n \"created_at\": \"2023-01-03T02:22:11\",\n \"updated_at\": \"2023-01-03T02:22:11\",\n \"private\": false,\n \"like_count\": 5,\n \"payment_card_digits\": null,\n \"comment_count\": 4,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n{\n \"transaction_id\": 180,\n \"amount\": 396.0,\n \"description\": \"Tech upgrade\",\n \"created_at\": \"2023-03-26T23:40:11\",\n \"updated_at\": \"2023-03-26T23:40:11\",\n \"private\": true,\n \"like_count\": 2,\n \"payment_card_digits\": null,\n \"comment_count\": 2,\n \"sender\": {\n  \"name\": \"Chris Mccoy\",\n  \"email\": \"chris.mcco@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198749472_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Look at transaction 176+: payment_card_digits: null (which means venmo balance was used or vice versa).\\n# Let's see some transactions where Nicholas is the sender!\\nsender_txs = [t for t in transactions if t.get('sender', {}).get('email') == 'nicholas.weber@gmail.com']\\nprint(f\\\"Transactions sent by Nicholas: {len(sender_txs)}\\\")\\nfor t in sender_txs[:5]:\\n    print(t)\\n\"}"
+     }
+    }
+   ],
+   "pt": 19618,
+   "ct": 130,
+   "cost": 0.0,
+   "step": 27
+  },
+  {
+   "type": "step",
+   "n": 28,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Look at transaction 176+: payment_card_digits: null (which means venmo balance was used or vice versa).\n# Let's see some transactions where Nicholas is the sender!\nsender_txs = [t for t in transactions if t.get('sender', {}).get('email') == 'nicholas.weber@gmail.com']\nprint(f\"Transactions sent by Nicholas: {len(sender_txs)}\")\nfor t in sender_txs[:5]:\n    print(t)\n"
+   },
+   "observation": "Transactions sent by Nicholas: 201\n{\n \"transaction_id\": 515,\n \"amount\": 49.0,\n \"description\": \"Video Games\",\n \"created_at\": \"2023-01-06T15:32:10\",\n \"updated_at\": \"2023-01-06T15:32:10\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Katherine Smith\",\n  \"email\": \"ka_ball@gmail.com\"\n }\n}\n{\n \"transaction_id\": 516,\n \"amount\": 30.0,\n \"description\": \"\\ud83c\\udf64 Seafood Dinner\",\n \"created_at\": \"2023-03-19T07:58:32\",\n \"updated_at\": \"2023-03-19T07:58:32\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Katherine Smith\",\n  \"email\": \"ka_ball@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1923,\n \"amount\": 68.0,\n \"description\": \"Treat Yo' Self \\ud83d\\udc86\",\n \"created_at\": \"2023-04-05T08:04:19\",\n \"updated_at\": \"2023-04-05T08:04:19\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1924,\n \"amount\": 256.0,\n \"description\": \"Language Classes\",\n \"created_at\": \"2023-03-21T06:08:34\",\n \"updated_at\": \"2023-03-21T06:08:34\",\n \"private\": true,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n }\n}\n{\n \"transaction_id\": 1925,\n \"amount\": 78.0,\n \"description\": \"\\ud83e\\uddf3 Travel Fund \\ud83c\\udf0d\\u2708\\ufe0f\",\n \"created_at\": \"2023-02-03T21:37:50\",\n \"updated_at\": \"2023-02-03T21:37:50\",\n \"private\": false,\n \"like_count\": 0,\n \"payment_card_digits\": null,\n \"comment_count\": 0,\n \"sender\": {\n  \"name\": \"Nicholas Weber\",\n  \"email\": \"nicholas.weber@gmail.com\"\n },\n \"receiver\": {\n  \"name\": \"Susan Burton\",\n  \"email\": \"susanmiller@gmail.com\"\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198751735_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check any transaction in June 2023 sent by Nicholas\\njune_sender_txs = [t for t in sender_txs if t.get('created_at', '').startswith('2023-06')]\\nfor t in june_sender_txs:\\n    print(t['transaction_id'], t['amount'], t['payment_card_digits'], t['receiver']['name'], t['description'])\\n\"}"
+     }
+    }
+   ],
+   "pt": 20741,
+   "ct": 114,
+   "cost": 0.0,
+   "step": 28
+  },
+  {
+   "type": "step",
+   "n": 29,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check any transaction in June 2023 sent by Nicholas\njune_sender_txs = [t for t in sender_txs if t.get('created_at', '').startswith('2023-06')]\nfor t in june_sender_txs:\n    print(t['transaction_id'], t['amount'], t['payment_card_digits'], t['receiver']['name'], t['description'])\n"
+   },
+   "observation": "8240 169.0 None Melissa Bailey \ud83c\udf9f\ufe0f Concert Tickets\n8241 48.0 None Anita Burch \ud83c\udf3a Farmers Market Haul\n8242 20.0 None Anthony Harrison \ud83c\udfac Movie Marathon Night \ud83c\udf7f\n8243 15.0 None Anthony Harrison \ud83c\udf5c Ramen Night \ud83c\udf5c\ud83e\udd62\n8251 20.0 9282 Melissa Bailey \ud83d\udcf1 App Store Fun\n8253 18.0 9282 Melissa Bailey \ud83c\udf71Bento Box Fix\n8254 60.0 9282 Anthony Harrison \ud83d\udc53New Specs\n8255 24.0 None Melissa Bailey Cosmetics\n8256 25.0 9282 Anita Burch \ud83c\udf2e Spicy Mexican Food Night \ud83c\udf36\ufe0f\n8257 138.0 None Anita Burch Birthday Gift\n8258 106.0 None Anthony Harrison \ud83d\udc5fFresh Kicks\n8259 85.0 None Melissa Bailey \ud83d\udc5fFresh Kicks\n8260 34.0 None Anita Burch \ud83d\udd2d Stargazing Trip Essentials \ud83c\udf0c\n8261 10.0 1094 Anthony Harrison Netflix binge weekend\n8265 200.0 None Anthony Harrison Utilities\n8266 82.0 None Melissa Bailey Video Games\n8267 38.0 1094 Anita Burch Dinner \ud83c\udf74 Date Night\n8270 27.0 9282 Anthony Harrison \ud83c\udf31Plant Babies\n8271 40.0 None Melissa Bailey Brunchin' \ud83e\udd42\n8272 83.0 9282 Anita Burch Gardening Supplies\n8273 28.0 None Anthony Harrison Fishing License\n8274 4.0 None Melissa Bailey Caffeine Fix \u2615\n8275 9.0 None Anita Burch \ud83c\udf2eTaco Vibes\n8276 85.0 None Melissa Bailey Grocery \ud83d\uded2 Haul\n8277 7.0 None Anita Burch Quick coffee fix \u2615\n8278 23.0 None Melissa Bailey Pizza & \ud83c\udfa5 Netflix\n8279 32.0 None Anita Burch \ud83d\udef5 Weekend Scooter Rental \ud83c\udf06\n8280 18.0 None Anthony Harrison \ud83d\udcf1 App Store Fun\n8301 23.0 None Anita Burch \ud83d\udc90 Flower Shop \ud83c\udf39\ud83c\udf37\n8302 14.0 None Melissa Bailey Taxi Fare\n8305 171.0 None Anthony Harrison Hotel Stay\n8307 31.0 None Anita Burch Custom phone case\n8308 121.0 None Anita Burch Musical Instruments\n8309 79.0 None Anthony Harrison Electronics\n8317 58.0 None Melissa Bailey \ud83c\udfb8 Music Lessons\n8318 16.0 None Melissa Bailey Dim Sum \ud83e\udd5f Brunch\n8319 20.0 None Melissa Bailey \ud83c\udfa4 Karaoke Night Entry Fees \ud83c\udfb6\n8349 62.0 None Kyle Moore \ud83d\udc84Makeup Haul\n8350 377.0 1094 Chris Mccoy Charity Donation\n8351 10.0 1094 Chelsea Burch \ud83c\udf69 Donut Delight \ud83c\udf69\ud83d\udc95\n8355 19.0 None Eric Bailey Food delivery \ud83c\udf55\n8356 26.0 None Chelsea Burch \ud83c\udf5c Ramen Night in Downtown \ud83c\udf03\n8357 33.0 None Valerie Blackburn \ud83c\udf54 Weekend BBQ Supplies\n8359 20.0 9282 Patricia Ritter Escape room fun\n8360 71.0 None Kyle Moore Tattoo\n8361 88.0 None Patricia Ritter Festival \ud83c\udfb6 Tickets & Snacks\n8362 17.0 None Susan Burton \ud83c\udf69 Donuts for the Team Meeting \ud83d\udcc8\n8363 26.0 None Chris Mccoy \ud83c\udfb3 Bowling Alley Fun Night \ud83e\udd17\n8366 47.0 None Valerie Blackburn Dinner \ud83c\udf74 Date Night\n8370 23.0 None Patricia Ritter Skincare \ud83d\udc86\ud83c\udf3f\n8378 8.0 9282 Chelsea Burch \ud83c\udf80 Gift Wrapping \ud83c\udf81\ud83c\udf80\n8382 14.0 None Susan Burton Movie \ud83c\udf9f\ufe0f Night\n8383 116.0 None Kyle Moore Cooking Ingredients\n8384 27.0 None Chelsea Burch \ud83c\udf93 Graduation Gift \ud83c\udf89\ud83c\udf81\n8385 63.0 None Chris Mccoy Festival \ud83c\udfb6 Tickets & Snacks\n8386 8.0 1094 Eric Bailey \ud83d\udef5Scooter Ride\n8387 176.0 None Patricia Ritter Clothing\n8390 29.0 None Susan Burton \ud83d\udc8d Small Gift \ud83d\udc8d\ud83d\udc96\n8391 35.0 None Valerie Blackburn Coffee \u2615 Workshop\n8392 21.0 None Chris Mccoy Coffee \u2615 Workshop\n8412 16.0 None Valerie Blackburn \ud83c\udfac Movie Marathon Night \ud83c\udf7f\n8413 37.0 None Eric Bailey Vegan Dinner \ud83c\udf31\ud83d\udc9a\n8416 69.0 None Chris Mccoy Sporting Event\n8423 30.0 None Valerie Blackburn \ud83d\udc7b Haunted House Adventure \ud83c\udf83\n8424 185.0 None Chris Mccoy Sporting Event\n8428 14.0 None Eric Bailey \ud83c\udf2eTaco Vibes\n8429 38.0 None Kyle Moore \ud83c\udfca Pool Party Supplies\n8431 59.0 None Chris Mccoy \ud83c\udf64 Seafood Dinner\n8432 18.0 None Susan Burton \ud83c\udf79 Happy Hour Fund\n8433 20.0 None Eric Bailey \ud83d\udc8a Pharmacy Stuff \ud83c\udf21\ufe0f\ud83d\udc8a\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198757703_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Look at transactions 8301, 8302, 8305, etc.\\n# 8301: 23.0 Anita Burch \\\"Flower Shop\\\" - matches payment request 6132!\\n# 8302: 14.0 Melissa Bailey \\\"Taxi Fare\\\" - matches payment request 6133!\\n# 8305: 171.0 Anthony Harrison \\\"Hotel Stay\\\" - matches payment request 6147!\\n# 8307: 31.0 Anita Burch \\\"Custom phone case\\\" - matches payment request 6150!\\n# 8308: 121.0 Anita Burch \\\"Musical Instruments\\\" - matches payment request 6152!\\n# 8309: 79.0 Anthony Harrison \\\"Electronics\\\" - matches payment request 6153!\\n# 8317: 58.0 Melissa Bailey \\\"Music Lessons\\\" - matches payment request 6169!\\n# 8318: 16.0 Melissa Bailey \\\"Dim Sum Brunch\\\" - matches payment request 6170!\\n# 8319: 20.0 Melissa Bailey \\\"Karaoke Night\\\" - matches payment request 6172!\\n\\n# All of those have payment_card_digits: None! That means they were approved using Venmo balance (or default when payment_card_id is not passed / passed card).\\n# But wait! What happens if venmo balance is not enough?\\n# Let's check: total pending is 751.0, and balance is 551.0.\\n# If we try to approve with venmo balance and it's insufficient, does it fail?\\n# Or can we use payment_card_id?\\n# Let's see what cards we have:\\n# 217: Visa ending in 9282 (exp 2024/01)\\n# 218: Chase ending in 1094 (exp 2024/01)\\n# Notice in the transactions above: 9282 and 1094 are both used by Nicholas!\\n# Let's test approving one of the pending requests with Venmo balance first (e.g. 6138 for 5.0) to see what response looks like.\\nres = apis.venmo.approve_payment_request(payment_request_id=6138, access_token=venmo_token)\\nprint(\\\"Approve 6138 result:\\\", res)\\nprint(\\\"New venmo balance:\\\", apis.venmo.show_venmo_balance(access_token=venmo_token))\\n\"}"
+     }
+    }
+   ],
+   "pt": 22179,
+   "ct": 626,
+   "cost": 0.0,
+   "step": 29
+  },
+  {
+   "type": "step",
+   "n": 30,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Look at transactions 8301, 8302, 8305, etc.\n# 8301: 23.0 Anita Burch \"Flower Shop\" - matches payment request 6132!\n# 8302: 14.0 Melissa Bailey \"Taxi Fare\" - matches payment request 6133!\n# 8305: 171.0 Anthony Harrison \"Hotel Stay\" - matches payment request 6147!\n# 8307: 31.0 Anita Burch \"Custom phone case\" - matches payment request 6150!\n# 8308: 121.0 Anita Burch \"Musical Instruments\" - matches payment request 6152!\n# 8309: 79.0 Anthony Harrison \"Electronics\" - matches payment request 6153!\n# 8317: 58.0 Melissa Bailey \"Music Lessons\" - matches payment request 6169!\n# 8318: 16.0 Melissa Bailey \"Dim Sum Brunch\" - matches payment request 6170!\n# 8319: 20.0 Melissa Bailey \"Karaoke Night\" - matches payment request 6172!\n\n# All of those have payment_card_digits: None! That means they were approved using Venmo balance (or default when payment_card_id is not passed / passed card).\n# But wait! What happens if venmo balance is not enough?\n# Let's check: total pending is 751.0, and balance is 551.0.\n# If we try to approve with venmo balance and it's insufficient, does it fail?\n# Or can we use payment_card_id?\n# Let's see what cards we have:\n# 217: Visa ending in 9282 (exp 2024/01)\n# 218: Chase ending in 1094 (exp 2024/01)\n# Notice in the transactions above: 9282 and 1094 are both used by Nicholas!\n# Let's test approving one of the pending requests with Venmo balance first (e.g. 6138 for 5.0) to see what response looks like.\nres = apis.venmo.approve_payment_request(payment_request_id=6138, access_token=venmo_token)\nprint(\"Approve 6138 result:\", res)\nprint(\"New venmo balance:\", apis.venmo.show_venmo_balance(access_token=venmo_token))\n"
+   },
+   "observation": "Approve 6138 result: {'message': 'Payment request approved.'}\nNew venmo balance: {'venmo_balance': 546.0}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198762254_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# It succeeded!\\n# Now let's see what happens if we approve 6137 (amount: 497.0).\\n# Balance is 546.0, which is enough for 497.0 (546 - 497 = 49).\\n# But then the remaining requests would need:\\n# 6168: 26.0\\n# 6149: 28.0\\n# 6151: 12.0\\n# 6145: 8.0\\n# 6143: 116.0\\n# 6139: 15.0\\n# 6131: 44.0\\n# Total remaining: 26 + 28 + 12 + 8 + 116 + 15 + 44 = 249.0.\\n# But balance would only be 49.0!\\n# What happens if we try to approve when balance is insufficient?\\n# Let's check: can we use a card, or can we add money to venmo balance?\\n# Let's check `add_to_venmo_balance` doc!\\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='add_to_venmo_balance'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 22521,
+   "ct": 326,
+   "cost": 0.0,
+   "step": 30
+  },
+  {
+   "type": "step",
+   "n": 31,
+   "tool": "execute_python",
+   "args": {
+    "code": "# It succeeded!\n# Now let's see what happens if we approve 6137 (amount: 497.0).\n# Balance is 546.0, which is enough for 497.0 (546 - 497 = 49).\n# But then the remaining requests would need:\n# 6168: 26.0\n# 6149: 28.0\n# 6151: 12.0\n# 6145: 8.0\n# 6143: 116.0\n# 6139: 15.0\n# 6131: 44.0\n# Total remaining: 26 + 28 + 12 + 8 + 116 + 15 + 44 = 249.0.\n# But balance would only be 49.0!\n# What happens if we try to approve when balance is insufficient?\n# Let's check: can we use a card, or can we add money to venmo balance?\n# Let's check `add_to_venmo_balance` doc!\nprint(apis.api_docs.show_api_doc(app_name='venmo', api_name='add_to_venmo_balance'))\n"
+   },
+   "observation": "{\n \"app_name\": \"venmo\",\n \"api_name\": \"add_to_venmo_balance\",\n \"path\": \"/balance\",\n \"method\": \"POST\",\n \"description\": \"Add money to your Venmo balance.\",\n \"parameters\": [\n  {\n   \"name\": \"amount\",\n   \"type\": \"number\",\n   \"required\": true,\n   \"description\": \"Amount to add to Venmo balance.\",\n   \"default\": null,\n   \"constraints\": [\n    \"value > 0.0\"\n   ]\n  },\n  {\n   \"name\": \"payment_card_id\",\n   \"type\": \"integer\",\n   \"required\": true,\n   \"description\": \"ID of the payment card to use for adding balance.\",\n   \"default\": null,\n   \"constraints\": []\n  },\n  {\n   \"name\": \"access_token\",\n   \"type\": \"string\",\n   \"required\": true,\n   \"description\": \"Access token obtained from venmo app login.\",\n   \"default\": null,\n   \"constraints\": []\n  }\n ],\n \"response_schemas\": {\n  \"success\": {\n   \"message\": \"string\",\n   \"bank_transfer_id\": 1\n  },\n  \"failure\": {\n   \"message\": \"string\"\n  }\n }\n}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198769122_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# But wait! Why add to venmo balance when approve_payment_request accepts payment_card_id?\\n# Let's check: approve_payment_request has:\\n# payment_card_id: \\\"ID of the payment card to use for approving the payment request. If not passed, Venmo balance will be used.\\\"\\n# If payment_card_id IS passed, it uses the payment card directly!\\n# But wait, what if we pass payment_card_id vs not pass payment_card_id?\\n# Wait, can we pass payment_card_id=217 (Visa) when approving?\\n# Or does the user have enough balance if we don't use balance for all of them, or should we pass payment_card_id, or use balance while available then card?\\n# Wait! Let's re-read the task carefully:\\n# \\\"Approve all venmo payment requests from my roommates from this calendar month.\\\"\\n# It doesn't specify payment method!\\n# \\\"When I omit details, choose any valid value. Avoid collateral damage: only do what I explicitly ask.\\\"\\n# But wait, if Venmo balance is used when payment_card_id is not passed, what does the server do if balance is insufficient?\\n# Let's check! If balance is insufficient, it might return an error like \\\"Insufficient balance\\\".\\n# If we pass payment_card_id (e.g. 217 or 218), it charges the card.\\n# Wait, why not pass payment_card_id=217 if needed, or pass payment_card_id=217 for all, or try without payment_card_id and if insufficient use card?\\n# Wait, let's see: what did Nicholas do previously?\\n# Look at the previous approvals from June:\\n# 8301, 8302, 8305, 8307, 8308, 8309, 8317, 8318, 8319 - ALL had payment_card_digits: None!\\n# That means Nicholas approved them using his Venmo balance!\\n# But wait! Why does Nicholas have 546 balance right now?\\n# Did he receive money? Let's check bank transfer history or received money!\\nprint(apis.venmo.show_bank_transfer_history(access_token=venmo_token))\\n\"}"
+     }
+    }
+   ],
+   "pt": 22132,
+   "ct": 548,
+   "cost": 0.0,
+   "step": 31
+  },
+  {
+   "type": "step",
+   "n": 32,
+   "tool": "execute_python",
+   "args": {
+    "code": "# But wait! Why add to venmo balance when approve_payment_request accepts payment_card_id?\n# Let's check: approve_payment_request has:\n# payment_card_id: \"ID of the payment card to use for approving the payment request. If not passed, Venmo balance will be used.\"\n# If payment_card_id IS passed, it uses the payment card directly!\n# But wait, what if we pass payment_card_id vs not pass payment_card_id?\n# Wait, can we pass payment_card_id=217 (Visa) when approving?\n# Or does the user have enough balance if we don't use balance for all of them, or should we pass payment_card_id, or use balance while available then card?\n# Wait! Let's re-read the task carefully:\n# \"Approve all venmo payment requests from my roommates from this calendar month.\"\n# It doesn't specify payment method!\n# \"When I omit details, choose any valid value. Avoid collateral damage: only do what I explicitly ask.\"\n# But wait, if Venmo balance is used when payment_card_id is not passed, what does the server do if balance is insufficient?\n# Let's check! If balance is insufficient, it might return an error like \"Insufficient balance\".\n# If we pass payment_card_id (e.g. 217 or 218), it charges the card.\n# Wait, why not pass payment_card_id=217 if needed, or pass payment_card_id=217 for all, or try without payment_card_id and if insufficient use card?\n# Wait, let's see: what did Nicholas do previously?\n# Look at the previous approvals from June:\n# 8301, 8302, 8305, 8307, 8308, 8309, 8317, 8318, 8319 - ALL had payment_card_digits: None!\n# That means Nicholas approved them using his Venmo balance!\n# But wait! Why does Nicholas have 546 balance right now?\n# Did he receive money? Let's check bank transfer history or received money!\nprint(apis.venmo.show_bank_transfer_history(access_token=venmo_token))\n"
+   },
+   "observation": "[]\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198772709_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's check: can a denied request be approved?\\n# Let's see what happens if we try to approve a denied request, e.g. 6171 (which is currently denied)\\ntry:\\n    apis.venmo.approve_payment_request(payment_request_id=6171, access_token=venmo_token)\\n    print(\\\"Could approve 6171!\\\")\\nexcept Exception as e:\\n    print(\\\"Error approving 6171:\\\", e)\\n\"}"
+     }
+    }
+   ],
+   "pt": 22531,
+   "ct": 129,
+   "cost": 0.0,
+   "step": 32
+  },
+  {
+   "type": "step",
+   "n": 33,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's check: can a denied request be approved?\n# Let's see what happens if we try to approve a denied request, e.g. 6171 (which is currently denied)\ntry:\n    apis.venmo.approve_payment_request(payment_request_id=6171, access_token=venmo_token)\n    print(\"Could approve 6171!\")\nexcept Exception as e:\n    print(\"Error approving 6171:\", e)\n"
+   },
+   "observation": "Error approving 6171: Response status code is 422:\n{\"message\":\"This payment request has already been completed.\"}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198777056_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Once a payment request is completed (approved or denied), it cannot be approved!\\n# So only pending payment requests can be approved.\\n# Let's verify all pending requests from roommates from this calendar month (June 2023).\\n\\n# Let's list the pending requests again:\\ncurrent_pending = []\\nfor r in june_roommate_reqs:\\n    if r['payment_request_id'] == 6138: # we already approved 6138\\n        continue\\n    if not r.get('approved_at') and not r.get('denied_at'):\\n        current_pending.append(r)\\n\\nprint(\\\"Remaining pending requests:\\\")\\nfor r in current_pending:\\n    print(r['payment_request_id'], r['amount'], r['sender']['name'], r['description'])\\n\"}"
+     }
+    }
+   ],
+   "pt": 22463,
+   "ct": 200,
+   "cost": 0.0,
+   "step": 33
+  },
+  {
+   "type": "step",
+   "n": 34,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Once a payment request is completed (approved or denied), it cannot be approved!\n# So only pending payment requests can be approved.\n# Let's verify all pending requests from roommates from this calendar month (June 2023).\n\n# Let's list the pending requests again:\ncurrent_pending = []\nfor r in june_roommate_reqs:\n    if r['payment_request_id'] == 6138: # we already approved 6138\n        continue\n    if not r.get('approved_at') and not r.get('denied_at'):\n        current_pending.append(r)\n\nprint(\"Remaining pending requests:\")\nfor r in current_pending:\n    print(r['payment_request_id'], r['amount'], r['sender']['name'], r['description'])\n"
+   },
+   "observation": "Remaining pending requests:\n6168 26.0 Melissa Bailey Mani-pedi day \ud83d\udc85\n6149 28.0 Melissa Bailey Craft beers \ud83c\udf7a\n6151 12.0 Anthony Harrison \ud83c\udf33 Park Picnic Snacks\n6145 8.0 Anita Burch \ud83e\uddfc Laundry Day \ud83e\uddfa\ud83d\udca6\n6143 116.0 Anthony Harrison Musical Instruments\n6137 497.0 Melissa Bailey Tech upgrade\n6139 15.0 Anita Burch Baking \ud83e\uddc1 Supplies\n6131 44.0 Anthony Harrison \ud83c\udf9f\ufe0f Amusement Park Day Pass \ud83c\udfa2\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198783415_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's see: current venmo balance is 546.0.\\n# If we approve 6168 (26), 6149 (28), 6151 (12), 6145 (8), 6143 (116), 6139 (15), 6131 (44):\\n# Sum of those: 26 + 28 + 12 + 8 + 116 + 15 + 44 = 249.\\n# 546 - 249 = 297.\\n# Then 6137 is 497. 297 is not enough for 497!\\n# Let's see what happens if we approve with a payment card vs venmo balance.\\n# Let's check card 217 (Visa):\\n# \\\"payment_card_id\\\": 217, \\\"card_name\\\": \\\"Visa\\\", \\\"owner_name\\\": \\\"Nicholas Weber\\\", \\\"card_number\\\": 9228490382699282, \\\"expiry_year\\\": 2024, \\\"expiry_month\\\": 1\\n# Let's see: if we pass payment_card_id=217 to approve_payment_request, does it work?\\n# Wait, or does approving without payment_card_id work when balance is sufficient, and for 6137 use payment_card_id=217?\\n# Or can we use payment_card_id=217 for all, or use balance when possible?\\n# Wait! Can we test approve with payment_card_id or check if payment_card_id is preferred?\\n# Let's check the instruction:\\n# \\\"When I omit details, choose any valid value. Avoid collateral damage: only do what I explicitly ask.\\\"\\n# Notice: \\\"choose any valid value\\\".\\n# That means any valid payment method (card or balance) is completely fine!\\n# But wait, does balance work first?\\n# Let's approve the ones that fit in balance first, or can we approve with balance until balance is insufficient, then use card 217?\\n# Wait, what if we use card 217 for 6137, or add money to venmo balance, or just pass payment_card_id=217?\\n# Wait, why not pass payment_card_id=217 for 6137?\\n# Let's check: does approve_payment_request with payment_card_id=217 work?\\n\"}"
+     }
+    }
+   ],
+   "pt": 22304,
+   "ct": 599,
+   "cost": 0.0,
+   "step": 34
+  },
+  {
+   "type": "step",
+   "n": 35,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's see: current venmo balance is 546.0.\n# If we approve 6168 (26), 6149 (28), 6151 (12), 6145 (8), 6143 (116), 6139 (15), 6131 (44):\n# Sum of those: 26 + 28 + 12 + 8 + 116 + 15 + 44 = 249.\n# 546 - 249 = 297.\n# Then 6137 is 497. 297 is not enough for 497!\n# Let's see what happens if we approve with a payment card vs venmo balance.\n# Let's check card 217 (Visa):\n# \"payment_card_id\": 217, \"card_name\": \"Visa\", \"owner_name\": \"Nicholas Weber\", \"card_number\": 9228490382699282, \"expiry_year\": 2024, \"expiry_month\": 1\n# Let's see: if we pass payment_card_id=217 to approve_payment_request, does it work?\n# Wait, or does approving without payment_card_id work when balance is sufficient, and for 6137 use payment_card_id=217?\n# Or can we use payment_card_id=217 for all, or use balance when possible?\n# Wait! Can we test approve with payment_card_id or check if payment_card_id is preferred?\n# Let's check the instruction:\n# \"When I omit details, choose any valid value. Avoid collateral damage: only do what I explicitly ask.\"\n# Notice: \"choose any valid value\".\n# That means any valid payment method (card or balance) is completely fine!\n# But wait, does balance work first?\n# Let's approve the ones that fit in balance first, or can we approve with balance until balance is insufficient, then use card 217?\n# Wait, what if we use card 217 for 6137, or add money to venmo balance, or just pass payment_card_id=217?\n# Wait, why not pass payment_card_id=217 for 6137?\n# Let's check: does approve_payment_request with payment_card_id=217 work?\n"
+   },
+   "observation": "Execution successful."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198788410_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's test approving one with balance:\\n# 6168: 26.0\\nres = apis.venmo.approve_payment_request(payment_request_id=6168, access_token=venmo_token)\\nprint(\\\"6168:\\\", res)\\n# 6149: 28.0\\nres = apis.venmo.approve_payment_request(payment_request_id=6149, access_token=venmo_token)\\nprint(\\\"6149:\\\", res)\\n# 6151: 12.0\\nres = apis.venmo.approve_payment_request(payment_request_id=6151, access_token=venmo_token)\\nprint(\\\"6151:\\\", res)\\n# 6145: 8.0\\nres = apis.venmo.approve_payment_request(payment_request_id=6145, access_token=venmo_token)\\nprint(\\\"6145:\\\", res)\\n# 6143: 116.0\\nres = apis.venmo.approve_payment_request(payment_request_id=6143, access_token=venmo_token)\\nprint(\\\"6143:\\\", res)\\n# 6139: 15.0\\nres = apis.venmo.approve_payment_request(payment_request_id=6139, access_token=venmo_token)\\nprint(\\\"6139:\\\", res)\\n# 6131: 44.0\\nres = apis.venmo.approve_payment_request(payment_request_id=6131, access_token=venmo_token)\\nprint(\\\"6131:\\\", res)\\nprint(\\\"Current venmo balance:\\\", apis.venmo.show_venmo_balance(access_token=venmo_token))\\n\"}"
+     }
+    }
+   ],
+   "pt": 22805,
+   "ct": 462,
+   "cost": 0.0,
+   "step": 35
+  },
+  {
+   "type": "step",
+   "n": 36,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's test approving one with balance:\n# 6168: 26.0\nres = apis.venmo.approve_payment_request(payment_request_id=6168, access_token=venmo_token)\nprint(\"6168:\", res)\n# 6149: 28.0\nres = apis.venmo.approve_payment_request(payment_request_id=6149, access_token=venmo_token)\nprint(\"6149:\", res)\n# 6151: 12.0\nres = apis.venmo.approve_payment_request(payment_request_id=6151, access_token=venmo_token)\nprint(\"6151:\", res)\n# 6145: 8.0\nres = apis.venmo.approve_payment_request(payment_request_id=6145, access_token=venmo_token)\nprint(\"6145:\", res)\n# 6143: 116.0\nres = apis.venmo.approve_payment_request(payment_request_id=6143, access_token=venmo_token)\nprint(\"6143:\", res)\n# 6139: 15.0\nres = apis.venmo.approve_payment_request(payment_request_id=6139, access_token=venmo_token)\nprint(\"6139:\", res)\n# 6131: 44.0\nres = apis.venmo.approve_payment_request(payment_request_id=6131, access_token=venmo_token)\nprint(\"6131:\", res)\nprint(\"Current venmo balance:\", apis.venmo.show_venmo_balance(access_token=venmo_token))\n"
+   },
+   "observation": "6168: {'message': 'Payment request approved.'}\n6149: {'message': 'Payment request approved.'}\n6151: {'message': 'Payment request approved.'}\n6145: {'message': 'Payment request approved.'}\n6143: {'message': 'Payment request approved.'}\n6139: {'message': 'Payment request approved.'}\n6131: {'message': 'Payment request approved.'}\nCurrent venmo balance: {'venmo_balance': 297.0}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198791556_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Now let's try approving 6137 (amount: 497.0).\\n# Let's see what happens if we try without card:\\ntry:\\n    res = apis.venmo.approve_payment_request(payment_request_id=6137, access_token=venmo_token)\\n    print(\\\"Without card:\\\", res)\\nexcept Exception as e:\\n    print(\\\"Without card failed as expected:\\\", e)\\n\"}"
+     }
+    }
+   ],
+   "pt": 23179,
+   "ct": 118,
+   "cost": 0.0,
+   "step": 36
+  },
+  {
+   "type": "step",
+   "n": 37,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Now let's try approving 6137 (amount: 497.0).\n# Let's see what happens if we try without card:\ntry:\n    res = apis.venmo.approve_payment_request(payment_request_id=6137, access_token=venmo_token)\n    print(\"Without card:\", res)\nexcept Exception as e:\n    print(\"Without card failed as expected:\", e)\n"
+   },
+   "observation": "Without card failed as expected: Response status code is 422:\n{\"message\":\"Insufficient money in the Venmo balance.\"}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198794810_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Awesome! It failed with \\\"Insufficient money in the Venmo balance.\\\"\\n# Now let's approve 6137 using payment_card_id=217 (Visa ending in 9282, valid card)!\\nres = apis.venmo.approve_payment_request(payment_request_id=6137, access_token=venmo_token, payment_card_id=217)\\nprint(\\\"With card 217:\\\", res)\\n\"}"
+     }
+    }
+   ],
+   "pt": 23139,
+   "ct": 123,
+   "cost": 0.0,
+   "step": 37
+  },
+  {
+   "type": "step",
+   "n": 38,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Awesome! It failed with \"Insufficient money in the Venmo balance.\"\n# Now let's approve 6137 using payment_card_id=217 (Visa ending in 9282, valid card)!\nres = apis.venmo.approve_payment_request(payment_request_id=6137, access_token=venmo_token, payment_card_id=217)\nprint(\"With card 217:\", res)\n"
+   },
+   "observation": "With card 217: {'message': 'Payment request approved.'}\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198798176_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Perfect!\\n# Now let's fetch all received payment requests from Venmo again to verify everything.\\nreqs = []\\npage = 0\\nwhile True:\\n    res = apis.venmo.show_received_payment_requests(access_token=venmo_token, page_index=page)\\n    if not res:\\n        break\\n    reqs.extend(res)\\n    page += 1\\n\\n# Check all requests from roommates in June 2023\\npending_remaining = []\\nfor r in reqs:\\n    sender_email = r.get('sender', {}).get('email')\\n    created_at = r.get('created_at', '')\\n    if sender_email in roommate_emails and created_at.startswith('2023-06'):\\n        if not r.get('approved_at') and not r.get('denied_at'):\\n            pending_remaining.append(r)\\n\\nprint(f\\\"Remaining pending roommate requests: {len(pending_remaining)}\\\")\\n\"}"
+     }
+    }
+   ],
+   "pt": 23156,
+   "ct": 244,
+   "cost": 0.0,
+   "step": 38
+  },
+  {
+   "type": "step",
+   "n": 39,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Perfect!\n# Now let's fetch all received payment requests from Venmo again to verify everything.\nreqs = []\npage = 0\nwhile True:\n    res = apis.venmo.show_received_payment_requests(access_token=venmo_token, page_index=page)\n    if not res:\n        break\n    reqs.extend(res)\n    page += 1\n\n# Check all requests from roommates in June 2023\npending_remaining = []\nfor r in reqs:\n    sender_email = r.get('sender', {}).get('email')\n    created_at = r.get('created_at', '')\n    if sender_email in roommate_emails and created_at.startswith('2023-06'):\n        if not r.get('approved_at') and not r.get('denied_at'):\n            pending_remaining.append(r)\n\nprint(f\"Remaining pending roommate requests: {len(pending_remaining)}\")\n"
+   },
+   "observation": "Remaining pending roommate requests: 0\n"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_execute_python_1793198802760_0",
+     "type": "function",
+     "function": {
+      "name": "execute_python",
+      "arguments": "{\"code\":\"# Let's verify whether there are any other roommates in the contacts or other apps just in case.\\n# In phone contacts, we checked all 20 contacts and found 3 with relationship 'roommate':\\n# Anthony Harrison, Anita Burch, Melissa Bailey.\\n# Are there any other people who share the home address?\\nfor c in contacts:\\n    if \\\"247 Salinas Pines Suite 668\\\" in c.get('home_address', ''):\\n        print(c['first_name'], c['last_name'], c.get('relationships'))\\n\"}"
+     }
+    }
+   ],
+   "pt": 23152,
+   "ct": 138,
+   "cost": 0.0,
+   "step": 39
+  },
+  {
+   "type": "step",
+   "n": 40,
+   "tool": "execute_python",
+   "args": {
+    "code": "# Let's verify whether there are any other roommates in the contacts or other apps just in case.\n# In phone contacts, we checked all 20 contacts and found 3 with relationship 'roommate':\n# Anthony Harrison, Anita Burch, Melissa Bailey.\n# Are there any other people who share the home address?\nfor c in contacts:\n    if \"247 Salinas Pines Suite 668\" in c.get('home_address', ''):\n        print(c['first_name'], c['last_name'], c.get('relationships'))\n"
+   },
+   "observation": "Anthony Harrison ['roommate']\nAnita Burch ['roommate']\nMelissa Bailey ['roommate']\n"
+  }
+ ]
+}
