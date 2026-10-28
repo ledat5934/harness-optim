@@ -1,10 +1,13 @@
-# Repo Playbook
+# AppWorld Execution Playbook
 
-Use `./policy.json` as the authoritative D1-D6 summary.
-Use this file as the stable MemoHarness playbook that Codex can consult during execution.
+Use `./policy.json` as the authoritative D1-D6 configuration.
 
-Dimension hints:
-- D1 strategy: inspect verifier evidence first
-- D2 strategy: use local tooling and file inspection first
-- D4 strategy: iterate until checks are satisfied
-- D6 strategy: validate outputs before finishing
+## Operational Directives
+- **D4 Workflow (Budget Conservation)**:
+  - Form an end-to-end action sequence before calling tools.
+  - Avoid iterative sequential item inspection; use batch/filter parameters.
+  - Execute mutations as soon as parameters are resolved to avoid turn timeouts.
+- **D1 Instruction & Context**:
+  - Carry account IDs and requester tokens consistently across multi-app workflows.
+- **D6 Output Validation**:
+  - Verify that scalar responses (currency amounts, counts) are pure numbers without formatting symbols unless requested.

@@ -1,0 +1,86 @@
+{
+  "bundle_version": 2,
+  "config": {
+    "D1": {
+      "examples": false,
+      "structured_instruction": true,
+      "compression": "none",
+      "strategy": "Explicit answer formatting and multi-app identity tracking"
+    },
+    "D2": {
+      "tool_access": "benchmark_tools",
+      "tool_protocol": "native",
+      "retrieval_mode": "none",
+      "top_k": 0,
+      "strategy": "Direct targeted API tool invocations without exploratory trial calls"
+    },
+    "D3": {
+      "temperature": 0.0,
+      "max_tokens": 2048,
+      "top_p": 1.0,
+      "candidate_count": 1,
+      "strategy": "Deterministic low-temperature decoding"
+    },
+    "D4": {
+      "workflow": "plan_and_execute",
+      "stop_rule": "env_done_or_accepted_finish_or_max_steps",
+      "strategy": "Step-budgeted execution: plan sequence upfront, batch queries, mutate early"
+    },
+    "D5": {
+      "memory_policy": "sliding_window",
+      "history_keep": 30,
+      "strategy": "Sliding window of 30 turns to retain execution context"
+    },
+    "D6": {
+      "postprocess": "schema_strip",
+      "validator": "verifier_slot",
+      "fallback": "none",
+      "strategy": "Strict schema conformance: raw numeric values without currency symbols"
+    }
+  },
+  "runtime_files": {
+    "agents": "AGENTS.override.md",
+    "policy": "policy.json",
+    "memory": ".memoharness/memory.md",
+    "playbook": ".memoharness/playbook.md"
+  },
+  "codex": {
+    "model": "",
+    "reasoning_effort": "medium",
+    "reasoning_summary": "auto"
+  },
+  "updated_iteration": 1,
+  "distilled_patterns": [
+    {
+      "pattern_id": "d4-turn-exhaustion",
+      "primary_dim": "D4",
+      "description": "Exploratory probing, sequential record inspection, and redundant schema checks exhaust the step budget before performing required mutations.",
+      "effect": "Causes 0.0 reward across complex multi-step tasks; resolved by planning upfront, filtering queries, and executing mutations immediately once targets are found.",
+      "evidence": [
+        "b0a8eae_1",
+        "b0a8eae_2",
+        "b0a8eae_3",
+        "6104387_3",
+        "afc0fce_1"
+      ],
+      "iteration_range": [
+        0,
+        0
+      ]
+    },
+    {
+      "pattern_id": "d6-answer-formatting",
+      "primary_dim": "D6",
+      "description": "Final answers fail validation when scalar outputs include unexpected currency symbols (e.g. '$') or prose wrappers instead of clean numeric values.",
+      "effect": "Evaluator rejects answers despite correct underlying computation; resolved by stripping symbols and outputting raw values.",
+      "evidence": [
+        "d0b1f43_1",
+        "76f2c72_3"
+      ],
+      "iteration_range": [
+        0,
+        0
+      ]
+    }
+  ]
+}
