@@ -1,14 +1,23 @@
 # Rolling Memory
 
-Updated after iteration 1.
+Updated after iteration 2.
 
 - Read `./policy.json` first and use this file only for recent distilled lessons.
 - Keep only recurring failures and verified repair heuristics here.
 
 Recent distilled patterns:
-- [D1] Ambiguous instruction framing between informational queries and operational actions causes deliberation overhead and incorrect terminal submission format.
-  Effect: Causes failure on final answer submission tasks (e.g., d0b1f43_3). Distinguish informational answers (exact scalar value or entity without conversational wrapper) from operational action tasks.
-  Evidence: d0b1f43_3
-- [D4] AppWorld agents hit execution step limits within reactive loops due to exploratory probing and unbatched linear item-by-item queries.
-  Effect: Causes failure from turn exhaustion. Prevented by upfront sequence planning, targeted filter queries, and immediate mutation upon target resolution.
+- [D4] Agents consistently exhaust turn limits in AppWorld tasks under the basic react_loop workflow due to excessive trial exploratory probing and unguided, exhaustive data retrieval without staged execution.
+  Effect: Eliminates 100% failure rate across these tasks; switch D4 workflow from react_loop to plan_and_solve or hierarchical_react to impose structured planning and prevent step-limit exhaustion.
   Evidence: b0a8eae_1, b0a8eae_2, b0a8eae_3
+- [D4] AppWorld agents consistently hit execution step limits within the react_loop due to inefficient exploratory probing, trial executions, and exhaustive linear querying of large result sets without batched filtering.
+  Effect: Causes 100% failure rate across 12 evaluation episodes. Update D4 workflow to an agentic loop with upfront plan-and-solve budgeting, batch queries, and strict limits on exploratory calls.
+  Evidence: b0a8eae_1, b0a8eae_2, b0a8eae_3
+- [D4] AppWorld tasks fail due to step limit exhaustion under the standard ReAct loop. The agent consumes available turns on unconstrained exploratory probing, trial executions, and exhaustive queries over large datasets without completing the core task requirements.
+  Effect: Causes 100% persistent failure across all 4 cases. Migrate D4 workflow from react_loop to plan_and_execute or two_stage_planner to structure multi-stage filtering and prevent turn exhaustion.
+  Evidence: d0b1f43_3, b0a8eae_1, b0a8eae_2
+- [D4] AppWorld tasks consistently hit step and turn limits during reactive execution. The standard react_loop workflow causes the agent to spend its entire turn budget on exploratory trial queries and unguided iteration over large result sets without completing the core task requirements.
+  Effect: Causes 100% failure across all 4 benchmark cases (reward 0.0). Transition D4 workflow from react_loop to plan_and_solve or hierarchical_react, or adjust execution limits and query filtering constraints.
+  Evidence: d0b1f43_3, b0a8eae_1, b0a8eae_2
+- [D4] AppWorld tasks fail consistently under D4 due to turn limit exhaustion, caused by the naive react_loop getting trapped in exploratory probing, redundant trial executions, and unbatched iterative queries.
+  Effect: All 3 cases score 0.0 across all attempts. Transition D4 workflow from 'react_loop' to 'plan_and_solve' or structured multi-action planning to eliminate turn budget waste.
+  Evidence: d0b1f43_3, b0a8eae_1, b0a8eae_2

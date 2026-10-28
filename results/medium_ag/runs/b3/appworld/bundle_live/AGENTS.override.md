@@ -15,3 +15,8 @@
   - Return the exact requested value or identifier directly without conversational filler.
   - For numeric amounts, output the raw scalar value without currency symbols unless explicitly requested.
 - If the task requires performing an action, execute all necessary tool calls and finish cleanly.
+
+Bundle contract:
+- Read `./policy.json` for the authoritative D1-D6 summary before using playbook or memory notes.
+- Treat `./.memoharness/playbook.md` as stable repo heuristics and `./.memoharness/memory.md` as rolling distilled notes.
+
