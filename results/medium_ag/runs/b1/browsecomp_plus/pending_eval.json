@@ -1,12 +1,12 @@
 {
- "iteration": 1,
+ "iteration": 2,
  "candidates": [
   {
-   "name": "search_heuristics_guidance",
-   "parent": "h0",
-   "hypothesis": "Providing domain-general search guidance in context_mgmt\u2014instructing the agent to break complex queries into key entities, avoid over-quoting long sentences, and actively fetch full documents with get_document when snippets contain promising leads\u2014will reduce repetitive search spinning and increase validation pass rate to >45% while decreasing average turns.",
-   "changes": "Set default extra_system in context_mgmt/default.py with domain-general information retrieval heuristics (flexible query keywords without rigid quotes, decomposing multi-hop clues, and actively inspecting documents with get_document).",
-   "expected_efficiency": "Pass rate increases to ~45-50%, mean turns reduce from 21.3 to ~17-18 due to fewer dead-end repeated searches."
+   "name": "stagnation_avoidance_search",
+   "parent": "r1",
+   "hypothesis": "Guiding the agent in context_mgmt to detect search query stagnation\u2014specifically prompting it to avoid repeating failed query formulations, to pivot orthogonal clues when a search direction produces irrelevant or repetitive documents, and to search for distinctive single entities/phrases rather than overcrowded conjunctions\u2014will reduce wasted turns on dead ends and increase pass rate from 46.7% to >=53.3%.",
+   "changes": "Augment context_mgmt extra_system with explicit anti-stagnation heuristics: pivot orthogonal clues when top results repeat or are irrelevant, avoid query repetition, and avoid stuffing more than 2-3 constraints into a single query.",
+   "expected_efficiency": "Reduces mean turns from ~20.8 to <19 by cutting loops on unproductive queries, saving token usage on stalled episodes."
   }
  ]
 }

@@ -1,0 +1,79 @@
+{
+  "bundle_version": 2,
+  "config": {
+    "D1": {
+      "examples": false,
+      "structured_instruction": true,
+      "compression": "none",
+      "strategy": "concise_direct_target_entity"
+    },
+    "D2": {
+      "tool_access": "benchmark_tools",
+      "tool_protocol": "native",
+      "retrieval_mode": "search_then_inspect",
+      "top_k": 5,
+      "strategy": "keyword_dense_queries_with_active_page_inspection"
+    },
+    "D3": {
+      "temperature": 0.0,
+      "max_tokens": 2048,
+      "top_p": 1.0,
+      "candidate_count": 1,
+      "strategy": "deterministic_factual_generation"
+    },
+    "D4": {
+      "workflow": "search_inspect_synthesize",
+      "stop_rule": "env_done_or_accepted_finish_or_max_steps",
+      "strategy": "budget_bounded_early_convergence"
+    },
+    "D5": {
+      "memory_policy": "sliding_window",
+      "history_keep": 30,
+      "strategy": "rolling_window_with_distilled_heuristics"
+    },
+    "D6": {
+      "postprocess": "direct_entity",
+      "validator": "verifier_slot",
+      "fallback": "best_grounded_candidate",
+      "strategy": "clean_target_extraction_no_narrative"
+    }
+  },
+  "runtime_files": {
+    "agents": "AGENTS.override.md",
+    "policy": "policy.json",
+    "memory": ".memoharness/memory.md",
+    "playbook": ".memoharness/playbook.md"
+  },
+  "codex": {
+    "model": "",
+    "reasoning_effort": "medium",
+    "reasoning_summary": "auto"
+  },
+  "updated_iteration": 1,
+  "distilled_patterns": [
+    {
+      "pattern_id": "browsecomp-d2-inspect-pages",
+      "primary_dim": "D2",
+      "description": "Agent repeatedly executes superficial search queries with quotes or complex clauses without reading candidate document text, causing search loops and timeouts.",
+      "effect": "Use concise keyword queries and inspect candidate document pages immediately upon retrieval.",
+      "evidence": ["793", "794", "796", "811", "815", "821", "822", "830", "833"],
+      "iteration_range": [0, 1]
+    },
+    {
+      "pattern_id": "browsecomp-d4-step-budget",
+      "primary_dim": "D4",
+      "description": "Agent exhausts step budget (24-25 steps) in ungrounded searches instead of converging on identified evidence by step 15-18.",
+      "effect": "Enforce step budget awareness: synthesize and conclude with best available grounded answer before step limit.",
+      "evidence": ["797", "802", "805", "819", "821", "822", "827", "828", "832", "836"],
+      "iteration_range": [0, 1]
+    },
+    {
+      "pattern_id": "browsecomp-d1-d6-exact-format",
+      "primary_dim": "D1",
+      "description": "Model outputs narrative explanations or conversational text instead of concise target values, or fails to cleanly invoke finish action.",
+      "effect": "Constrain outputs to direct target value without conversational framing.",
+      "evidence": ["809", "826"],
+      "iteration_range": [0, 1]
+    }
+  ]
+}
