@@ -1,12 +1,12 @@
 {
- "iteration": 3,
+ "iteration": 4,
  "candidates": [
   {
-   "name": "paraphrase_aware_retrieval",
+   "name": "doc_inspection_priority",
    "parent": "r1",
-   "hypothesis": "Because benchmark questions deliberately paraphrase source text, instructing the agent in context_mgmt to treat question clues as paraphrases and avoid wrapping descriptive clauses in quotation marks (reserving quotes only for proper nouns) will eliminate zero-hit search loops and improve pass rate.",
-   "changes": "Updated context_mgmt/default.py _DEFAULT_EXTRA_SYSTEM with explicit guidance on paraphrase awareness and unquoted keyword formulation.",
-   "expected_efficiency": "Faster document discovery, reducing turns on difficult retrieval tasks and increasing pass rate from 46.7% to >=53.3%."
+   "hypothesis": "In many failed episodes, search results return relevant documents with high BM25 scores, but the agent fails to inspect them with get_document because the snippet preview cuts off before the relevant fact. Instructing the agent to systematically call get_document on high-relevance search candidates before trying new query variations will uncover obscured clues, increasing validation pass rate from 46.7% to >=53.3% while reducing redundant searches.",
+   "changes": "Refine extra_system in context_mgmt to instruct the agent: whenever search returns highly relevant or promising titles/snippets, prioritize inspecting the full document text via get_document immediately rather than continuing to guess alternate search queries.",
+   "expected_efficiency": "Slight reduction in total search calls and turns for tasks where relevant documents appear early in search results."
   }
  ]
 }
