@@ -1,0 +1,43 @@
+{
+ "global": "r4",
+ "iteration": 4,
+ "train": 1.0,
+ "config": {
+  "D1": {
+   "examples": false,
+   "structured_instruction": true,
+   "compression": "none",
+   "strategy": "phased exploration hierarchy and category-based search heuristics"
+  },
+  "D2": {
+   "tool_access": "bash",
+   "tool_protocol": "native",
+   "retrieval_mode": "none",
+   "top_k": 0,
+   "strategy": "strict native tool call execution on every step with no raw text fallback"
+  },
+  "D3": {
+   "temperature": 0.0,
+   "max_tokens": 2048,
+   "top_p": 1.0,
+   "candidate_count": 1,
+   "strategy": "deterministic greedy action selection"
+  },
+  "D4": {
+   "workflow": "agentic_loop",
+   "stop_rule": "env_done_or_accepted_finish_or_max_steps",
+   "strategy": "phased exploration (open surfaces -> appliances -> closed storage) and stage execution (locate -> take -> transform -> place)"
+  },
+  "D5": {
+   "memory_policy": "sliding_window",
+   "history_keep": 45,
+   "strategy": "extended history window (45 turns) to retain exploration map and prevent search cycles"
+  },
+  "D6": {
+   "postprocess": "none",
+   "validator": "verifier_slot",
+   "fallback": "none",
+   "strategy": "action admissibility verification"
+  }
+ }
+}

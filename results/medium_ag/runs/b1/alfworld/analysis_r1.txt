@@ -1,0 +1,28 @@
+STATE: Baseline h0 achieves 96.7% val pass rate (29/30 tasks solved) with 11.4 mean turns and 1.06M tokens.
+The only failure is pick_two_obj_and_place-Ladle-None-Drawer-2 (timed out at 50 max_steps).
+Trajectory analysis shows that across every single task requiring object placement, the agent emits natural syntax
+like 'put <obj> in/on <recep>', which ALFWorld rejects with 'Nothing happens.', forcing the agent to burn a turn
+calling admissible_commands, then a 3rd turn executing 'move <obj> to <recep>', wasting 2-4 steps per episode.
+
+HYPOTHESIS: "Normalizing natural language placement commands ('put/place <obj> in/on/in/on/into/onto <recep>') to ALFWorld's accepted syntax ('move <obj> to <recep>') in tool_policy.parse will eliminate 2-4 wasted steps and redundant admissible_commands calls per episode, preventing step budget exhaustion on complex multi-object tasks and reducing average turns and tokens by 15-20%."
+CANDIDATE: name=action_syntax_normalization, changes="Add command normalization in tool_policy.parse to translate 'put' and 'place' phrasing to 'move <obj> to <recep>' before execution.", prediction="Val pass rate improves from 96.7% to 100.0% (solving the 50-step timeout task), with mean turns dropping from 11.4 to ~9.2 and tokens dropping by ~18%."
+PARENT: h0
+
+```json
+{
+  "iteration": 1,
+  "candidates": [
+    {
+      "name": "action_syntax_normalization",
+      "parent": "h0",
+      "hypothesis": "Normalizing natural language placement commands ('put/place <obj> in/on/in/on/into/onto <recep>') to ALFWorld's accepted syntax ('move <obj> to <recep>') in tool_policy.parse will eliminate 2-4 wasted steps and redundant admissible_commands calls per episode, preventing step budget exhaustion on complex multi-object tasks and reducing average turns and tokens by 15-20%.",
+      "changes": "In variants/tool_policy/default.py, implement command syntax normalization for text-game actions in parse(), mapping 'put/place <obj> in/on/into/onto <recep>' to 'move <obj> to <recep>'.",
+      "expected_efficiency": "Reduces mean turns from 11.4 to ~9.2 and saves ~15-20% input tokens across all placement tasks."
+    }
+  ]
+}
+```
+
+### FILE: variants/tool_policy/default.py
+```python
+"""tool_policy/default: expose the env's native tools as-is; parse native tool calls

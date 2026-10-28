@@ -1,0 +1,39 @@
+### FILE: variants/tool_policy/default.py
+```python
+"""tool_policy/default: expose the env's native tools as-is; parse native tool calls with a text fallback.
+
+- tools(task): the adapter's tool schemas, unchanged.
+- parse(resp): native `tool_calls`. When the model replies in text, we also accept the text tool-call formats
+  open models emit even when native tools are offered: a <tool_call>{json}</tool_call> block, a GLM-style
+  <tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value></tool_call> block, a Qwen-style
+  <function=name><parameter=k>v</parameter></function> block, or a bare JSON object {"name": ..., "arguments": ...}
+  (nested braces allowed). The arguments are JSON-decoded (also from a ```json fence or with trailing text);
+  on a decode error the raw string is passed under "_raw" so the env reports the problem instead of us dropping it.
+  A plain-text reply in the BrowseComp answer format ("Exact Answer: ...") on a task with a finish tool is taken
+  as that finish call with the whole reply as the answer, as the reference BrowseComp-Plus agent does.
+  Normalizes text-game placement command syntax ('put/place <obj> in/on/into/onto <recep>' -> 'move <obj> to <recep>').
+- format_observation: the env's text, truncated to `max_obs_chars` (head+tail).
+"""
+from __future__ import annotations
+
+import json
+import re
+
+from benchmarks.common import truncate
+from h0.protocols import Action
+
+_TC_BLOCK = re.compile(r"<tool_call>(.*?)(?:</tool_call>|$)", re.S)
+_ARG_KV = re.compile(r"<arg_key>\s*(.*?)\s*</arg_key>\s*<arg_value>(.*?)</arg_value>", re.S)
+_FN_BLOCK = re.compile(r"<function=([\w.\-]+)>(.*?)(?:</function>|$)", re.S)
+_EXACT = re.compile(r"^\W*exact answer\W*:", re.I | re.M)
+_PARAM = re.compile(r"<parameter=([\w.\-]+)>\s*(.*?)\s*</parameter>", re.S)
+_PUT_PLACE_RE = re.compile(
+    r"^\s*(?:put|place)\s+(.+?)\s+(?:in/on|into|onto|in|on)\s+(.+?)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _normalize_command(cmd: str) -> str:
+    m = _PUT_PLACE_RE.match(cmd)
+    if m:
+        obj = m
