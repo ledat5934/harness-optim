@@ -1,0 +1,68 @@
+"""context_mgmt/default: system prompt + guidance + memory notes, pinned task message, sliding window.
+
+Keeps the first user message (task) pinned and the most recent `keep_turns` assistant turns, together with the
+tool/user replies that belong to them, so native tool-call pairing is never broken. When older turns are
+dropped, a one-line marker says how many were elided. Each tool observation is also capped at `max_obs_chars`
+inside the context. This matches the simplified AppWorld agent's `trimmed_messages` (drop the oldest
+non-instruction messages when too long) and MemoHarness's stabilized default (sliding window that pins the
+instruction).
+"""
+from __future__ import annotations
+
+_OPERATIONAL_GUIDANCE = (
+    "Operational guidelines:\n"
+    "- Stateless API authentication: API calls do not automatically retain session state. When an authentication call returns an access_token, explicitly include it in subsequent authenticated calls.\n"
+    "- Credential lookup: If a password or credential is needed but not specified in the task instruction, look it up in the supervisor password store or account settings.\n"
+    "- Pagination: When calling search or list APIs, check pagination fields and loop over pages if needed to retrieve all relevant records.\n"
+    "- Multi-statement batching: When working in script or code execution environments, batch multiple statements and operations together into single executions to conserve steps."
+)
+
+
+class SlidingWindow:
+    def __init__(self, keep_turns: int = 30, max_obs_chars: int = 6000, extra_system: str = ""):
+        self.keep_turns, self.max_obs_chars, self.extra_system = keep_turns, max_obs_chars, extra_system
+
+    def build(self, system, task, history, memory_notes):
+        sys_parts = [system]
+        if task.guidance:
+            sys_parts.append(task.guidance)
+        if _OPERATIONAL_GUIDANCE:
+            sys_parts.append(_OPERATIONAL_GUIDANCE)
+        if self.extra_system:
+            sys_parts.append(self.extra_system)
+        if memory_notes:
+            sys_parts.append("Notes from previous experience:\n" + memory_notes)
+        msgs = [{"role": "system", "content": "\n\n".join(sys_parts)}]
+        if not history:
+            return msgs
+        head, rest = history[0], history[1:]
+        # group: an assistant message followed by its tool/user replies
+        groups, cur = [], []
+        for m in rest:
+            if m["role"] == "assistant" and cur:
+                groups.append(cur)
+                cur = []
+            cur.append(m)
+        if cur:
+            groups.append(cur)
+        dropped = max(0, len(groups) - self.keep_turns)
+        kept = groups[dropped:]
+        msgs.append(head)
+        if dropped:
+            msgs.append({"role": "user", "content": f"[{dropped} earlier steps omitted from context]"})
+        for g in kept:
+            for m in g:
+                if m["role"] == "tool" and len(m.get("content") or "") > self.max_obs_chars:
+                    c = m["content"]
+                    m = {**m, "content": c[: self.max_obs_chars] + f"\n...[truncated {len(c) - self.max_obs_chars} chars]"}
+                msgs.append(m)
+        return msgs
+
+
+def register(reg):
+    reg.register("context_mgmt", "default", lambda c: SlidingWindow(**c),
+                 "System prompt + benchmark guidance + operational guidance + memory notes; task message pinned; "
+                 "sliding window over the last 30 assistant turns (tool pairs kept intact); observations capped at 6000 chars.",
+                 config_schema={"keep_turns": "int (default 30)", "max_obs_chars": "int (default 6000)",
+                                "extra_system": "str appended to the system prompt (default empty)"},
+                 niche={"strategy": "sliding_window", "summarize": "no"})
