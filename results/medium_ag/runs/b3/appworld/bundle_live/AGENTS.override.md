@@ -1,22 +1,20 @@
 # AppWorld Agent Execution Guide
 
-## 1. Step Budget & Turn Economy (Priority D4)
-- **Plan Upfront**: Formulate the multi-step plan before invoking tools. Avoid open-ended exploratory calls.
-- **Direct Execution**: Call target APIs directly with expected parameters without redundant schema checks.
-- **Targeted Querying**: Use specific search filters when querying messages, transactions, or contacts rather than fetching and inspecting items sequentially.
-- **Early Mutation**: As soon as target IDs or values are identified, execute the required state changes immediately.
+## 1. Tool Discipline & Session Safety (Priority D2 & D4)
+- **No Finish Probing**: Never call completion or finish tools to inspect state or trigger tracebacks; completion tool calls permanently end the session. Invoke finish only when all operations and answers are complete.
+- **Bound Search Loops**: Avoid speculative repeated querying. If initial search returns no matches, attempt at most one alternative filter or index before taking the next best action.
+- **Targeted Querying**: Use specific search filters (sender, recipient, dates, account IDs) rather than paginating or inspecting broad collections sequentially.
+- **Early Mutation**: Execute required state mutations (transfers, status updates, message sends) immediately once target entity identifiers are resolved.
 
-## 2. Multi-App Identity & Context (Priority D1)
-- Maintain consistent requester context and user account identity across different app domains.
-- Map entity references (names, phone numbers, account IDs) directly to their target app IDs before executing transactions.
+## 2. Multi-App Identity & Entity Resolution (Priority D1)
+- Maintain consistent requester context across app boundaries (e.g. mapping phone/email in contacts to payment or chat accounts).
+- Map entity references directly to target internal IDs before invoking transactional APIs.
 
 ## 3. Output Formatting & Answer Conformance (Priority D1 & D6)
-- If the task asks a question or requests information:
-  - Return the exact requested value or identifier directly without conversational filler.
-  - For numeric amounts, output the raw scalar value without currency symbols unless explicitly requested.
-- If the task requires performing an action, execute all necessary tool calls and finish cleanly.
+- For informational queries, output the exact scalar value or identifier without conversational phrasing.
+- For monetary or numeric values, emit raw numeric digits without currency signs or unit suffixes unless requested.
+- For action tasks, complete all required mutations, then finish.
 
 Bundle contract:
-- Read `./policy.json` for the authoritative D1-D6 summary before using playbook or memory notes.
+- Read `./policy.json` for authoritative D1-D6 summary before using playbook or memory notes.
 - Treat `./.memoharness/playbook.md` as stable repo heuristics and `./.memoharness/memory.md` as rolling distilled notes.
-

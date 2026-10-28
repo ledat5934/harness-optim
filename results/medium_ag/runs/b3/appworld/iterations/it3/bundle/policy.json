@@ -1,0 +1,97 @@
+{
+  "bundle_version": 1,
+  "config": {
+    "D1": {
+      "examples": false,
+      "structured_instruction": true,
+      "compression": "none",
+      "strategy": "Direct final answer formatting and precise multi-app entity resolution"
+    },
+    "D2": {
+      "tool_access": "bash",
+      "tool_protocol": "native",
+      "retrieval_mode": "none",
+      "top_k": 0,
+      "strategy": "Direct targeted API tool invocations; never invoke completion tool for probing"
+    },
+    "D3": {
+      "temperature": 0.0,
+      "max_tokens": 2048,
+      "top_p": 1.0,
+      "candidate_count": 1,
+      "strategy": "Deterministic low-temperature decoding"
+    },
+    "D4": {
+      "workflow": "agentic_loop",
+      "stop_rule": "env_done_or_accepted_finish_or_max_steps",
+      "strategy": "Step-budgeted execution: bound search retry loops, batch queries, mutate early"
+    },
+    "D5": {
+      "memory_policy": "sliding_window",
+      "history_keep": 30,
+      "strategy": "Sliding window of 30 turns to retain execution context"
+    },
+    "D6": {
+      "postprocess": "schema_strip",
+      "validator": "verifier_slot",
+      "fallback": "none",
+      "strategy": "Strict schema conformance: raw numeric values and exact target entities"
+    }
+  },
+  "runtime_files": {
+    "agents": "AGENTS.override.md",
+    "policy": "policy.json",
+    "memory": ".memoharness/memory.md",
+    "playbook": ".memoharness/playbook.md"
+  },
+  "codex": {
+    "model": "",
+    "reasoning_effort": "medium",
+    "reasoning_summary": "auto"
+  },
+  "updated_iteration": 2,
+  "distilled_patterns": [
+    {
+      "pattern_id": "llm-pattern-iter2-1",
+      "primary_dim": "D4",
+      "description": "Agent exhausts turn limit by engaging in unbounded speculative analysis loops and repeated queries when target records are not immediately found.",
+      "effect": "Impose strict 1-retry bound on speculative queries to preserve turn budget.",
+      "evidence": [
+        "afc0fce_2"
+      ],
+      "iteration_range": [
+        2,
+        2
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter2-2",
+      "primary_dim": "D2",
+      "description": "Agent misuses task completion / finish tool as an inspection or debugging probe to provoke error tracebacks, prematurely terminating the environment.",
+      "effect": "Prohibit invoking completion tools for state probing; reserve exclusively for final termination.",
+      "evidence": [
+        "d0b1f43_2"
+      ],
+      "iteration_range": [
+        2,
+        2
+      ]
+    },
+    {
+      "pattern_id": "llm-pattern-iter1-1",
+      "primary_dim": "D4",
+      "description": "Turn limit exhaustion caused by exploratory probing and unbatched linear scanning across multi-app entity graphs.",
+      "effect": "Plan upfront, target specific search filters, and mutate early.",
+      "evidence": [
+        "b0a8eae_1",
+        "b0a8eae_2",
+        "b0a8eae_3",
+        "d0b1f43_3"
+      ],
+      "iteration_range": [
+        0,
+        1
+      ]
+    }
+  ]
+}
