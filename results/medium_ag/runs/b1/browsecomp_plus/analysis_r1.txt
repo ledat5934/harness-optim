@@ -1,0 +1,183 @@
+An analysis of the trajectories reveals a critical flaw in browsecomp_plus information retrieval:
+
+1. **Failure analysis**:
+   - In multiple failed trajectories (e.g. task 827, 828, 830, 832, 833, 836), the agent searches using overly rigid keyword strings with quotation marks (e.g. `"two decades in the education profession"`, `"alleged not to be originally from"`, `"38 fouls"`, `"wrong inmate"`, `"talent management company"`), which frequently return irrelevant snippets.
+   - Crucially, when `search` returns snippet results (containing docids, scores, titles, snippets), the model **rarely calls `get_document`** unless it sees an exact verbatim match in the snippet! If the snippet cuts off right before the answer or doesn't mention the exact phrase, the agent ignores the top docids and frantically issues another rigid search query 20+ times until max steps (25 steps) are reached.
+   - Look at task 827: docid 14013, 77759, 84815, 14572 are returned with high scores, but the model never called `get_document` on them once!
+   - Look at task 830: in r1 (PASS), it called `get_document` on 54126 and immediately won. In r2 (FAIL), it repeated 25 searches without reading documents!
+   - Look at task 833: in r3 (FAIL), it searched 25 times; in r1 (PASS), it found Brad William Henke.
+   - Look at task 836: in r3 (PASS), it called `search` with `Darkplace` and won. In r1 & r2 (FAIL), it spun searching `talent management company` 25 times and never investigated the leads.
+   - In addition, the system prompt / context management does not provide any guidance on browsing strategies (e.g., retrieving the full document for promising candidates, reformulating queries if 0-hit or irrelevant snippets occur, extracting keywords instead of searching entire long prompt sentences in quotes).
+   - More importantly, `system_prompt` in H0 is default / minimal or whatever base is provided. Adding concise, general-purpose web search/information-retrieval guidelines to the system prompt in `context_mgmt` (via `extra_system` or directly in `context_mgmt`) will guide the agent to:
+     1. Retrieve full documents (`get_document`) for top-ranking search results when snippets look promising or ambiguous.
+     2. Deconstruct multi-hop queries: search for distinct entities/facts separately instead of combining 5 constraints with quotes into one query.
+     3. Avoid over-constraining searches with long exact quotes from the question.
+
+Let's check `variants/context_mgmt/default.py`:
+`SlidingWindow` has an `extra_system: str = ""` parameter!
+Or we can create `variants/context_mgmt/search_guidance.py` or customize `context_mgmt/default.py` / `bundle.json`.
+Wait, we can edit `variants/context_mgmt/default.py` directly, or add `variants/context_mgmt/search_guidance.py` and specify it in `bundle.json`. But editing `variants/context_mgmt/default.py` (or setting the default `extra_system` in `context_mgmt/default.py`) directly is clean, robust, and self-contained.
+
+Let's formulate the exact hypothesis and change.
+
+### Step 1: Analyze & State
+STATE: H0 baseline pass rate is 36.7% (11/30 tasks) on validation with mean turns 21.3.
+Failed trajectories consistently suffer from search thrashing: querying rigid quoted phrases from the prompt 20-25 times.
+Agents fail to inspect documents with `get_document` when search snippets look promising but truncated.
+Successful runs (e.g., 823, 834, 830-r1) retrieve full documents early when high-relevance docids appear.
+A general search-strategy instruction in context management will curb fruitless query spam and promote document inspection.
+
+HYPOTHESIS: "Providing domain-general search guidance in context_mgmt—instructing the agent to break complex queries into key entities, avoid over-quoting long sentences, and actively fetch full documents with get_document when snippets contain promising leads—will reduce repetitive search spinning and increase validation pass rate from 36.7% to >45% while decreasing average turns."
+CANDIDATE: name=search_heuristics_guidance, changes="Update context_mgmt/default.py extra_system default to provide concise information retrieval heuristics (query decomposition, flexible search keywords, active get_document retrieval).", prediction="Pass rate increases to ~45-50%, mean turns drop from 21.3 to ~17-18."
+PARENT: h0
+
+Let's check the code for `variants/context_mgmt/default.py`:
+```python
+"""context_mgmt/default: system prompt + guidance + memory notes, pinned task message, sliding window.
+
+Keeps the first user message (task) pinned and the most recent `keep_turns` assistant turns, together with the
+tool/user replies that belong to them, so native tool-call pairing is never broken. When older turns are
+dropped, a one-line marker says how many were elided. Each tool observation is also capped at `max_obs_chars`
+inside the context. This matches the simplified AppWorld agent's `trimmed_messages` (drop the oldest
+non-instruction messages when too long) and MemoHarness's stabilized default (sliding window that pins the
+instruction).
+"""
+from __future__ import annotations
+
+DEFAULT_SEARCH_GUIDANCE = (
+    "Effective search strategies:\n"
+    "1. Query formulation: Do not copy long verbatim sentences from the question into search queries. "
+    "Extract 2-4 distinctive keywords or entity names. If exact phrases with quotes return poor results, drop the quotes or try synonyms.\n"
+    "2. Multi-hop reasoning: Break complex questions into sub-clues. Search for the most specific, anchor clue first.\n"
+    "3. Inspecting documents: Search snippets are often truncated. When search results contain relevant titles or promising docids, "
+    "use `get_document` to inspect the full document text rather than repeatedly issuing minor search variants.\n"
+    "4. Final answer: Provide a direct, concise, and complete answer answering all parts of the question."
+)
+
+
+class SlidingWindow:
+    def __init__(self, keep_turns: int = 30, max_obs_chars: int = 6000, extra_system: str = DEFAULT_SEARCH_GUIDANCE):
+        self.keep_turns, self.max_obs_chars, self.extra_system = keep_turns, max_obs_chars, extra_system
+...
+```
+
+Notice: Does `DEFAULT_SEARCH_GUIDANCE` violate anti-overfitting rules?
+"Rules like 'back up files before opening them with tools that modify on read' are fine -- they happen to help specific tasks but apply broadly. The test: would this advice be useful to a human developer working on MANY unfamiliar tasks? If in doubt, make it more general."
+Yes! These are universal information retrieval and search agent principles:
+- Extract key terms instead of verbatim sentence querying.
+- Break multi-hop questions into sub-clues.
+- Inspect full documents when snippet is truncated.
+- Give a concise and direct answer.
+No task names, no task-specific knowledge. Applies universally to any search/QA environment with search + get_document.
+
+Let's write the response cleanly.
+
+### Step 1 & 3 Text and Implementation File
+
+```python
+### FILE: variants/context_mgmt/default.py
+```
+
+Let's double-check all protocol requirements:
+- `context_mgmt.build(system, task, history, memory_notes) -> list[messages]`
+- `register(reg)` function present and unchanged in signature.
+
+Let's output everything properly.STATE: H0 baseline pass rate is 36.7% (11/30 tasks) on validation with mean turns 21.3.
+Failed trajectories consistently suffer from search thrashing: querying rigid quoted phrases from the prompt 20-25 times.
+Agents fail to inspect documents with get_document when search snippets look promising but truncated.
+Successful runs (e.g., 823, 834, 830-r1) retrieve full documents early when high-relevance docids appear.
+A general search-strategy instruction in context management will curb fruitless query spam and promote document inspection.
+
+HYPOTHESIS: "Providing domain-general search guidance in context_mgmt—instructing the agent to break complex queries into key entities, avoid over-quoting long sentences, and actively fetch full documents with get_document when snippets contain promising leads—will reduce repetitive search spinning and increase validation pass rate to >45% while decreasing average turns."
+CANDIDATE: name=search_heuristics_guidance, changes="Set default extra_system in context_mgmt/default.py with domain-general information retrieval heuristics (flexible query keywords without rigid quotes, decomposing multi-hop clues, and actively inspecting documents with get_document).", prediction="Pass rate increases from 36.7% to ~45-50%, mean turns drop from 21.3 to ~17-18."
+PARENT: h0
+
+```json
+{
+  "iteration": 1,
+  "candidates": [
+    {
+      "name": "search_heuristics_guidance",
+      "parent": "h0",
+      "hypothesis": "Providing domain-general search guidance in context_mgmt—instructing the agent to break complex queries into key entities, avoid over-quoting long sentences, and actively fetch full documents with get_document when snippets contain promising leads—will reduce repetitive search spinning and increase validation pass rate to >45% while decreasing average turns.",
+      "changes": "Set default extra_system in context_mgmt/default.py with domain-general information retrieval heuristics (flexible query keywords without rigid quotes, decomposing multi-hop clues, and actively inspecting documents with get_document).",
+      "expected_efficiency": "Pass rate increases to ~45-50%, mean turns reduce from 21.3 to ~17-18 due to fewer dead-end repeated searches."
+    }
+  ]
+}
+```
+
+Output: `CANDIDATES: search_heuristics_guidance`
+
+### FILE: variants/context_mgmt/default.py
+"""context_mgmt/default: system prompt + guidance + memory notes, pinned task message, sliding window.
+
+Keeps the first user message (task) pinned and the most recent `keep_turns` assistant turns, together with the
+tool/user replies that belong to them, so native tool-call pairing is never broken. When older turns are
+dropped, a one-line marker says how many were elided. Each tool observation is also capped at `max_obs_chars`
+inside the context. This matches the simplified AppWorld agent's `trimmed_messages` (drop the oldest
+non-instruction messages when too long) and MemoHarness's stabilized default (sliding window that pins the
+instruction).
+"""
+from __future__ import annotations
+
+DEFAULT_SEARCH_GUIDANCE = (
+    "Search and Retrieval Guidelines:\n"
+    "1. Query Formulation: Avoid pasting long verbatim phrases or entire sentences in quotes into search queries. "
+    "Instead, extract 2-4 key entity names or distinctive keywords. If an exact quoted phrase yields 0 or poor results, "
+    "immediately broaden the query by removing quotes and using essential keywords.\n"
+    "2. Sub-problem Decomposition: When multiple clues or constraints are given, identify the single most specific or "
+    "anchoring clue and search for it first, rather than trying to satisfy all constraints in one complex query.\n"
+    "3. Document Inspection: Search snippets are often truncated and may cut off key details. When top search results "
+    "look relevant or mention candidate entities, call `get_document` on their docids to read the full context rather "
+    "than repeatedly reformulating search queries.\n"
+    "4. Thoroughness: Verify that the candidate entity satisfies all conditions in the question before finalizing."
+)
+
+
+class SlidingWindow:
+    def __init__(self, keep_turns: int = 30, max_obs_chars: int = 6000, extra_system: str = DEFAULT_SEARCH_GUIDANCE):
+        self.keep_turns, self.max_obs_chars, self.extra_system = keep_turns, max_obs_chars, extra_system
+
+    def build(self, system, task, history, memory_notes):
+        sys_parts = [system]
+        if task.guidance:
+            sys_parts.append(task.guidance)
+        if self.extra_system:
+            sys_parts.append(self.extra_system)
+        if memory_notes:
+            sys_parts.append("Notes from previous experience:\n" + memory_notes)
+        msgs = [{"role": "system", "content": "\n\n".join(sys_parts)}]
+        if not history:
+            return msgs
+        head, rest = history[0], history[1:]
+        # group: an assistant message followed by its tool/user replies
+        groups, cur = [], []
+        for m in rest:
+            if m["role"] == "assistant" and cur:
+                groups.append(cur)
+                cur = []
+            cur.append(m)
+        if cur:
+            groups.append(cur)
+        dropped = max(0, len(groups) - self.keep_turns)
+        kept = groups[dropped:]
+        msgs.append(head)
+        if dropped:
+            msgs.append({"role": "user", "content": f"[{dropped} earlier steps omitted from context]"})
+        for g in kept:
+            for m in g:
+                if m["role"] == "tool" and len(m.get("content") or "") > self.max_obs_chars:
+                    c = m["content"]
+                    m = {**m, "content": c[: self.max_obs_chars] + f"\n...[truncated {len(c) - self.max_obs_chars} chars]"}
+                msgs.append(m)
+        return msgs
+
+
+def register(reg):
+    reg.register("context_mgmt", "default", lambda c: SlidingWindow(**c),
+                 "System prompt + benchmark guidance + memory notes; task message pinned; sliding window over "
+                 "the last 30 assistant turns (tool pairs kept intact); observations capped at 6000 chars.",
+                 config_schema={"keep_turns": "int (default 30)", "max_obs_chars": "int (default 6000)",
+                                "extra_system": "str appended to the system prompt (default search guidance)"},
+                 niche={"strategy": "sliding_window", "summarize": "no"})
