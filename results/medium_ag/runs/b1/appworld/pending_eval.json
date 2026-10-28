@@ -1,12 +1,12 @@
 {
- "iteration": 4,
+ "iteration": 5,
  "candidates": [
   {
-   "name": "robust_message_sanitizer",
+   "name": "auth_recovery_obs",
    "parent": "h0",
-   "hypothesis": "In agent_loop/default.py, ensuring assistant messages never contain completely empty content when no tool calls are present will eliminate Gemini Flash HTTP 400 INVALID_ARGUMENT crashes, recovering dropped tasks (530b157_2, df61dc5_1) and achieving 100% pass rate.",
-   "changes": "In agent_loop/default.py, ensure assistant messages always have non-empty content if tool_calls is empty, preventing provider API HTTP 400 invalid argument rejections.",
-   "expected_efficiency": "Eliminates unexpected HTTP 400 crashes on turns with empty assistant responses; token count and step count remain comparable."
+   "hypothesis": "When API tools return 401 Unauthorized / missing access token errors, agents frequently waste 15-20 turns reverse-engineering SDK internals and session state, leading to step budget timeouts. Augmenting 401 observation returns in tool_policy with explicit guidance to pass access_token directly and re-authenticate if expired will eliminate wasted turns and recover failed tasks.",
+   "changes": "In variants/tool_policy/default.py, format_observation appends actionable authentication guidance whenever a tool response contains a 401 Unauthorized / access token error.",
+   "expected_efficiency": "Saves 10-20 turns per task on tasks requiring authenticated API endpoints, increasing pass rate from 96.7% towards 100% and reducing overall token usage."
   }
  ]
 }

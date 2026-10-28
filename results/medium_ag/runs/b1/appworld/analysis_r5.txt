@@ -1,0 +1,175 @@
+STATE: h0 achieved 96.7% pass rate (29/30 tasks) with 20.8 mean turns. r1-r4 regressed (86.7%-93.3%) primarily due to intrusive loop nudges interrupting normal agent execution or empty message formatting errors. Analysis of high-turn (>30 turns) and timed-out trajectories (530b157_1, 530b157_3, 0d8a4ee_1, df61dc5_1, df61dc5_2, df61dc5_3, 3ab5b8b_1) reveals the agent consistently spends 15-20 turns reverse-engineering Python closures, inspect, and HTTP client sessions when APIs return 401 Unauthorized, not realizing `access_token` must be passed as an explicit keyword argument.
+
+HYPOTHESIS: "When API tool executions return 401 Unauthorized or missing access token errors, agents misinterpret this as a session persistence failure and waste 15-20 turns reverse-engineering SDK internals, exhausting the turn budget on multi-step tasks. Augmenting 401 observations in `tool_policy.format_observation` with explicit guidance to pass the `access_token` argument (and re-authenticate if expired) will eliminate wasted turns, preventing step-limit timeouts and improving val pass rate towards 100% while significantly reducing turns and token consumption."
+CANDIDATE: name=auth_recovery_obs, changes="In variants/tool_policy/default.py, update format_observation to detect 401 Unauthorized / access token errors and append actionable guidance to explicitly pass access_token as a keyword argument and re-login if the token expired.", prediction="Increases pass rate from 96.7% to 100% on val (resolving 3ab5b8b_1 and preventing timeouts on df61dc5 tasks) while saving 10-15 turns per authentication-heavy task."
+PARENT: h0
+
+### FILE: variants/tool_policy/default.py
+"""tool_policy/default: expose the env's native tools as-is; parse native tool calls with a text fallback.
+
+- tools(task): the adapter's tool schemas, unchanged.
+- parse(resp): native `tool_calls`. When the model replies in text, we also accept the text tool-call formats
+  open models emit even when native tools are offered: a <tool_call>{json}</tool_call> block, a GLM-style
+  <tool_call>name<arg_key>k</arg_key><arg_value>v</arg_value></tool_call> block, a Qwen-style
+  <function=name><parameter=k>v</parameter></function> block, or a bare JSON object {"name": ..., "arguments": ...}
+  (nested braces allowed). The arguments are JSON-decoded (also from a ```json fence or with trailing text);
+  on a decode error the raw string is passed under "_raw" so the env reports the problem instead of us dropping it.
+  A plain-text reply in the BrowseComp answer format ("Exact Answer: ...") on a task with a finish tool is taken
+  as that finish call with the whole reply as the answer, as the reference BrowseComp-Plus agent does.
+- format_observation: the env's text, truncated to `max_obs_chars` (head+tail); appends recovery guidance
+  if the observation indicates an authentication / 401 Unauthorized error.
+"""
+from __future__ import annotations
+
+import json
+import re
+
+from benchmarks.common import truncate
+from h0.protocols import Action
+
+_TC_BLOCK = re.compile(r"<tool_call>(.*?)(?:</tool_call>|$)", re.S)
+_ARG_KV = re.compile(r"<arg_key>\s*(.*?)\s*</arg_key>\s*<arg_value>(.*?)</arg_value>", re.S)
+_FN_BLOCK = re.compile(r"<function=([\w.\-]+)>(.*?)(?:</function>|$)", re.S)
+_EXACT = re.compile(r"^\W*exact answer\W*:", re.I | re.M)
+_PARAM = re.compile(r"<parameter=([\w.\-]+)>\s*(.*?)\s*</parameter>", re.S)
+
+
+def _json_objects(text: str):
+    """Every balanced top-level {...} in free text that decodes as JSON (strings with braces/escapes handled)."""
+    i = text.find("{")
+    while i != -1:
+        depth, in_str, esc, end = 0, False, False, -1
+        for j in range(i, len(text)):
+            c = text[j]
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            elif c == '"':
+                in_str = True
+            elif c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    end = j
+                    break
+        if end == -1:
+            return
+        try:
+            yield json.loads(text[i:end + 1])
+            i = text.find("{", end + 1)
+        except json.JSONDecodeError:
+            i = text.find("{", i + 1)
+
+
+def _decode_args(raw):
+    """Tool arguments -> dict. Accepts a dict, a JSON string, JSON inside a code fence or followed by extra text."""
+    if isinstance(raw, dict):
+        return raw
+    raw = raw or "{}"
+    try:
+        args = json.loads(raw)
+        if isinstance(args, str):  # double-encoded
+            args = json.loads(args)
+        if isinstance(args, dict):
+            return args
+    except (json.JSONDecodeError, TypeError):
+        pass
+    for obj in _json_objects(str(raw)):
+        if isinstance(obj, dict):
+            return obj
+    return {"_raw": raw}
+
+
+def _value(v: str):
+    v = v.strip()
+    try:
+        return json.loads(v) if v[:1] in "[{" else v
+    except json.JSONDecodeError:
+        return v
+
+
+class NativeTools:
+    def __init__(self, max_obs_chars: int = 8000, text_fallback: bool = True):
+        self.max_obs_chars, self.text_fallback = max_obs_chars, text_fallback
+
+    def tools(self, task):
+        return task.tools
+
+    def parse(self, resp, task):
+        acts = []
+        for tc in resp.tool_calls or []:
+            fn = tc.get("function") or {}
+            raw_args = fn.get("arguments") or "{}"
+            args = _decode_args(raw_args)
+            acts.append(Action(tool=fn.get("name", ""), args=args, call_id=tc.get("id"),
+                               raw={"function": {"name": fn.get("name", ""), "arguments": raw_args}}))
+        if acts or not self.text_fallback:
+            return acts
+        names = {t["function"]["name"] for t in task.tools}
+        for name, args in self._text_calls(resp.content or ""):
+            if name in names:
+                return [Action(tool=name, args=args, call_id=None, raw={"name": name, "arguments": args})]
+        fin = getattr(task, "finish_tool", "")
+        if fin in names and _EXACT.search(resp.content or ""):
+            args = {"answer": resp.content.strip()}
+            return [Action(tool=fin, args=args, call_id=None, raw={"name": fin, "arguments": args})]
+        return []
+
+    @staticmethod
+    def _text_calls(txt: str):
+        for body in _TC_BLOCK.findall(txt):
+            body = body.strip()
+            if body.startswith("{"):
+                for d in _json_objects(body):
+                    if isinstance(d, dict) and "name" in d:
+                        yield str(d["name"]), _decode_args(d.get("arguments", d.get("parameters", {})))
+            else:  # GLM style: name, then <arg_key>/<arg_value> pairs
+                name = re.split(r"[\s<]", body, maxsplit=1)[0]
+                yield name, {k: _value(v) for k, v in _ARG_KV.findall(body)}
+        for name, body in _FN_BLOCK.findall(txt):
+            yield name, {k: _value(v) for k, v in _PARAM.findall(body)}
+        for d in _json_objects(txt):
+            if isinstance(d, dict) and isinstance(d.get("name"), str) and ("arguments" in d or "parameters" in d):
+                yield d["name"], _decode_args(d.get("arguments", d.get("parameters", {})))
+
+    def format_observation(self, action, result, task):
+        obs = result.observation
+        if "401" in obs and any(phrase in obs.lower() for phrase in ("access token", "not authorized", "unauthorized")):
+            obs += (
+                "\n[Note: This API endpoint requires authentication. Explicitly pass the `access_token` "
+                "parameter obtained from login, e.g. `api.endpoint(..., access_token=token)`. "
+                "If an existing token returns 401, it may have expired; log in again to get a fresh token.]"
+            )
+        return truncate(obs, self.max_obs_chars)
+
+
+def register(reg):
+    reg.register("tool_policy", "default", lambda c: NativeTools(**c),
+                 "Exposes the environment's native tools unchanged; parses native tool calls (text fallback: JSON, "
+                 "<tool_call> JSON or GLM arg_key/arg_value, <function=...> blocks); observations truncated "
+                 "head+tail to 8000 chars; appends recovery guidance on 401 auth errors.",
+                 config_schema={"max_obs_chars": "int (default 8000)", "text_fallback": "bool (default true)"},
+                 niche={"exposure": "all", "parse": "native+text", "obs": "truncate"})
+
+
+```json
+{
+  "iteration": 5,
+  "candidates": [
+    {
+      "name": "auth_recovery_obs",
+      "parent": "h0",
+      "hypothesis": "When API tools return 401 Unauthorized / missing access token errors, agents frequently waste 15-20 turns reverse-engineering SDK internals and session state, leading to step budget timeouts. Augmenting 401 observation returns in tool_policy with explicit guidance to pass access_token directly and re-authenticate if expired will eliminate wasted turns and recover failed tasks.",
+      "changes": "In variants/tool_policy/default.py, format_observation appends actionable authentication guidance whenever a tool response contains a 401 Unauthorized / access token error.",
+      "expected_efficiency": "Saves 10-20 turns per task on tasks requiring authenticated API endpoints, increasing pass rate from 96.7% towards 100% and reducing overall token usage."
+    }
+  ]
+}
+```
+
+CANDIDATES: auth_recovery_obs
