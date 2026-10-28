@@ -201,6 +201,7 @@ class LLM:
             "temperature": self.temperature if temperature is None else temperature,
             "max_tokens": max_tokens or self.max_tokens,
             "usage": {"include": True},  # OpenRouter usage accounting -> usage.cost
+            "stream": False,  # 9router streams by default for some providers (antigravity) unless told not to
         }
         if tools:
             body["tools"] = tools
