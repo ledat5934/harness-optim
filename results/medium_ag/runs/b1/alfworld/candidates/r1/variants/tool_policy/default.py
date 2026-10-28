@@ -7,6 +7,7 @@
   <function=name><parameter=k>v</parameter></function> block, or a bare JSON object {"name": ..., "arguments": ...}
   (nested braces allowed). The arguments are JSON-decoded (also from a ```json fence or with trailing text);
   on a decode error the raw string is passed under "_raw" so the env reports the problem instead of us dropping it.
+  Placement commands like 'put/place <obj> in/on/into/onto <recep>' are normalized to 'move <obj> to <recep>'.
   A plain-text reply in the BrowseComp answer format ("Exact Answer: ...") on a task with a finish tool is taken
   as that finish call with the whole reply as the answer, as the reference BrowseComp-Plus agent does.
 - format_observation: the env's text, truncated to `max_obs_chars` (head+tail).
@@ -24,6 +25,7 @@ _ARG_KV = re.compile(r"<arg_key>\s*(.*?)\s*</arg_key>\s*<arg_value>(.*?)</arg_va
 _FN_BLOCK = re.compile(r"<function=([\w.\-]+)>(.*?)(?:</function>|$)", re.S)
 _EXACT = re.compile(r"^\W*exact answer\W*:", re.I | re.M)
 _PARAM = re.compile(r"<parameter=([\w.\-]+)>\s*(.*?)\s*</parameter>", re.S)
+_PUT_PATTERN = re.compile(r"^\s*(?:put|place)\s+(.+?)\s+(?:in/on|into|onto|in|on)\s+(.+?)\s*$", re.I)
 
 
 def _json_objects(text: str):
@@ -85,6 +87,30 @@ def _value(v: str):
         return v
 
 
+def _normalize_command_str(s: str) -> str:
+    cleaned = s.strip().strip("'\"").rstrip(".")
+    m = _PUT_PATTERN.match(cleaned)
+    if m:
+        return f"move {m.group(1).strip()} to {m.group(2).strip()}"
+    return s
+
+
+def _normalize_val(v):
+    if isinstance(v, str):
+        return _normalize_command_str(v)
+    if isinstance(v, dict):
+        return {k: _normalize_val(val) for k, val in v.items()}
+    if isinstance(v, list):
+        return [_normalize_val(item) for item in v]
+    return v
+
+
+def _normalize_args(args: dict) -> dict:
+    if not isinstance(args, dict):
+        return args
+    return {k: _normalize_val(v) for k, v in args.items()}
+
+
 class NativeTools:
     def __init__(self, max_obs_chars: int = 8000, text_fallback: bool = True):
         self.max_obs_chars, self.text_fallback = max_obs_chars, text_fallback
@@ -98,12 +124,19 @@ class NativeTools:
             fn = tc.get("function") or {}
             raw_args = fn.get("arguments") or "{}"
             args = _decode_args(raw_args)
+            args = _normalize_args(args)
             acts.append(Action(tool=fn.get("name", ""), args=args, call_id=tc.get("id"),
                                raw={"function": {"name": fn.get("name", ""), "arguments": raw_args}}))
+        names = {t["function"]["name"] for t in getattr(task, "tools", [])}
+        for act in acts:
+            if act.tool in ("put", "place") and act.tool not in names and "move" in names:
+                act.tool = "move"
         if acts or not self.text_fallback:
             return acts
-        names = {t["function"]["name"] for t in task.tools}
         for name, args in self._text_calls(resp.content or ""):
+            args = _normalize_args(args)
+            if name in ("put", "place") and name not in names and "move" in names:
+                name = "move"
             if name in names:
                 return [Action(tool=name, args=args, call_id=None, raw={"name": name, "arguments": args})]
         fin = getattr(task, "finish_tool", "")
@@ -136,7 +169,7 @@ class NativeTools:
 def register(reg):
     reg.register("tool_policy", "default", lambda c: NativeTools(**c),
                  "Exposes the environment's native tools unchanged; parses native tool calls (text fallback: JSON, "
-                 "<tool_call> JSON or GLM arg_key/arg_value, <function=...> blocks); observations truncated "
-                 "head+tail to 8000 chars.",
+                 "<tool_call> JSON or GLM arg_key/arg_value, <function=...> blocks); normalizes placement commands; "
+                 "observations truncated head+tail to 8000 chars.",
                  config_schema={"max_obs_chars": "int (default 8000)", "text_fallback": "bool (default true)"},
                  niche={"exposure": "all", "parse": "native+text", "obs": "truncate"})

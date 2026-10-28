@@ -1,0 +1,387 @@
+{
+ "benchmark": "alfworld",
+ "task_id": "pick_two_obj_and_place-CD-None-Safe-308/trial_T20190907_050942_897916",
+ "run_tag": "b3_alfworld_test",
+ "wall_s": 47.65,
+ "tokens": 47866,
+ "cost": 0.0,
+ "llm_calls": 12,
+ "steps": 12,
+ "success": true,
+ "error": null,
+ "eval_info": {
+  "won": true
+ },
+ "outcome": {
+  "stopped": "done",
+  "steps": 12,
+  "final_answer": null,
+  "llm_calls": 12
+ },
+ "events": [
+  {
+   "type": "task",
+   "instruction": "Your task is to: put two cd in safe.",
+   "max_steps": 50
+  },
+  {
+   "type": "harness",
+   "root": "/home/user/harness-optim/h0",
+   "bundle": {
+    "agent_loop": {
+     "name": "default",
+     "config": {
+      "temperature": 0.0,
+      "max_tokens": 2048
+     }
+    },
+    "context_mgmt": {
+     "name": "default",
+     "config": {
+      "keep_turns": 50,
+      "extra_system": "# Harness bundle (MemoHarness)\nThe files below are your harness policy, in the order to read them.\n\n## ./AGENTS.override.md\n# AlfWorld Policy Guidelines\n\n## Action Execution Protocol\n- Always execute actions via the native tool call API on every turn; never output action commands as raw text or markdown.\n- Execute one admissible action per step matching the observed environment state.\n\n## Task Execution Flow\n- Locate target item -> take item -> transform if required (clean with sinkbasin, cool with fridge, heat with microwave, use desklamp) -> navigate to target receptacle -> put item in/on receptacle.\n- For `pick_two_obj_and_place`, deliver the first item completely, then locate and deliver the second item.\n\n## Phased Search Hierarchy\n- Phase 1 (Open Surfaces): Check open surfaces first (diningtable, countertop, desk, table, bed, sofa). Food items and everyday objects are usually visible immediately without opening actions.\n- Phase 2 (Appliances): Check category appliances (fridge for food/produce; microwave; sinkbasin).\n- Phase 3 (Closed Storage): Check closed containers (cabinets, drawers, safe) only if the item was not found on open surfaces or appliances. Always open containers before taking or placing items.\n- Spatial Memory: Note the locations of transformation fixtures (sinkbasin, microwave, fridge) and target receptacles when first seen to navigate directly when needed.\n- Avoid Search Cycles: Never re-examine receptacles that were already checked.\n\n## ./policy.json\n{\n \"bundle_version\": 1,\n \"config\": {\n  \"D1\": {\n   \"examples\": false,\n   \"structured_instruction\": true,\n   \"compression\": \"none\",\n   \"strategy\": \"phased exploration hierarchy and category-based search heuristics\"\n  },\n  \"D2\": {\n   \"tool_access\": \"bash\",\n   \"tool_protocol\": \"native\",\n   \"retrieval_mode\": \"none\",\n   \"top_k\": 0,\n   \"strategy\": \"strict native tool call execution on every step with no raw text fallback\"\n  },\n  \"D3\": {\n   \"temperature\": 0.0,\n   \"max_tokens\": 2048,\n   \"top_p\": 1.0,\n   \"candidate_count\": 1,\n   \"strategy\": \"deterministic greedy action selection\"\n  },\n  \"D4\": {\n   \"workflow\": \"agentic_loop\",\n   \"stop_rule\": \"env_done_or_accepted_finish_or_max_steps\",\n   \"strategy\": \"two-phase sequential item retrieval: locate and deposit first cd into safe, then explore remaining unvisited receptacles for second cd and deposit into safe\"\n  },\n  \"D5\": {\n   \"memory_policy\": \"sliding_window\",\n   \"history_keep\": 50,\n   \"strategy\": \"extended 50-turn sliding window to preserve safe location, open state, and visited receptacle tracking across both pick-and-place cycles\"\n  },\n  \"D6\": {\n   \"postprocess\": \"none\",\n   \"validator\": \"verifier_slot\",\n   \"fallback\": \"none\",\n   \"strategy\": \"action admissibility verification\"\n  }\n },\n \"runtime_files\": {\n  \"agents\": \"AGENTS.override.md\",\n  \"policy\": \"policy.json\",\n  \"memory\": \".memoharness/memory.md\",\n  \"playbook\": \".memoharness/playbook.md\"\n },\n \"codex\": {\n  \"model\": \"\",\n  \"reasoning_effort\": \"medium\",\n  \"reasoning_summary\": \"auto\"\n }\n}\n\n## ./.memoharness/playbook.md\n# Repo Playbook\n\nUse `./policy.json` as the authoritative D1-D6 summary.\nUse this file for stable MemoHarness execution heuristics that should survive iteration-to-iteration.\n\nCurrent priorities:\n- Read `./policy.json` first, then use this playbook for stable execution heuristics.\n- D1 strategy: phased exploration hierarchy and category-based search heuristics\n- D2 strategy: strict native tool call execution on every step with no raw text fallback\n- D4 strategy: two-phase sequential item retrieval: locate and deposit first cd into safe, then explore remaining unvisited receptacles for second cd and deposit into safe\n- D5 strategy: extended 50-turn sliding window to preserve safe location, open state, and visited receptacle tracking across both pick-and-place cycles\n- D6 strategy: action admissibility verification\n\n## ./.memoharness/memory.md\n# Rolling Memory\n\n- Read `./policy.json` first and use this file only for recent distilled lessons.\n- No stable distilled patterns are available yet.\n- Record recurring verifier failures and verified repair heuristics here.\n"
+     }
+    },
+    "tool_policy": {
+     "name": "default",
+     "config": {}
+    },
+    "memory": {
+     "name": "default",
+     "config": {}
+    },
+    "verifier": {
+     "name": "default",
+     "config": {}
+    }
+   },
+   "meta": {
+    "composer": "custom"
+   }
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155645198_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to desk 1\"}"
+     }
+    }
+   ],
+   "pt": 3726,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 0
+  },
+  {
+   "type": "step",
+   "n": 1,
+   "tool": "act",
+   "args": {
+    "command": "go to desk 1"
+   },
+   "observation": "You arrive at desk 1. On the desk 1, you see a bowl 1, a desklamp 1, a mug 1, and a pen 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155651045_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to desk 2\"}"
+     }
+    }
+   ],
+   "pt": 3679,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 1
+  },
+  {
+   "type": "step",
+   "n": 2,
+   "tool": "act",
+   "args": {
+    "command": "go to desk 2"
+   },
+   "observation": "You arrive at desk 2. On the desk 2, you see a bowl 2, a cd 2, a cd 1, a creditcard 3, a mug 2, a pencil 3, and a pencil 2."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155654813_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"take cd 1 from desk 2\"}"
+     }
+    }
+   ],
+   "pt": 3793,
+   "ct": 21,
+   "cost": 0.0,
+   "step": 2
+  },
+  {
+   "type": "step",
+   "n": 3,
+   "tool": "act",
+   "args": {
+    "command": "take cd 1 from desk 2"
+   },
+   "observation": "You pick up the cd 1 from the desk 2."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155656788_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to safe 1\"}"
+     }
+    }
+   ],
+   "pt": 3768,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 3
+  },
+  {
+   "type": "step",
+   "n": 4,
+   "tool": "act",
+   "args": {
+    "command": "go to safe 1"
+   },
+   "observation": "You arrive at safe 1. The safe 1 is closed."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155658406_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"open safe 1\"}"
+     }
+    }
+   ],
+   "pt": 3813,
+   "ct": 17,
+   "cost": 0.0,
+   "step": 4
+  },
+  {
+   "type": "step",
+   "n": 5,
+   "tool": "act",
+   "args": {
+    "command": "open safe 1"
+   },
+   "observation": "You open the safe 1. The safe 1 is open. In it, you see a cellphone 2."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155660014_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"put cd 1 in/on safe 1\"}"
+     }
+    }
+   ],
+   "pt": 3867,
+   "ct": 23,
+   "cost": 0.0,
+   "step": 5
+  },
+  {
+   "type": "step",
+   "n": 6,
+   "tool": "act",
+   "args": {
+    "command": "put cd 1 in/on safe 1"
+   },
+   "observation": "Nothing happens."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_admissible_commands_1793155665531_0",
+     "type": "function",
+     "function": {
+      "name": "admissible_commands",
+      "arguments": "{\"reason\":\"Check admissible commands for placing cd 1 in safe 1\"}"
+     }
+    }
+   ],
+   "pt": 3930,
+   "ct": 28,
+   "cost": 0.0,
+   "step": 6
+  },
+  {
+   "type": "step",
+   "n": 7,
+   "tool": "admissible_commands",
+   "args": {
+    "reason": "Check admissible commands for placing cd 1 in safe 1"
+   },
+   "observation": "Valid commands:\nclose safe 1\nexamine cd 1\nexamine safe 1\ngo to bed 1\ngo to desk 1\ngo to desk 2\ngo to drawer 1\ngo to drawer 2\ngo to drawer 3\ngo to drawer 4\ngo to drawer 5\ngo to drawer 6\ngo to garbagecan 1\ngo to laundryhamper 1\ngo to shelf 1\ngo to shelf 2\ngo to shelf 3\ngo to shelf 4\ngo to shelf 5\ngo to shelf 6\nhelp\ninventory\nlook\nmove cd 1 to safe 1"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155669178_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"move cd 1 to safe 1\"}"
+     }
+    }
+   ],
+   "pt": 4123,
+   "ct": 21,
+   "cost": 0.0,
+   "step": 7
+  },
+  {
+   "type": "step",
+   "n": 8,
+   "tool": "act",
+   "args": {
+    "command": "move cd 1 to safe 1"
+   },
+   "observation": "You move the cd 1 to the safe 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155671664_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to desk 2\"}"
+     }
+    }
+   ],
+   "pt": 4134,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 8
+  },
+  {
+   "type": "step",
+   "n": 9,
+   "tool": "act",
+   "args": {
+    "command": "go to desk 2"
+   },
+   "observation": "You arrive at desk 2. On the desk 2, you see a bowl 2, a cd 2, a creditcard 3, a mug 2, a pencil 3, and a pencil 2."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155674509_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"take cd 2 from desk 2\"}"
+     }
+    }
+   ],
+   "pt": 4212,
+   "ct": 21,
+   "cost": 0.0,
+   "step": 9
+  },
+  {
+   "type": "step",
+   "n": 10,
+   "tool": "act",
+   "args": {
+    "command": "take cd 2 from desk 2"
+   },
+   "observation": "You pick up the cd 2 from the desk 2."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155676819_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to safe 1\"}"
+     }
+    }
+   ],
+   "pt": 4259,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 10
+  },
+  {
+   "type": "step",
+   "n": 11,
+   "tool": "act",
+   "args": {
+    "command": "go to safe 1"
+   },
+   "observation": "You arrive at safe 1. The safe 1 is open. In it, you see a cd 1, and a cellphone 2."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155678498_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"move cd 2 to safe 1\"}"
+     }
+    }
+   ],
+   "pt": 4320,
+   "ct": 21,
+   "cost": 0.0,
+   "step": 11
+  },
+  {
+   "type": "step",
+   "n": 12,
+   "tool": "act",
+   "args": {
+    "command": "move cd 2 to safe 1"
+   },
+   "observation": "You move the cd 2 to the safe 1."
+  }
+ ]
+}

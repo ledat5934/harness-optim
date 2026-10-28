@@ -1,0 +1,43 @@
+STATE: H0 baseline achieves 36.7% pass rate (11/30 tasks) on validation, averaging 21.3 turns and ~465k tokens per task.
+Failed episodes overwhelmingly time out at 25 steps with 0 get_document calls, trapped in repetitive search loops.
+Failed runs repeatedly issue verbatim quoted clauses from the prompt (e.g., exact match queries that return empty/irrelevant results).
+Search results only provide brief snippets, but the agent fails to invoke get_document on high-scoring candidate documents.
+Successful runs (e.g., 823, 834, 835) consistently fetch and inspect full documents using get_document within 7-12 steps.
+
+HYPOTHESIS: Introducing a structured search-and-retrieval system prompt that directs the model to use concise keyword queries (avoiding long verbatim quotes), actively call `get_document` on promising search results rather than relying solely on snippets, and avoid repeating failing queries will eliminate snippet-blindness and search-looping, raising the validation pass rate from 36.7% to over 50% while reducing average turns and token usage.
+CANDIDATE: name=search_retrieval_system_prompt, changes="Add system_prompt.txt providing general guidelines on effective keyword querying, inspecting full documents via get_document, and avoiding duplicate queries", prediction="Pass rate increases from 36.7% to >=50.0%; average turns decrease from 21.3 to <18.0"
+PARENT: h0
+
+### FILE: system_prompt.txt
+You are an autonomous research agent tasked with answering questions accurately by searching a document corpus and retrieving relevant evidence.
+
+Follow these principles:
+1. Search Effectively:
+   - Formulate search queries using concise, distinctive keywords (such as key names, places, dates, and domain-specific terms).
+   - Do NOT enclose long phrases or entire clauses from the question in quotation marks; paraphrasing in the corpus means exact multi-word phrases frequently fail to match.
+   - If a query yields poor or irrelevant results, rephrase using synonyms, broader concepts, or alternative clues from the question. Do not repeat identical queries.
+
+2. Retrieve and Inspect Documents:
+   - Search results only return brief preview snippets, which rarely contain complete answers.
+   - When a search result's title, score, or snippet appears potentially relevant, use `get_document(docid=...)` to inspect the full document text for specific facts, names, and details.
+
+3. Verify and Answer:
+   - Carefully verify that your findings satisfy all constraints specified in the question.
+   - Once all required information is confirmed, call the finish tool with your final answer. Provide a direct, concise, and accurate response to the question.
+
+```json
+{
+  "iteration": 1,
+  "candidates": [
+    {
+      "name": "search_retrieval_system_prompt",
+      "parent": "h0",
+      "hypothesis": "Introducing a structured search-and-retrieval system prompt that directs the model to use concise keyword queries (avoiding long verbatim quotes), actively call get_document on promising search results rather than relying solely on snippets, and avoid repeating failing queries will eliminate snippet-blindness and search-looping, raising the validation pass rate from 36.7% to over 50% while reducing average turns and token usage.",
+      "changes": "Add system_prompt.txt providing general guidelines on effective keyword querying, inspecting full documents via get_document, and avoiding duplicate queries",
+      "expected_efficiency": "Average turns decrease from 21.3 to <18.0 and mean input tokens decrease by ~15-25% due to fewer 25-turn exhausted search loops"
+    }
+  ]
+}
+```
+
+CANDIDATES: search_retrieval_system_prompt

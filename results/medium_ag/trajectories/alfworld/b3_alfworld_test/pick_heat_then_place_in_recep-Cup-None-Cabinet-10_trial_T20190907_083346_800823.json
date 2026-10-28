@@ -1,0 +1,549 @@
+{
+ "benchmark": "alfworld",
+ "task_id": "pick_heat_then_place_in_recep-Cup-None-Cabinet-10/trial_T20190907_083346_800823",
+ "run_tag": "b3_alfworld_test",
+ "wall_s": 62.09,
+ "tokens": 76457,
+ "cost": 0.0,
+ "llm_calls": 18,
+ "steps": 18,
+ "success": true,
+ "error": null,
+ "eval_info": {
+  "won": true
+ },
+ "outcome": {
+  "stopped": "done",
+  "steps": 18,
+  "final_answer": null,
+  "llm_calls": 18
+ },
+ "events": [
+  {
+   "type": "task",
+   "instruction": "Your task is to: put a hot cup in cabinet.",
+   "max_steps": 50
+  },
+  {
+   "type": "harness",
+   "root": "/home/user/harness-optim/h0",
+   "bundle": {
+    "agent_loop": {
+     "name": "default",
+     "config": {
+      "temperature": 0.0,
+      "max_tokens": 2048
+     }
+    },
+    "context_mgmt": {
+     "name": "default",
+     "config": {
+      "keep_turns": 45,
+      "extra_system": "# Harness bundle (MemoHarness)\nThe files below are your harness policy, in the order to read them.\n\n## ./AGENTS.override.md\n# AlfWorld Policy Guidelines\n\n## Action Execution Protocol\n- Always execute actions via the native tool call API on every turn; never output action commands as raw text or markdown.\n- Execute one admissible action per step matching the observed environment state.\n\n## Task Execution Flow\n- Locate target item -> take item -> transform if required (clean with sinkbasin, cool with fridge, heat with microwave, use desklamp) -> navigate to target receptacle -> put item in/on receptacle.\n- For `pick_two_obj_and_place`, deliver the first item completely, then locate and deliver the second item.\n\n## Phased Search Hierarchy\n- Phase 1 (Open Surfaces): Check open surfaces first (diningtable, countertop, desk, table, bed, sofa). Food items and everyday objects are usually visible immediately without opening actions.\n- Phase 2 (Appliances): Check category appliances (fridge for food/produce; microwave; sinkbasin).\n- Phase 3 (Closed Storage): Check closed containers (cabinets, drawers, safe) only if the item was not found on open surfaces or appliances. Always open containers before taking or placing items.\n- Spatial Memory: Note the locations of transformation fixtures (sinkbasin, microwave, fridge) and target receptacles when first seen to navigate directly when needed.\n- Avoid Search Cycles: Never re-examine receptacles that were already checked.\n\n## ./policy.json\n{\n \"bundle_version\": 1,\n \"config\": {\n  \"D1\": {\n   \"examples\": false,\n   \"structured_instruction\": true,\n   \"compression\": \"none\",\n   \"strategy\": \"phased exploration hierarchy and category-based search heuristics\"\n  },\n  \"D2\": {\n   \"tool_access\": \"bash\",\n   \"tool_protocol\": \"native\",\n   \"retrieval_mode\": \"none\",\n   \"top_k\": 0,\n   \"strategy\": \"strict native tool call execution on every step with no raw text fallback\"\n  },\n  \"D3\": {\n   \"temperature\": 0.0,\n   \"max_tokens\": 2048,\n   \"top_p\": 1.0,\n   \"candidate_count\": 1,\n   \"strategy\": \"deterministic greedy action selection\"\n  },\n  \"D4\": {\n   \"workflow\": \"agentic_loop\",\n   \"stop_rule\": \"env_done_or_accepted_finish_or_max_steps\",\n   \"strategy\": \"phased exploration (open surfaces -> appliances -> closed storage) and stage execution (locate -> take -> transform -> place)\"\n  },\n  \"D5\": {\n   \"memory_policy\": \"sliding_window\",\n   \"history_keep\": 45,\n   \"strategy\": \"extended history window (45 turns) to retain exploration map and prevent search cycles\"\n  },\n  \"D6\": {\n   \"postprocess\": \"none\",\n   \"validator\": \"verifier_slot\",\n   \"fallback\": \"none\",\n   \"strategy\": \"action admissibility verification\"\n  }\n },\n \"runtime_files\": {\n  \"agents\": \"AGENTS.override.md\",\n  \"policy\": \"policy.json\",\n  \"memory\": \".memoharness/memory.md\",\n  \"playbook\": \".memoharness/playbook.md\"\n },\n \"codex\": {\n  \"model\": \"\",\n  \"reasoning_effort\": \"medium\",\n  \"reasoning_summary\": \"auto\"\n }\n}\n\n## ./.memoharness/playbook.md\n# Repo Playbook\n\nUse `./policy.json` as the authoritative D1-D6 summary.\nUse this file for stable MemoHarness execution heuristics that should survive iteration-to-iteration.\n\nCurrent priorities:\n- Read `./policy.json` first, then use this playbook for stable execution heuristics.\n- D1 strategy: phased exploration hierarchy and category-based search heuristics\n- D2 strategy: strict native tool call execution on every step with no raw text fallback\n- D4 strategy: phased exploration (open surfaces -> appliances -> closed storage) and stage execution (locate -> take -> transform -> place)\n- D5 strategy: extended history window (45 turns) to retain exploration map and prevent search cycles\n- D6 strategy: action admissibility verification\n\n## ./.memoharness/memory.md\n# Rolling Memory\n\n- Read `./policy.json` first and use this file only for recent distilled lessons.\n- No stable distilled patterns are available yet.\n- Record recurring verifier failures and verified repair heuristics here.\n"
+     }
+    },
+    "tool_policy": {
+     "name": "default",
+     "config": {}
+    },
+    "memory": {
+     "name": "default",
+     "config": {}
+    },
+    "verifier": {
+     "name": "default",
+     "config": {}
+    }
+   },
+   "meta": {
+    "composer": "custom"
+   }
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155475187_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to countertop 1\"}"
+     }
+    }
+   ],
+   "pt": 3697,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 0
+  },
+  {
+   "type": "step",
+   "n": 1,
+   "tool": "act",
+   "args": {
+    "command": "go to countertop 1"
+   },
+   "observation": "You arrive at countertop 1. On the countertop 1, you see a cellphone 2, a egg 2, and a lettuce 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155478217_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to countertop 2\"}"
+     }
+    }
+   ],
+   "pt": 3693,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 1
+  },
+  {
+   "type": "step",
+   "n": 2,
+   "tool": "act",
+   "args": {
+    "command": "go to countertop 2"
+   },
+   "observation": "You arrive at countertop 2. On the countertop 2, you see a bowl 2, a bread 1, a butterknife 1, a egg 3, a fork 1, a glassbottle 2, a glassbottle 1, a knife 2, a knife 1, a potato 1, and a spatula 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155480190_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to countertop 3\"}"
+     }
+    }
+   ],
+   "pt": 3745,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 2
+  },
+  {
+   "type": "step",
+   "n": 3,
+   "tool": "act",
+   "args": {
+    "command": "go to countertop 3"
+   },
+   "observation": "You arrive at countertop 3. On the countertop 3, you see a butterknife 2, a cellphone 3, a fork 3, a houseplant 1, a knife 3, a peppershaker 2, a potato 2, a soapbottle 1, a statue 3, a tomato 3, and a tomato 2."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155483600_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to coffeemachine 1\"}"
+     }
+    }
+   ],
+   "pt": 3878,
+   "ct": 21,
+   "cost": 0.0,
+   "step": 3
+  },
+  {
+   "type": "step",
+   "n": 4,
+   "tool": "act",
+   "args": {
+    "command": "go to coffeemachine 1"
+   },
+   "observation": "You arrive at coffeemachine 1. On the coffeemachine 1, you see nothing."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155486594_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to shelf 1\"}"
+     }
+    }
+   ],
+   "pt": 3909,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 4
+  },
+  {
+   "type": "step",
+   "n": 5,
+   "tool": "act",
+   "args": {
+    "command": "go to shelf 1"
+   },
+   "observation": "You arrive at shelf 1. On the shelf 1, you see a saltshaker 3, a statue 2, and a statue 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155491343_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to shelf 2\"}"
+     }
+    }
+   ],
+   "pt": 3973,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 5
+  },
+  {
+   "type": "step",
+   "n": 6,
+   "tool": "act",
+   "args": {
+    "command": "go to shelf 2"
+   },
+   "observation": "You arrive at shelf 2. On the shelf 2, you see a glassbottle 3, a mug 1, and a plate 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155495171_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to shelf 3\"}"
+     }
+    }
+   ],
+   "pt": 4092,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 6
+  },
+  {
+   "type": "step",
+   "n": 7,
+   "tool": "act",
+   "args": {
+    "command": "go to shelf 3"
+   },
+   "observation": "You arrive at shelf 3. On the shelf 3, you see nothing."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155500970_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to sinkbasin 1\"}"
+     }
+    }
+   ],
+   "pt": 4084,
+   "ct": 19,
+   "cost": 0.0,
+   "step": 7
+  },
+  {
+   "type": "step",
+   "n": 8,
+   "tool": "act",
+   "args": {
+    "command": "go to sinkbasin 1"
+   },
+   "observation": "You arrive at sinkbasin 1. On the sinkbasin 1, you see a apple 1, a butterknife 3, a cup 4, a dishsponge 2, a fork 2, a potato 3, a spatula 3, and a spoon 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155504926_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"take cup 4 from sinkbasin 1\"}"
+     }
+    }
+   ],
+   "pt": 4236,
+   "ct": 22,
+   "cost": 0.0,
+   "step": 8
+  },
+  {
+   "type": "step",
+   "n": 9,
+   "tool": "act",
+   "args": {
+    "command": "take cup 4 from sinkbasin 1"
+   },
+   "observation": "You pick up the cup 4 from the sinkbasin 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155507563_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to microwave 1\"}"
+     }
+    }
+   ],
+   "pt": 4225,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 9
+  },
+  {
+   "type": "step",
+   "n": 10,
+   "tool": "act",
+   "args": {
+    "command": "go to microwave 1"
+   },
+   "observation": "You arrive at microwave 1. The microwave 1 is closed."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155510164_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"open microwave 1\"}"
+     }
+    }
+   ],
+   "pt": 4270,
+   "ct": 17,
+   "cost": 0.0,
+   "step": 10
+  },
+  {
+   "type": "step",
+   "n": 11,
+   "tool": "act",
+   "args": {
+    "command": "open microwave 1"
+   },
+   "observation": "You open the microwave 1. The microwave 1 is open. In it, you see nothing."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155512304_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"put cup 4 in/on microwave 1\"}"
+     }
+    }
+   ],
+   "pt": 4321,
+   "ct": 23,
+   "cost": 0.0,
+   "step": 11
+  },
+  {
+   "type": "step",
+   "n": 12,
+   "tool": "act",
+   "args": {
+    "command": "put cup 4 in/on microwave 1"
+   },
+   "observation": "Nothing happens."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_admissible_commands_1793155514342_0",
+     "type": "function",
+     "function": {
+      "name": "admissible_commands",
+      "arguments": "{\"reason\":\"check valid actions for microwave 1 with cup 4\"}"
+     }
+    }
+   ],
+   "pt": 4360,
+   "ct": 27,
+   "cost": 0.0,
+   "step": 12
+  },
+  {
+   "type": "step",
+   "n": 13,
+   "tool": "admissible_commands",
+   "args": {
+    "reason": "check valid actions for microwave 1 with cup 4"
+   },
+   "observation": "Valid commands:\nclose microwave 1\nexamine cup 4\nexamine microwave 1\ngo to cabinet 1\ngo to cabinet 2\ngo to cabinet 3\ngo to cabinet 4\ngo to cabinet 5\ngo to cabinet 6\ngo to coffeemachine 1\ngo to countertop 1\ngo to countertop 2\ngo to countertop 3\ngo to drawer 1\ngo to drawer 2\ngo to drawer 3\ngo to fridge 1\ngo to garbagecan 1\ngo to shelf 1\ngo to shelf 2\ngo to shelf 3\ngo to sinkbasin 1\ngo to stoveburner 1\ngo to stoveburner 2\ngo to stoveburner 3\ngo to stoveburner 4\ngo to toaster 1\nheat cup 4 with microwave 1\nhelp\ninventory\nlook\nmove cup 4 to microwave 1"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155516947_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"heat cup 4 with microwave 1\"}"
+     }
+    }
+   ],
+   "pt": 4598,
+   "ct": 21,
+   "cost": 0.0,
+   "step": 13
+  },
+  {
+   "type": "step",
+   "n": 14,
+   "tool": "act",
+   "args": {
+    "command": "heat cup 4 with microwave 1"
+   },
+   "observation": "You heat the cup 4 using the microwave 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155518972_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"go to cabinet 1\"}"
+     }
+    }
+   ],
+   "pt": 4644,
+   "ct": 18,
+   "cost": 0.0,
+   "step": 14
+  },
+  {
+   "type": "step",
+   "n": 15,
+   "tool": "act",
+   "args": {
+    "command": "go to cabinet 1"
+   },
+   "observation": "You arrive at cabinet 1. On the cabinet 1, you see a saltshaker 1."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155520775_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"open cabinet 1\"}"
+     }
+    }
+   ],
+   "pt": 4697,
+   "ct": 17,
+   "cost": 0.0,
+   "step": 15
+  },
+  {
+   "type": "step",
+   "n": 16,
+   "tool": "act",
+   "args": {
+    "command": "open cabinet 1"
+   },
+   "observation": "Nothing happens."
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_admissible_commands_1793155522684_0",
+     "type": "function",
+     "function": {
+      "name": "admissible_commands",
+      "arguments": "{\"reason\":\"check admissible commands at cabinet 1\"}"
+     }
+    }
+   ],
+   "pt": 4730,
+   "ct": 23,
+   "cost": 0.0,
+   "step": 16
+  },
+  {
+   "type": "step",
+   "n": 17,
+   "tool": "admissible_commands",
+   "args": {
+    "reason": "check admissible commands at cabinet 1"
+   },
+   "observation": "Valid commands:\nexamine cabinet 1\nexamine cup 4\ngo to cabinet 2\ngo to cabinet 3\ngo to cabinet 4\ngo to cabinet 5\ngo to cabinet 6\ngo to coffeemachine 1\ngo to countertop 1\ngo to countertop 2\ngo to countertop 3\ngo to drawer 1\ngo to drawer 2\ngo to drawer 3\ngo to fridge 1\ngo to garbagecan 1\ngo to microwave 1\ngo to shelf 1\ngo to shelf 2\ngo to shelf 3\ngo to sinkbasin 1\ngo to stoveburner 1\ngo to stoveburner 2\ngo to stoveburner 3\ngo to stoveburner 4\ngo to toaster 1\nhelp\ninventory\nlook\nmove cup 4 to cabinet 1"
+  },
+  {
+   "type": "llm",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "call_act_1793155524206_0",
+     "type": "function",
+     "function": {
+      "name": "act",
+      "arguments": "{\"command\":\"move cup 4 to cabinet 1\"}"
+     }
+    }
+   ],
+   "pt": 4950,
+   "ct": 21,
+   "cost": 0.0,
+   "step": 17
+  },
+  {
+   "type": "step",
+   "n": 18,
+   "tool": "act",
+   "args": {
+    "command": "move cup 4 to cabinet 1"
+   },
+   "observation": "You move the cup 4 to the cabinet 1."
+  }
+ ]
+}

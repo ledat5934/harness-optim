@@ -1,12 +1,12 @@
 {
- "iteration": 1,
+ "iteration": 2,
  "candidates": [
   {
-   "name": "action_syntax_normalization",
-   "parent": "h0",
-   "hypothesis": "Normalizing natural language placement commands ('put/place <obj> in/on/in/on/into/onto <recep>') to ALFWorld's accepted syntax ('move <obj> to <recep>') in tool_policy.parse will eliminate 2-4 wasted steps and redundant admissible_commands calls per episode, preventing step budget exhaustion on complex multi-object tasks and reducing average turns and tokens by 15-20%.",
-   "changes": "In variants/tool_policy/default.py, implement command syntax normalization for text-game actions in parse(), mapping 'put/place <obj> in/on/into/onto <recep>' to 'move <obj> to <recep>'.",
-   "expected_efficiency": "Reduces mean turns from 11.4 to ~9.2 and saves ~15-20% input tokens across all placement tasks."
+   "name": "env_interaction_guidance",
+   "parent": "r1",
+   "hypothesis": "Supplying general interactive household environment domain principles in context_mgmt (standard action formats, conditioning objects directly in inventory without placing them inside appliances first, and recognizing that co-located fixtures share positions so 'Nothing happens' on navigation means direct interaction is available) will eliminate appliance-misuse recovery loops and redundant admissible_commands exploratory calls, reducing mean turns by ~15-20% and preventing step budget exhaustion on complex multi-stage tasks while maintaining 100% pass rate.",
+   "changes": "In variants/context_mgmt/default.py, set default extra_system guidance detailing standard action primitives, inventory-based object conditioning (heat/cool/clean), and co-located fixture mechanics.",
+   "expected_efficiency": "Maintains 100% pass rate while reducing mean turns from 10.4 to ~8.5-9.0 and reducing total token consumption by ~15%."
   }
  ]
 }
