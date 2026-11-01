@@ -209,7 +209,7 @@ class HookedLoop:
                 continue
             if eval_pre(self.code[i], tr, sig):
                 fired[i] = fired.get(i, 0) + 1
-                rec.note("mech", id=m["id"], kind=kind, step=tr.step)
+                rec.note("mech", id=m["id"], mkind=kind, step=tr.step)
                 out.append(render(m["text"], sig))
         return out
 
