@@ -96,6 +96,12 @@ class AnseriniBM25:
         import jnius_config
         jars = glob.glob(os.path.join(_sys.prefix, "lib", "python*", "site-packages", "pyserini", "resources",
                                       "jars", "anserini-*-fatjar.jar"))
+        if not jars:  # dist-packages installs: locate the package without importing pyserini.search
+            import importlib.util
+            spec = importlib.util.find_spec("pyserini")
+            if spec and spec.submodule_search_locations:
+                for d in spec.submodule_search_locations:
+                    jars += glob.glob(os.path.join(d, "resources", "jars", "anserini-*-fatjar.jar"))
         if not jars:
             raise FileNotFoundError("anserini fatjar not found (pip install --no-deps pyserini)")
         if not jnius_config.vm_running:
