@@ -75,7 +75,7 @@ def main():
     h0_dir = C.OUT  # the shared H0 records stay in the protocol's folder, also in debug mode
     cfg = dict(base_cfg)
     if args.debug:
-        cfg.update(n_check=1, n_val=1, n_test=1, workers=1)
+        cfg.update(n_check=1, n_val=1, n_test=1, workers=1, rounds=1)
     for k in ("n_check", "n_val", "n_test", "workers"):
         if getattr(args, k) is not None:
             cfg[k] = getattr(args, k)
