@@ -23,7 +23,7 @@ from baselines import common as C  # noqa: E402
 def test_harness(method: str, bench: str, client) -> dict:
     ws = C.RUNS / method / bench
     fin = json.loads((ws / "final.json").read_text())
-    if method == "b1":
+    if method in ("b1", "b4"):
         return {"root": Path(fin["final_root"])}
     if method == "b2":
         from baselines.b2_modular import llm_composer_factory
@@ -47,7 +47,7 @@ def test_harness(method: str, bench: str, client) -> dict:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench", required=True)
-    ap.add_argument("--method", required=True, choices=["b1", "b2", "b3"])
+    ap.add_argument("--method", required=True, choices=["b1", "b2", "b3", "b4"])
     ap.add_argument("--protocol", default="medium", choices=sorted(C.PROTOCOLS))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--missing", action="store_true",

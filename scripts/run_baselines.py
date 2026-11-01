@@ -64,7 +64,7 @@ def load_shared(bench: str, cfg: dict = C.SMOKE, allow_stale: bool = False, h0_d
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench", required=True)
-    ap.add_argument("--method", required=True, choices=["b1", "b2", "b3"])
+    ap.add_argument("--method", required=True, choices=["b1", "b2", "b3", "b4"])
     ap.add_argument("--debug", action="store_true", help="full LLM logging + verbose steps, output in results/debug/")
     for k in ("n_check", "n_val", "n_test", "workers"):
         ap.add_argument("--" + k.replace("_", "-"), type=int)
@@ -97,7 +97,7 @@ def main():
     shared = load_shared(args.bench, cfg, allow_stale=args.debug, h0_dir=h0_dir)
     print(f"shared H0: train records={len(shared['h0_train'])} (pass {sum(r['success'] for r in shared['h0_train'])}), "
           f"val={C.score(shared['h0_val']):.2f}")
-    mod = {"b1": "baselines.b1_freeform", "b2": "baselines.b2_modular", "b3": "baselines.b3_memo"}[args.method]
+    mod = {"b1": "baselines.b1_freeform", "b2": "baselines.b2_modular", "b3": "baselines.b3_memo", "b4": "baselines.b4_repertoire"}[args.method]
     import importlib
     m = importlib.import_module(mod)
     t0 = time.time()
