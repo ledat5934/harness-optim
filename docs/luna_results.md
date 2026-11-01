@@ -121,3 +121,45 @@ Ghi chú nhỏ, chưa sửa vì không ảnh hưởng: `baselines/b3_memo.py` v�
 - `results/medium_luna/runs/<method>/<bench>/`: workspace tiến hóa (log, candidate, bundle, bank).
 - `results/medium_luna/logs/`: log từng tiến trình, gồm cả `alfworld_<method>_redo.log`.
 - Trajectory và thư mục `runs/` lớn không được commit (gitignore), giống lần chạy ling.
+
+## 6. B4 – repertoire cơ chế có cổng kiểm định (ý tưởng v2, `baselines/b4_repertoire.py`)
+
+Cùng model luna, cùng protocol medium (5 vòng, 50 train × 3 roll của H0, 30 val, 100/99 task test), cùng bản ghi H0 dùng chung.
+B4 thêm các cơ chế khai báo `precondition -> action` (guidance / inject / annotate_obs / reject_finish) vào vòng ReAct của H0;
+mỗi vòng: gắn nhãn failure mode từ tín hiệu hành vi → blind/hindsight report → đề xuất 2 nhánh (structural + guidance)
+→ cổng khái quát hóa (lint) → sàng lọc từng ứng viên trên 10 task mục tiêu + 6 task "an toàn" (ghép cặp với H0)
+→ gộp R³ và kiểm định trên val. Thiết kế: `docs/idea_v2.md`.
+
+| Benchmark (test) | H0 | B1 | B2 | B3 | **B4** | B4 vs H0 (thắng/thua, sign test) | B4 vs B1 |
+|---|---|---|---|---|---|---|---|
+| BrowseComp-Plus acc (100) | 24 | 28 | 23 | 21 | **33** | +13/−4, p = 0,05 | +11/−6, p = 0,33 |
+| AppWorld TGC (99) | 74,7 | **77,8** | 74,7 | 75,8 | 71,7 | +4/−7, p = 0,55 | +5/−11, p = 0,21 |
+
+Chi phí: luna qua 9router miễn phí ($0). B4 dùng nhiều episode hơn B1 (BCP 410, AppWorld 469 episode tiến hóa + test),
+vì mỗi ứng viên được sàng lọc riêng trên 16 task train.
+
+**BrowseComp-Plus.** Bộ cuối {m1, m2} được chọn ngay vòng 1 (val 0,13 → 0,43). m1 là `reject_finish` khi câu trả lời
+mang tính "không xác định được" mà vẫn còn bước (kích hoạt ở 70/100 task test); m2 là guidance về chiến lược tìm kiếm.
+Đây đúng là failure mode chính của H0 trên luna (75% câu trả lời bị hedge, không câu hedge nào đúng). Vòng 2–5 đều nhắm
+"early_stop"; vài ứng viên qua sàng lọc nhưng không cải thiện val nên không được gộp. Đây là kết quả tốt nhất trên BCP
+và là cải thiện duy nhất so với H0 có ý nghĩa thống kê (p = 0,05).
+
+**AppWorld.** Bộ cuối {m1 annotate_obs khi observation dài, m2 guidance kiểm tra đầy đủ trước khi kết thúc,
+m6 guidance dùng ít tool call nhất}. Val tăng 0,70 → 0,80 → 0,833 nhưng test giảm 3 điểm so với H0 (không có ý nghĩa thống kê).
+Phân tích pool (`runs/b4/appworld/pool.json`):
+- Cổng "không gây hại" quá lỏng: m2 được nhận dù dS = −0,167 trên task an toàn (ngưỡng hiện tại cho phép tổng −1 trên 6 task);
+  m7, m10 cũng có dS âm. Trên AppWorld H0 đã giải 75%, nên tác hại lên task dễ quan trọng hơn lợi ích trên task khó.
+- Val 30 task quá nhỏ cho chênh lệch 1–4 task; chọn theo `C.better` (chỉ cần lớn hơn) nên dễ overfit val.
+  Đây cũng là vấn đề chung của B1–B3 (đã ghi ở mục trên), nhưng B4 gộp tới 3 cơ chế.
+- Hai guidance m2, m6 kích hoạt ở mọi task (precondition True), tức là thay đổi toàn cục, đúng loại thay đổi mà
+  ý tưởng v2 khuyên hạn chế.
+
+**Đề xuất sửa (khái quát, chưa chạy lại):** (1) cổng an toàn chặt hơn: loại ứng viên nếu dS < 0 (hoặc LCB của dS < 0),
+nhất là với guidance; (2) chỉ gộp khi val tăng ≥ 2 task hoặc LCB ghép cặp > 0, thay cho "lớn hơn"; (3) với benchmark mà H0
+đã mạnh, ưu tiên cơ chế có precondition hẹp thay cho guidance toàn cục; (4) tăng số task an toàn khi sàng lọc.
+
+**Lỗi pipeline phát hiện khi chạy debug** (đã sửa): `Recorder.note()` trùng tham số `kind` khi log cơ chế kích hoạt
+(đổi thành `mkind`); container khởi động lại làm mất pyserini/pyjnius và appworld (cài lại; adapter BCP tìm fatjar
+cả trong `dist-packages`; AppWorld chạy bằng venv Python 3.12 vì SQLAlchemy cũ không build trên Python 3.13);
+chế độ `--debug` giờ chỉ chạy 1 vòng. Calibration: blind confidence của luna không phân biệt được run đúng/sai
+(BCP: 0,35 với run đúng, 0,43 với run sai) nên chỉ được ghi lại, không dùng làm tín hiệu chọn.
