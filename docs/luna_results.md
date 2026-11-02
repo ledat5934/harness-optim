@@ -163,3 +163,33 @@ nhất là với guidance; (2) chỉ gộp khi val tăng ≥ 2 task hoặc LCB g
 cả trong `dist-packages`; AppWorld chạy bằng venv Python 3.12 vì SQLAlchemy cũ không build trên Python 3.13);
 chế độ `--debug` giờ chỉ chạy 1 vòng. Calibration: blind confidence của luna không phân biệt được run đúng/sai
 (BCP: 0,35 với run đúng, 0,43 với run sai) nên chỉ được ghi lại, không dùng làm tín hiệu chọn.
+
+## 7. B4 v2 – cổng chặt hơn (chạy lại cả hai benchmark)
+
+Thay đổi so với v1 (đều là nguyên tắc chung, `baselines/b4_repertoire.py`):
+1. **Ngân sách gây hại theo phạm vi tác động:** cơ chế luôn bật (guidance hoặc precondition `True`) không được làm hỏng
+   task an toàn nào; cơ chế có điều kiện được phép hỏng tối đa 1 (nhiễu). Số task an toàn khi sàng lọc 6 → 10.
+2. **Gộp theo biên ghép cặp trên val:** số task thắng − số task thua so với bộ hiện tại ≥ 2, thay cho "val cao hơn".
+3. Proposer được dặn ưu tiên precondition hẹp; guidance chỉ dùng cho lời khuyên không viết được thành điều kiện.
+
+Kết quả v1 giữ ở `results/medium_luna/b4v1_*.jsonl`, `runs/b4v1/`; v2 ở `b4_*.jsonl`, `runs/b4/`.
+
+| Test (luna) | H0 | B1 | B2 | B3 | B4 v1 | **B4 v2** | v2 vs H0 | v2 vs B1 | v2 vs v1 |
+|---|---|---|---|---|---|---|---|---|---|
+| BrowseComp-Plus acc (100) | 24 | 28 | 23 | 21 | **33** | 28 | +9/−5, p = 0,42 | +7/−7 | +6/−11, p = 0,33 |
+| AppWorld TGC (99) | 74,7 | 77,8 | 74,7 | 75,8 | 71,7 | **78,8** | +9/−5, p = 0,42 | +6/−5 | +12/−5, p = 0,14 |
+
+- **AppWorld:** bộ cuối chỉ còn **một** cơ chế có điều kiện: m3 `inject` khi `n_errors >= 3 and steps_left > 1`
+  (nhắc dùng chi tiết lỗi để sửa cách làm và tiếp tục; kích hoạt ở 87/99 task test). Các guidance luôn bật bị cổng mới
+  loại vì làm hỏng task H0 luôn giải (m4) hoặc không thắng đủ trên val. Test từ 71,7 (v1) lên 78,8, cao nhất trong
+  các phương pháp, và không còn bị overfit val (val 0,767 ≈ test 0,788).
+- **BrowseComp-Plus:** cả v1 và v2 đều chọn {reject_finish khi trả lời hedge, guidance tìm kiếm} ở vòng 1 và không gộp
+  thêm gì; v2 đạt 28 thay vì 33. Cổng mới không ảnh hưởng vòng 1 (cả hai đều qua), nên chênh lệch đến từ cách proposer
+  diễn đạt cơ chế và nhiễu (+6/−11, p = 0,33).
+- Không có khác biệt nào có ý nghĩa thống kê ở mức 0,05 với 100 task; B4 v2 là phương pháp duy nhất không thua H0 trên
+  cả hai benchmark và đứng đầu/ngang đầu ở cả hai.
+
+**Nhận xét về ý tưởng.** (1) Cơ chế có điều kiện hẹp tổng quát tốt hơn guidance toàn cục: lợi ích nằm ở các episode mà
+precondition đúng, còn các episode khác gần như không bị đụng tới. (2) Với model mạnh trên benchmark mà H0 đã cao, rủi ro
+chính là làm hỏng task dễ, nên ngân sách gây hại phải phụ thuộc phạm vi kích hoạt. (3) Val 30 task là nút thắt: biến
+động giữa hai lần chạy cùng cấu hình (BCP 33 vs 28) cỡ bằng hiệu ứng cần đo; muốn kết luận chắc cần nhiều seed hoặc val lớn hơn.
