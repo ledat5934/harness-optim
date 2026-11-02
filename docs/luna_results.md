@@ -193,3 +193,22 @@ Kết quả v1 giữ ở `results/medium_luna/b4v1_*.jsonl`, `runs/b4v1/`; v2 �
 precondition đúng, còn các episode khác gần như không bị đụng tới. (2) Với model mạnh trên benchmark mà H0 đã cao, rủi ro
 chính là làm hỏng task dễ, nên ngân sách gây hại phải phụ thuộc phạm vi kích hoạt. (3) Val 30 task là nút thắt: biến
 động giữa hai lần chạy cùng cấu hình (BCP 33 vs 28) cỡ bằng hiệu ứng cần đo; muốn kết luận chắc cần nhiều seed hoặc val lớn hơn.
+
+## 8. B4 v3 (sàng lọc cận biên, đóng băng mode, dừng sớm, chọn lại 2 lượt val)
+
+| | BCP acc | AppWorld TGC |
+|---|---|---|
+| H0 | 24 | 74.7 |
+| B1 | 28 | 77.8 |
+| B4 v1 | 33 | 71.7 |
+| B4 v2 | 28 | 78.8 |
+| **B4 v3** | **29** | **80.8** |
+
+- Ghép cặp trên test, v3 so với H0: AppWorld 8 thắng / 2 thua (sign test p = 0.11); BCP 12/7 (p = 0.36). So với v2: AppWorld 7/5, BCP 7/6.
+- Bộ cuối mỗi benchmark là 1 cơ chế có điều kiện:
+  - AppWorld: `inject` khi `n_errors >= 1 and err_streak == 0 and step_frac < 0.5 and steps_left > 2`, tức là gợi ý khôi phục lỗi khi còn nhiều ngân sách. Cơ chế kích hoạt trên 99/99 task test.
+  - BCP: `reject_finish` khi câu trả lời né tránh, đã search ít nhất 3 lần và còn bước. Kích hoạt trên 66/100 task.
+- Dừng sớm: BCP dừng sau vòng 3, AppWorld sau vòng 4. Chi phí ngoài test: BCP 268 episode (v2: 290). AppWorld 390 episode (v2: 320) do phải chạy lại bộ mới trên train để làm mốc so sánh và chạy val lượt 2.
+- Chọn lại cuối: ở cả hai benchmark, bộ hai cơ chế không vượt được bộ một cơ chế qua hai lượt val (AppWorld −2, BCP +1), nên bộ một cơ chế được giữ.
+- So sánh kích hoạt / không kích hoạt bị lệch do chọn mẫu: m1 trên BCP chỉ kích hoạt ở task khó (8/66 đúng so với 21/34). Chỉ số này cần được so với H0 trên cùng task trước khi dùng làm bằng chứng.
+- Hạn chế: mỗi phiên bản mới chạy 1 seed, và chưa có kết quả nào đạt mức có ý nghĩa thống kê.
