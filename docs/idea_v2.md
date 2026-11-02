@@ -227,3 +227,39 @@ Làm theo thứ tự này, để mỗi bước đều chạy và đo được tr
 - không kích hoạt lười, để đo chi phí.
 
 **Benchmark:** bỏ ALFWorld với model mạnh vì H0 đạt trần (ag 100%). Nếu cần thêm, chọn benchmark mà model mạnh vẫn còn failure niche rõ ràng.
+
+## 9. Bài học từ 4 lần chạy B4 trên luna (v1, v2 × BCP, AppWorld) và đề xuất v3
+
+Số liệu: `results/medium_luna/runs/{b4v1,b4}/*/{pool,log}.json`, `docs/luna_results.md` mục 6–7.
+
+| Quan sát | Bằng chứng | Hệ quả cho ý tưởng |
+|---|---|---|
+| O1. Ghép thêm cơ chế vào bộ hiện tại **luôn** làm val giảm | 9/9 lần thử bộ ≥ 2 cơ chế sau vòng đầu đều thấp hơn bộ cũ (v2 AppWorld: +m7 1W/4L, +m9 0W/5L) dù từng cơ chế đều qua sàng lọc | Sàng lọc đứng riêng trên H0 không đo được tương tác. "Compatibility-aware composition" của ý tưởng gốc là cần thiết, nhưng phải đo bằng thực nghiệm chứ không suy ra từ đồ thị |
+| O2. Toàn bộ lợi ích đến từ vòng 1 | Bộ cuối của cả 4 lần chạy = bộ chọn ở vòng 1 hoặc 2; vòng 3–5 đổ ~60% ngân sách mà không gộp được gì | Cần dừng sớm / chuyển ngân sách sang việc khác (seed, val lớn hơn) khi lợi ích cận biên ≈ 0 |
+| O3. Proposer kẹt ở một failure mode | BCP: `early_stop` 4 vòng liên tiếp ở cả v1 và v2, không cơ chế nào được gộp | Thiếu cơ chế "từ bỏ" một mode sau k lần thất bại |
+| O4. Hindsight report không đáng tin để lọc | AppWorld: LLM quy 29/30 lỗi cho "reasoning", nhưng cơ chế harness (m3) vẫn tăng +4 điểm; blind confidence đảo ngược (đúng 0,35 < sai 0,43) | Tự đánh giá của model chỉ dùng để **sinh giả thuyết**, không dùng để **loại bằng chứng**. Quy trách nhiệm phải bằng can thiệp (sàng lọc), không bằng lời kể |
+| O5. Cơ chế có điều kiện hẹp tổng quát tốt hơn guidance toàn cục | v2 AppWorld: 5/5 guidance bị loại; bộ cuối 1 inject có điều kiện → test 78,8 (v1 với 2 guidance: 71,7) | Giữ "placement rule", nhưng ưu tiên mặc định cho precondition hẹp |
+| O6. Nhiễu lớn ngang hiệu ứng | Cùng cấu hình, BCP 33 vs 28; tăng sàng lọc +0,3 vẫn rớt val | Mọi quyết định cần khoảng tin cậy, không dùng điểm trung bình |
+
+### Đề xuất v3 (đều là nguyên tắc chung)
+
+1. **Sàng lọc cận biên (marginal screening) thay cho sàng lọc độc lập.** Ứng viên chạy trên *bộ hiện tại* (không phải H0),
+   trên task mà *bộ hiện tại* thất bại; task an toàn = task bộ hiện tại luôn giải. Giải quyết trực tiếp O1. Ghi vào ledger
+   cặp (cơ chế, bộ nền) → dần dần có ma trận tương thích thực nghiệm, đúng tinh thần "compatibility-aware composition".
+2. **Lịch failure mode có ngân sách (bandit).** Mỗi mode có điểm = tần suất lỗi × xác suất sửa được (ước lượng từ lịch sử
+   sàng lọc). Sau k = 2 vòng không gộp được gì, mode bị "đóng băng" và ghi lại là *không sửa được bằng harness với model này*
+   — đây chính là thông tin hành vi cần cho chọn harness đa model (mục 4.1). Giải quyết O3.
+3. **Dừng sớm và tái phân bổ ngân sách.** Khi 2 vòng liên tiếp không gộp, dừng tiến hóa; dùng ngân sách còn lại để chạy lại
+   val với roll thứ 2 cho bộ cuối và 1–2 bộ dự phòng tốt nhất trong pool, chọn theo LCB. Giải quyết O2, O6.
+4. **Quy trách nhiệm bằng can thiệp.** Bỏ bước loại bằng chứng theo hindsight; giữ report làm đầu vào sinh giả thuyết.
+   Thêm phân tích ex post trên test/val: tỉ lệ thành công khi cơ chế *kích hoạt* vs *không kích hoạt* (đã log `mech`)
+   để cập nhật độ tin cậy của từng cơ chế mà không tốn thêm episode. Giải quyết O4.
+5. **Repertoire liên phiên, chọn theo hồ sơ hành vi.** Giữ pool qua các model; với model mới, đo hồ sơ hành vi trên vài task
+   train bằng H0, rồi thử trước các cơ chế đã thắng trên model có hồ sơ gần nhất (khoảng cách trên `profile()`); chỉ đề xuất
+   cơ chế mới cho failure mode chưa có cơ chế phù hợp. Đây là phần ý tưởng chưa được kiểm chứng; cần thêm ít nhất một model
+   thứ hai (ví dụ ag hoặc ling, đã có kết quả H0) để đánh giá.
+6. **Giữ nguyên** các thành phần đã chứng minh có ích: DSL precondition khai báo, cổng khái quát hóa (không vi phạm lần nào
+   trong 40 ứng viên), ngân sách gây hại theo phạm vi, biên ghép cặp khi gộp.
+
+Thứ tự ưu tiên triển khai: (1) → (3) → (2) → (4) → (5). (1) và (3) rẻ (chỉ đổi tập task và vòng lặp), và nhắm vào hai
+nguồn lãng phí lớn nhất quan sát được.
