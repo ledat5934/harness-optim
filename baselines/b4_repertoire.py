@@ -40,7 +40,9 @@ def register(reg):
                  "reject_finish).", config_schema={"mechanisms": "list of mechanism specs"})
 '''
 
-N_TARGET, N_SAFE = 10, 6        # screening tasks per candidate
+N_TARGET, N_SAFE = 10, 10       # screening tasks per candidate
+MERGE_MARGIN = 2                # val: paired wins - losses vs the incumbent needed to change the set
+SAFE_SLACK = 1                  # safe-task failures tolerated for a conditional mechanism (global ones: 0)
 N_REPORT_FAIL, N_REPORT_PASS = 6, 2
 FINISH = {"browsecomp_plus": "finish"}
 
@@ -190,6 +192,9 @@ MECHANISMS. A mechanism is a declarative rule `precondition -> action` that runs
   -> reject_finish or inject with a precondition; behavioural advice -> guidance. Enforcement written only as advice
   is often ignored by strong models.
 - Do not propose fixes for failures whose cause is the model's reasoning, task ambiguity or the environment.
+- Prefer NARROW preconditions: a mechanism that fires on every task (guidance, or precondition True) changes every
+  episode and is rejected if it breaks ANY task the current harness already solves. Use guidance only for advice that
+  cannot be expressed as a condition on the run.
 - Do not repeat a mechanism already in the pool (same behaviour, same trigger), especially rejected ones.
 
 ## Expression language for preconditions
@@ -337,11 +342,27 @@ def screen(bench, split, cand: dict, ws: Path, client, out: Path, cfg: dict, p_h
           "behavior_delta": {k: round(sum(v) / len(v), 3) for k, v in bdelta.items() if v}}
     if fired == 0:
         return {"status": "rejected", "reason": "never fired (no credit)", "evidence": ev}
-    if sum(dS) < -1.0:
-        return {"status": "rejected", "reason": "hurts tasks H0 always solves", "evidence": ev}
+    # harm budget: a mechanism that is active on every task (always-true precondition) changes every episode, so it
+    # gets no slack on the tasks H0 always solves; a conditional one may lose SAFE_SLACK of them (sampling noise).
+    n_safe_fail = sum(1 for x in dS if x < 0)
+    slack = 0 if is_global(cand) else SAFE_SLACK
+    ev["safe_fail"] = n_safe_fail
+    if n_safe_fail > slack:
+        return {"status": "rejected", "reason": f"hurts tasks H0 always solves ({n_safe_fail} > {slack})", "evidence": ev}
     if ev["dT"] <= 0:
         return {"status": "rejected", "reason": "no gain on targeted tasks", "evidence": ev}
     return {"status": "admitted", "evidence": ev}
+
+
+def is_global(m: dict) -> bool:
+    return m["kind"] == "guidance" or str(m.get("precondition", "")).strip() in ("True", "1", "")
+
+
+def paired_margin(new: list[dict], old: list[dict]) -> tuple[int, int]:
+    o = {r["task_id"]: r["success"] for r in old}
+    w = sum(1 for r in new if r["task_id"] in o and r["success"] and not o[r["task_id"]])
+    l = sum(1 for r in new if r["task_id"] in o and not r["success"] and o[r["task_id"]])
+    return w, l
 
 
 def val_run(bench, split, ids, mechs, name, ws, client, out, cfg, r) -> tuple[float, int, list[dict], Path]:
@@ -391,6 +412,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     incumbent: list[dict] = []
     inc_val, inc_tok = C.score(shared["h0_val"]), sum(r.get("tokens") or 0 for r in shared["h0_val"])
     inc_root = C.H0_ROOT
+    inc_vrecs = list(shared["h0_val"])
     cur_recs, cur_sigs = list(shared["h0_train"]), dict(sig_by_path)  # evidence of the current harness
     log = {"rounds": [], "profile_h0": prof0}
     for r in range(1, cfg["rounds"] + 1):
@@ -445,8 +467,10 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                 v, tok, vrecs, root = val_run(bench, val_split, val_ids, mechs, f"r{r}_set{len(mechs)}_"
                                               + "_".join(c["id"] for c in tset), ws, client, out, cfg, r)
                 rd.setdefault("val_trials", []).append({"set": [c["id"] for c in mechs], "val": v, "tokens": tok})
-                if C.better(v, tok, inc_val, inc_tok):
-                    incumbent, inc_val, inc_tok, inc_root = mechs, v, tok, root
+                w, l = paired_margin(vrecs, inc_vrecs)
+                rd["val_trials"][-1].update(wins=w, losses=l)
+                if w - l >= MERGE_MARGIN:  # small val sets: require a paired margin, not just a higher mean
+                    incumbent, inc_val, inc_tok, inc_root, inc_vrecs = mechs, v, tok, root, vrecs
                     for c in tset:
                         c["status"] = "in_set"
                     rd["result"] = f"new set {[c['id'] for c in mechs]} val={v:.3f}"
