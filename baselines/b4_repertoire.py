@@ -20,6 +20,7 @@ At test time the final set is frozen; mechanisms fire lazily on their preconditi
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import shutil
@@ -46,6 +47,8 @@ STALL_ROUNDS = 2                # v3: stop evolving after this many rounds in a 
 MODE_FREEZE = 2                 # v3: a failure mode is frozen after this many unmerged rounds targeting it
 SAFE_SLACK = 1                  # safe-task failures tolerated for a conditional mechanism (global ones: 0)
 N_REPORT_FAIL, N_REPORT_PASS = 6, 2
+SEED = int(os.environ.get("B4_SEED", "0"))  # independent repeat: proposer/sampling rng + output names
+TAG = "b4" if SEED == 0 else f"b4s{SEED}"
 FINISH = {"browsecomp_plus": "finish"}
 
 # ---------------------------------------------------------------- behaviour
@@ -326,7 +329,7 @@ def screen(bench, split, cand: dict, ws: Path, client, out: Path, cfg: dict, p_h
     ok, glog = C.static_gate(root)
     if not ok:
         return {"status": "rejected", "reason": "static gate: " + glog[-200:]}
-    tag = f"b4_{bench}_r{r}_{cand['id']}"
+    tag = f"{TAG}_{bench}_r{r}_{cand['id']}"
     recs = C.evaluate(bench, split, target + safe, root, client, tag, out, workers=cfg["workers"],
                       label={"method": "b4", "phase": "screen", "round": r, "cand": cand["id"], "base": [m["id"] for m in base]})
     dT, dS, fired, bdelta = [], [], 0, defaultdict(list)
@@ -375,23 +378,23 @@ def paired_margin(new: list[dict], old: list[dict]) -> tuple[int, int]:
 
 def val_run(bench, split, ids, mechs, name, ws, client, out, cfg, r) -> tuple[float, int, list[dict], Path]:
     root = make_root(ws, name, mechs)
-    recs = C.evaluate(bench, split, ids, root, client, f"b4_{bench}_r{r}_{name}_val", out, workers=cfg["workers"],
+    recs = C.evaluate(bench, split, ids, root, client, f"{TAG}_{bench}_r{r}_{name}_val", out, workers=cfg["workers"],
                       label={"method": "b4", "phase": "val", "round": r, "set": [m["id"] for m in mechs]})
     return C.score(recs), sum(x.get("tokens") or 0 for x in recs), recs, root
 
 
 # ---------------------------------------------------------------- main loop
 def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
-    ws = C.RUNS / "b4" / bench
+    ws = C.RUNS / TAG / bench
     if ws.exists():
         shutil.rmtree(ws)
     ws.mkdir(parents=True)
-    out = C.OUT / f"b4_{bench}.jsonl"
+    out = C.OUT / f"{TAG}_{bench}.jsonl"
     ledger = ws / "ledger.jsonl"
     tasks = shared["tasks"]
     tr_split, val_split = tasks["train"][0], tasks["val"][0]
     val_ids = tasks["val"][1]
-    rng = random.Random(0)
+    rng = random.Random(SEED)
     fin = FINISH.get(bench)
 
     p_h0 = h0_task_stats(shared["h0_train"])
@@ -507,7 +510,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             # Estimate = mean of the H0 rolls and this roll (shrinks the single noisy roll toward H0); a task is
             # "safe" (=1.0) only if H0 always solved it and the new set solved it too.
             C.budget_check(f"b4[{bench}] incumbent train r{r}")
-            cur = C.evaluate(bench, tr_split, list(p_h0), inc_root, client, f"b4_{bench}_r{r}_inc_train", out,
+            cur = C.evaluate(bench, tr_split, list(p_h0), inc_root, client, f"{TAG}_{bench}_r{r}_inc_train", out,
                              workers=cfg["workers"], label={"method": "b4", "phase": "inc_train", "round": r})
             sig_base = defaultdict(list)
             for x in cur:
@@ -540,9 +543,9 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     if alternates:
         alt = max(alternates, key=lambda a: a["val"])
         C.budget_check(f"b4[{bench}] reselect")
-        inc2 = C.evaluate(bench, val_split, val_ids, inc_root, client, f"b4_{bench}_reselect_inc", out,
+        inc2 = C.evaluate(bench, val_split, val_ids, inc_root, client, f"{TAG}_{bench}_reselect_inc", out,
                           workers=cfg["workers"], label={"method": "b4", "phase": "val2", "set": [c["id"] for c in incumbent]})
-        alt2 = C.evaluate(bench, val_split, val_ids, alt["root"], client, f"b4_{bench}_reselect_alt", out,
+        alt2 = C.evaluate(bench, val_split, val_ids, alt["root"], client, f"{TAG}_{bench}_reselect_alt", out,
                           workers=cfg["workers"], label={"method": "b4", "phase": "val2", "set": [c["id"] for c in alt["mechs"]]})
         w1, l1 = paired_margin(alt["vrecs"], inc_vrecs)
         w2, l2 = paired_margin(alt2, inc2)
@@ -561,7 +564,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     (ws / "final.json").write_text(json.dumps({"final_root": str(inc_root), "set": incumbent, "val": inc_val},
                                               indent=1, default=str))
     C.budget_check(f"b4[{bench}] test")
-    test = C.evaluate(bench, tasks["test"][0], tasks["test"][1], inc_root, client, f"b4_{bench}_test", out,
+    test = C.evaluate(bench, tasks["test"][0], tasks["test"][1], inc_root, client, f"{TAG}_{bench}_test", out,
                       workers=cfg["workers"], label={"method": "b4", "phase": "test"})
     fired = Counter(m for x in test for m in R.trajectory_signals(x.get("trajectory_path") or "", fin).get("mech_fired", []))
     log["test"] = {"success": C.score(test), "n": len(test), "fired": dict(fired)}
@@ -571,5 +574,13 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         c["id"]: {"fired": [sum(ok for f, ok in fs if c["id"] in f), sum(1 for f, _ in fs if c["id"] in f)],
                   "not_fired": [sum(ok for f, ok in fs if c["id"] not in f), sum(1 for f, _ in fs if c["id"] not in f)]}
         for c in incumbent}
+    # the raw split is confounded (conditional mechanisms fire on hard tasks): pair each fired task with H0 on it
+    h0t = {x["task_id"]: x["success"] for x in shared.get("h0_test") or []}
+    for c in incumbent:
+        ft = [x for x in test if c["id"] in R.trajectory_signals(x.get("trajectory_path") or "", fin).get("mech_fired", [])
+              and x["task_id"] in h0t]
+        log["test"]["fired_vs_not"][c["id"]]["fired_vs_h0"] = {
+            "wins": sum(1 for x in ft if x["success"] and not h0t[x["task_id"]]),
+            "losses": sum(1 for x in ft if not x["success"] and h0t[x["task_id"]]), "n": len(ft)}
     (ws / "log.json").write_text(json.dumps(log, indent=1, default=str))
     return {"log": log, "test": test}

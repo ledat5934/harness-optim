@@ -58,7 +58,8 @@ def load_shared(bench: str, cfg: dict = C.SMOKE, allow_stale: bool = False, h0_d
     if short:  # the contrastive router needs K rolls of every train task
         raise SystemExit(f"shared H0 train evidence has < K={cfg['k']} rolls for {len(short)} tasks of {bench}; "
                          f"run scripts/run_h0.py --bench {bench} --phase train --roll N for the missing rolls")
-    return {"tasks": tasks, "h0_train": h0_train, "h0_val": h0_val}
+    h0_test = [r for (ph, _, tid), r in latest.items() if ph == "test" and tid in set(tasks["test"][1])]
+    return {"tasks": tasks, "h0_train": h0_train, "h0_val": h0_val, "h0_test": h0_test}
 
 
 def main():
