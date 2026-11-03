@@ -44,6 +44,7 @@ def register(reg):
 N_TARGET, N_SAFE = 10, 10       # screening tasks per candidate
 MERGE_MARGIN = 2                # val: paired wins - losses vs the incumbent needed to change the set
 STALL_ROUNDS = 2                # v3: stop evolving after this many rounds in a row without a merge
+MIN_ROUNDS = 3                  # never stop before this round (seed 0 AppWorld found its mechanism in round 2)
 MODE_FREEZE = 2                 # v3: a failure mode is frozen after this many unmerged rounds targeting it
 SAFE_SLACK = 1                  # safe-task failures tolerated for a conditional mechanism (global ones: 0)
 N_REPORT_FAIL, N_REPORT_PASS = 6, 2
@@ -534,7 +535,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         print(f"  [b4 {bench}] round {r}: mode={rd['failure_mode']} "
               f"cands={[(c['id'], c['status'], (c.get('evidence') or {}).get('dT')) for c in pool if c['round'] == r]} "
               f"-> {rd['result']}", flush=True)
-        if stall >= STALL_ROUNDS and r < cfg["rounds"]:
+        if stall >= STALL_ROUNDS and MIN_ROUNDS <= r < cfg["rounds"]:
             log["early_stop"] = {"round": r, "reason": f"{stall} rounds without a merge"}
             print(f"  [b4 {bench}] early stop after round {r}", flush=True)
             break
