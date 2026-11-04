@@ -1,0 +1,19 @@
+{
+ "agent_loop": {
+  "name": "hooked",
+  "config": {
+   "mechanisms": [
+    {
+     "id": "m1",
+     "slot": "error_recovery",
+     "kind": "inject",
+     "mechanism": "recover_after_single_error",
+     "target_behavior": "Continue with a focused recovery instead of ending after an isolated tool error when ample budget remains.",
+     "precondition": "n_errors >= 1 and err_streak == 0 and step_frac < 0.5 and steps_left > 2",
+     "text": "A prior tool observation contained an error, but there is still substantial budget. Use its details to make a focused recovery attempt and continue toward the requested outcome before deciding whether the task is complete.",
+     "max_fires": 1
+    }
+   ]
+  }
+ }
+}
