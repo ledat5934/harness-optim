@@ -212,3 +212,19 @@ chính là làm hỏng task dễ, nên ngân sách gây hại phải phụ thu�
 - Chọn lại cuối: ở cả hai benchmark, bộ hai cơ chế không vượt được bộ một cơ chế qua hai lượt val (AppWorld −2, BCP +1), nên bộ một cơ chế được giữ.
 - So sánh kích hoạt / không kích hoạt bị lệch do chọn mẫu: m1 trên BCP chỉ kích hoạt ở task khó (8/66 đúng so với 21/34). Chỉ số này cần được so với H0 trên cùng task trước khi dùng làm bằng chứng.
 - Hạn chế: mỗi phiên bản mới chạy 1 seed, và chưa có kết quả nào đạt mức có ý nghĩa thống kê.
+
+## 9. B4 v3, 2 seed (thêm `MIN_ROUNDS = 3`)
+
+Lần chạy seed 1 đầu tiên (`b4s1a_*`) dừng sau vòng 2 mà không gộp được cơ chế nào, nên test chỉ là H0 chạy lại: BCP 26, AppWorld 77,8. Lần này cho thấy chạy lại H0 đã lệch 2–3 điểm chỉ do nhiễu. Đã thêm luật phải chạy ít nhất 3 vòng mới được dừng sớm, rồi chạy lại seed 1.
+
+| | H0 | seed 0 | seed 1 | Thắng/thua so với H0, gộp 2 seed |
+|---|---|---|---|---|
+| BCP | 24 | 29 | 28 | 22 / 13 (p = 0,18) |
+| AppWorld TGC | 74,7 | 80,8 | 81,8 | 17 / 4 (p = 0,007) |
+
+- Hai seed độc lập tìm ra **cùng loại cơ chế**:
+  - AppWorld: `inject` khi đã có nhiều lỗi tool (gợi ý khôi phục, kiểm tra việc còn lại).
+  - BCP: `reject_finish` khi câu trả lời né tránh mà vẫn còn bước.
+  Precondition khác nhau về ngưỡng nhưng cùng nguyên tắc. Đây là bằng chứng cơ chế tìm được tổng quát, không phải may rủi.
+- So với H0 trên chính các task có cơ chế kích hoạt (seed 1): AppWorld 7 thắng / 1 thua trên 80 task, BCP 4 thắng / 2 thua trên 65 task. Phép so kích hoạt / không kích hoạt thô cho kết quả ngược (BCP 4/65 so với 24/35), vì cơ chế chủ yếu kích hoạt trên task khó.
+- Lưu ý về p-value: hai seed dùng chung kết quả H0 trên test nên không hoàn toàn độc lập.
