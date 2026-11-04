@@ -30,6 +30,11 @@ TASK_CHARS = 1500  # task instruction shown at the top of each trajectory (the r
 # ---------------------------------------------------------------- reference functions (copied, paths as arguments)
 
 
+
+import os as _os
+SEED = int(_os.environ.get("B1_SEED", "0"))  # independent repeat: only changes output names
+TAG = "b1" if SEED == 0 else f"b1s{SEED}"
+
 def compute_pass_rates(task_rewards: dict[str, list[float]]) -> tuple[dict[str, float], float]:
     """Pass rate per task and flat average (total passes / total trials, matching harbor's metric). Copied from
     meta_harness.compute_pass_rates."""
@@ -434,9 +439,9 @@ def _reward(r: dict) -> float:
 # ---------------------------------------------------------------- run
 def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> dict:
     """shared: {'tasks': protocol_tasks, 'h0_train': [...recs], 'h0_val': [...recs]} computed once for all methods."""
-    ws = C.RUNS / "b1" / bench
+    ws = C.RUNS / TAG / bench
     ws.mkdir(parents=True, exist_ok=True)
-    out = C.OUT / f"b1_{bench}.jsonl"
+    out = C.OUT / f"{TAG}_{bench}.jsonl"
     frontier_path, summary_path = ws / "frontier_val.json", ws / "evolution_summary.jsonl"
     tasks = shared["tasks"]
     k = cfg["k"]
@@ -476,7 +481,7 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
             continue
         # smoke: execute on cfg["n_check"] train tasks (crash check, reference smoke_test)
         sm = C.evaluate(bench, tasks["train"][0], tasks["train"][1][:cfg["n_check"]], cand_dir, client,
-                        f"b1_{bench}_r{ri}_smoke", out, workers=cfg["workers"],
+                        f"{TAG}_{bench}_r{ri}_smoke", out, workers=cfg["workers"],
                         label={"method": "b1", "phase": "smoke", "round": ri})
         crashed = [r for r in sm if r["error"]]
         if crashed:
@@ -485,7 +490,7 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
             update_evolution_summary(summary_path, frontier_path, ri, [{**cand, "name": f"r{ri}"}], {})
             continue
         # benchmark: validation tasks (shared protocol)
-        val = C.evaluate(bench, tasks["val"][0], tasks["val"][1], cand_dir, client, f"b1_{bench}_r{ri}_val", out,
+        val = C.evaluate(bench, tasks["val"][0], tasks["val"][1], cand_dir, client, f"{TAG}_{bench}_r{ri}_val", out,
                          workers=cfg["workers"], label={"method": "b1", "phase": "val", "round": ri})
         v, tok = C.score(val), sum(r["tokens"] for r in val)
         per_task, avg = compute_pass_rates({r["task_id"]: [_reward(r)] for r in val})
@@ -505,7 +510,7 @@ def run(bench: str, shared: dict, client, cfg=C.SMOKE, tag: str = "smoke") -> di
     log["final"] = str(best)
     (ws / "final.json").write_text(json.dumps({"final_root": str(best), "val": best_val}, indent=1))
     C.budget_check(f"b1[{bench}] test")
-    test = C.evaluate(bench, tasks["test"][0], tasks["test"][1], best, client, f"b1_{bench}_test", out,
+    test = C.evaluate(bench, tasks["test"][0], tasks["test"][1], best, client, f"{TAG}_{bench}_test", out,
                       workers=cfg["workers"], label={"method": "b1", "phase": "test"})
     log["test"] = {"success": C.score(test), "n": len(test)}
     (ws / "log.json").write_text(json.dumps(log, indent=1, default=str))
