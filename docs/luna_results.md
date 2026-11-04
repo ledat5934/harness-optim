@@ -228,3 +228,14 @@ Lần chạy seed 1 đầu tiên (`b4s1a_*`) dừng sau vòng 2 mà không gộp
   Precondition khác nhau về ngưỡng nhưng cùng nguyên tắc. Đây là bằng chứng cơ chế tìm được tổng quát, không phải may rủi.
 - So với H0 trên chính các task có cơ chế kích hoạt (seed 1): AppWorld 7 thắng / 1 thua trên 80 task, BCP 4 thắng / 2 thua trên 65 task. Phép so kích hoạt / không kích hoạt thô cho kết quả ngược (BCP 4/65 so với 24/35), vì cơ chế chủ yếu kích hoạt trên task khó.
 - Lưu ý về p-value: hai seed dùng chung kết quả H0 trên test nên không hoàn toàn độc lập.
+
+## 10. B4 v3 so với B1, mỗi bên 2 seed
+
+| | H0 | B1 (seed 0 / 1) | B4 v3 (seed 0 / 1) | B4 so với B1, ghép theo seed (thắng/thua) |
+|---|---|---|---|---|
+| AppWorld TGC | 74,7 | 77,8 / 77,8 | 80,8 / 81,8 | 13 / 6 (p = 0,17) |
+| BCP | 24 | 28 / 19 | 29 / 28 | 20 / 10 (p = 0,10) |
+| Gộp 2 benchmark | | | | 33 / 16 (p = 0,02) |
+
+- B4 cao hơn B1 trên cả 4 cặp (benchmark × seed). Riêng từng benchmark thì chưa có ý nghĩa thống kê, nhưng gộp lại có (p = 0,02).
+- B4 ổn định hơn: trên BCP, B1 dao động 28 → 19 giữa hai seed, còn B4 chỉ 29 → 28.
