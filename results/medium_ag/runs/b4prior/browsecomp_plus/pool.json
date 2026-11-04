@@ -1,0 +1,186 @@
+[
+ {
+  "id": "m1",
+  "round": 1,
+  "branch": "prior0",
+  "failure_mode": "transfer",
+  "status": "rejected",
+  "kind": "reject_finish",
+  "precondition": "is_finish and answer_hedged and n('search') >= 3 and steps_left > 0",
+  "text": "Your answer is hedged, and there is still time to investigate. Before finishing, try a materially different, clue-focused search or retrieve a promising result with get_document. Use the available evidence to answer; if it remains insufficient, state the uncertainty clearly.",
+  "slot": "termination",
+  "mechanism": "Retry_hedged_finish_with_budget",
+  "target_behavior": "Avoid ending a search-based run with an uncertainty-only answer when there is time for another evidence-seeking step.",
+  "max_fires": 1,
+  "reason": "hurts tasks H0 always solves (5 > 1)",
+  "evidence": {
+   "dT": -0.233,
+   "dS": -0.5,
+   "lcbT": -0.4,
+   "fired": 16,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.315,
+    "n_errors": -0.167,
+    "answer_hedged": 0.7,
+    "repeat_ratio": -0.018,
+    "tokens": -267277.517
+   },
+   "safe_fail": 5
+  }
+ },
+ {
+  "id": "m2",
+  "round": 1,
+  "branch": "prior1",
+  "failure_mode": "transfer",
+  "status": "rejected",
+  "kind": "reject_finish",
+  "precondition": "is_finish and answer_hedged and n('search') >= 2 and steps_left > 1",
+  "text": "Do not finish with an unsupported or hedged answer yet. Use the remaining steps for a materially different, targeted search based on the clues, and inspect any promising result before deciding whether the answer is supported.",
+  "slot": "termination",
+  "mechanism": "continue_after_hedged_search",
+  "target_behavior": "Prevent a hedged answer after repeated searches from ending the run prematurely.",
+  "max_fires": 1,
+  "reason": "hurts tasks H0 always solves (4 > 1)",
+  "evidence": {
+   "dT": -0.233,
+   "dS": -0.4,
+   "lcbT": -0.4,
+   "fired": 14,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.247,
+    "n_errors": -0.35,
+    "answer_hedged": 0.45,
+    "repeat_ratio": -0.015,
+    "tokens": -224717.217
+   },
+   "safe_fail": 4
+  }
+ },
+ {
+  "id": "m3",
+  "round": 2,
+  "branch": "structural",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "inject",
+  "precondition": "step_frac > 0.4 and n('search') >= 8 and n('get_document') == 0 and steps_left > 2",
+  "text": "You have spent many steps searching without opening a result. Inspect the most promising result with get_document; if the evidence is still inadequate, change the search approach rather than repeating broad or near-duplicate queries. Reserve steps to verify the requested detail and give a complete final answer.",
+  "slot": "orchestration",
+  "mechanism": "Inspect_Before_More_Searching",
+  "target_behavior": "Open a promising search result instead of continuing a search-only loop.",
+  "max_fires": 1,
+  "reason": "never fired (no credit)",
+  "evidence": {
+   "dT": -0.167,
+   "dS": -0.8,
+   "lcbT": -0.3,
+   "fired": 0,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.464,
+    "n_errors": -0.383,
+    "answer_hedged": 0.85,
+    "repeat_ratio": -0.015,
+    "tokens": -320699.317
+   }
+  }
+ },
+ {
+  "id": "m4",
+  "round": 2,
+  "branch": "guidance",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "guidance",
+  "precondition": "True",
+  "text": "Manage the step budget deliberately: use distinctive clues to focus searches, inspect promising results with get_document, and avoid repeating queries that return the same evidence. Before finishing, verify that the evidence addresses the specific question and leave enough room to provide a complete answer.",
+  "slot": "context",
+  "mechanism": "Budget_Aware_Research",
+  "target_behavior": "Use searches to locate evidence, inspect promising documents, and leave time to verify and answer.",
+  "max_fires": 1,
+  "reason": "hurts tasks H0 always solves (5 > 0)",
+  "evidence": {
+   "dT": -0.267,
+   "dS": -0.5,
+   "lcbT": -0.4,
+   "fired": 20,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.393,
+    "n_errors": -0.733,
+    "answer_hedged": 0.75,
+    "repeat_ratio": -0.012,
+    "tokens": -282200.083
+   },
+   "safe_fail": 5
+  }
+ },
+ {
+  "id": "m5",
+  "round": 3,
+  "branch": "structural",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "inject",
+  "precondition": "steps_left <= 3 and n('finish') == 0",
+  "text": "Only a few steps remain. Stop broad or repeated exploration. Use the strongest evidence already gathered to answer the specific question concisely; make any uncertainty explicit.",
+  "slot": "orchestration",
+  "mechanism": "Late_Budget_Prioritization",
+  "target_behavior": "Stop low-yield exploration near the step limit and use remaining steps to produce a concise, supported answer.",
+  "max_fires": 1,
+  "reason": "never fired (no credit)",
+  "evidence": {
+   "dT": -0.233,
+   "dS": -0.5,
+   "lcbT": -0.4,
+   "fired": 0,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.455,
+    "n_errors": -0.45,
+    "answer_hedged": 0.7,
+    "repeat_ratio": -0.019,
+    "tokens": -320344.333
+   }
+  }
+ },
+ {
+  "id": "m6",
+  "round": 3,
+  "branch": "guidance",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "guidance",
+  "precondition": "True",
+  "text": "Track whether each search is adding new evidence. When searches stop yielding useful leads, consolidate what you have and answer the specific question concisely; avoid spending the remaining budget on near-duplicate searches.",
+  "slot": "context",
+  "mechanism": "Preserve_Final_Steps",
+  "target_behavior": "Reserve the final steps for consolidating evidence and completing the answer instead of extending low-yield searches.",
+  "max_fires": 1,
+  "reason": "hurts tasks H0 always solves (6 > 0)",
+  "evidence": {
+   "dT": -0.267,
+   "dS": -0.6,
+   "lcbT": -0.433,
+   "fired": 20,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.438,
+    "n_errors": -0.317,
+    "answer_hedged": 0.75,
+    "repeat_ratio": -0.012,
+    "tokens": -322223.75
+   },
+   "safe_fail": 6
+  }
+ }
+]

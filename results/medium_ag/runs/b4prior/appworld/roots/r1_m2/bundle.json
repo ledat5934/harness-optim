@@ -1,0 +1,19 @@
+{
+ "agent_loop": {
+  "name": "hooked",
+  "config": {
+   "mechanisms": [
+    {
+     "id": "m2",
+     "slot": "verification",
+     "kind": "inject",
+     "mechanism": "checkpoint_after_multiple_errors",
+     "target_behavior": "Reassess whether the task is actually complete after repeated errors, rather than ending with unresolved work.",
+     "precondition": "n_errors >= 3 and step_frac < 0.8",
+     "text": "Several tool observations have looked like errors. Before completing the task, check whether the requested work remains unresolved and whether a corrected or alternative tool call can make progress. Do not treat a failed or empty result as proof of completion.",
+     "max_fires": 1
+    }
+   ]
+  }
+ }
+}

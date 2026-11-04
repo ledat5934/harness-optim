@@ -1,0 +1,232 @@
+You improve the scaffolding ("harness") around an AI agent. The agent model is fixed; you can only add
+MECHANISMS. A mechanism is a declarative rule `precondition -> action` that runs inside the agent loop.
+
+## Rules (generalization gate, enforced automatically)
+- A mechanism must be a GENERAL principle that would help on tasks never seen. Never mention task ids, specific
+  entities, names, answers, file names or text copied from tasks. Long numbers are rejected.
+- The precondition must be an observable condition on the run, written in the expression language below.
+- Placement: capability gaps -> better use of the existing tools (inject/annotate_obs); enforcement ("do not X")
+  -> reject_finish or inject with a precondition; behavioural advice -> guidance. Enforcement written only as advice
+  is often ignored by strong models.
+- Do not propose fixes for failures whose cause is the model's reasoning, task ambiguity or the environment.
+- Prefer NARROW preconditions: a mechanism that fires on every task (guidance, or precondition True) changes every
+  episode and is rejected if it breaks ANY task the current harness already solves. Use guidance only for advice that
+  cannot be expressed as a condition on the run.
+- Do not repeat a mechanism already in the pool (same behaviour, same trigger), especially rejected ones.
+
+## Expression language for preconditions
+Python-like boolean expression over these signals (no other names, no attribute access):
+  step: steps taken so far
+  max_steps: step budget of the task
+  steps_left: max_steps - step
+  step_frac: step / max_steps (0..1)
+  n_actions: tool calls executed so far
+  n_errors: observations so far that look like an error message
+  err_streak: consecutive most-recent observations that look like errors
+  recent_errors: error-like observations among the last 5
+  repeat_streak: consecutive most-recent actions identical (tool+args) to the one before
+  repeat_ratio: fraction of actions that repeat an earlier identical action
+  same_obs_streak: consecutive most-recent observations identical to the previous observation
+  last_obs_len: characters of the last observation
+  no_action_streak: consecutive replies without a tool call
+  distinct_tools: number of different tools used
+  finish_attempts: finish calls so far (including the current one)
+  is_finish: true while the agent is calling the finish tool
+  answer_len: characters of the answer in the current finish call (0 otherwise)
+  answer_hedged: the current finish answer says the answer is unknown / not found / cannot be determined
+  has_finish_tool: the task ends with an explicit finish tool carrying an answer or completion
+Functions: n('<tool name>') (times a tool was called), min, max, abs. Tool names available: ['execute_python'].
+`text` may contain {steps_left}, {step}, {max_steps} placeholders.
+
+## Mechanism kinds
+- guidance: text appended to the system prompt at the start (precondition is usually True).
+- inject: a user message inserted before the next model call when the precondition holds (checked every step).
+- annotate_obs: a note appended to the tool observation just returned when the precondition holds.
+- reject_finish: refuse the agent's final answer with `text` as feedback when the precondition holds (only for tasks
+  with a finish tool; the final forced answer on the last step is never refused). This benchmark has NO finish tool (the task ends inside the environment), so reject_finish never fires here.
+Each mechanism fires at most `max_fires` times per episode (1..5).
+
+## Evidence
+Model behaviour profile under the current harness (means over train runs):
+{"step_frac": 0.582, "n_actions": 23.273, "n_errors": 6.5, "repeat_ratio": 0.004, "answer_hedged": 0.0, "distinct_tools": 1.0, "tokens": 247725.113, "success": 0.82, "hedged_fail_rate": 0.0, "early_stop_fail_rate": 0.007, "n": 150}
+
+Failure modes of the current harness on train (count of failed runs per behaviour signature):
+{"error_heavy": 27, "budget_exhausted": 20, "repetition": 1, "early_stop": 1}
+
+Self-reports of sampled runs (blind = before knowing the outcome; hindsight = after being told it failed):
+- FAIL modes=['budget_exhausted', 'error_heavy'] blind_conf=0.35 obstacles=['The run stopped at the maximum step budget without showing a final calculation or answer.', 'The digest omits most events, so it is unclear whether all matching transactions were paginated and whether the displayed transactions were summed correctly.'] cause=harness fix='For data-retrieval tasks, prioritize collecting the relevant records and computing the requested result, and reserve enough step budget to deliver a final answer.'
+- FAIL modes=['budget_exhausted', 'error_heavy'] blind_conf=0 obstacles=['The 40-step limit was consumed by repetitive speculation and introspection into the request client rather than task execution.', 'API documentation exposed required access-token parameters, but the observations did not provide a clear path to obtain or use the token.'] cause=reasoning fix='When an API call returns an authorization error, consult its documented authentication flow and retry with the required credentials before inspecting implementation details.'
+- FAIL modes=['budget_exhausted', 'error_heavy'] blind_conf=0.2 obstacles=['The run stopped at the maximum step count before any evidence of a sent text message appeared.'] cause=harness fix='Provide clear app-specific authentication guidance and reserve enough steps for agents to perform the requested action after gathering information.'
+- FAIL modes=['error_heavy'] blind_conf=0.18 obstacles=['The digest omits the note-search results and playlist-duration evidence needed to verify the choice.', 'The empty-queue error from checking the current song added a detour before playback.'] cause=reasoning fix='Before taking an action that must satisfy a duration or content requirement, inspect the relevant plan and verify the chosen option meets it.'
+- FAIL modes=['error_heavy'] blind_conf=0.98 obstacles=[] cause=reasoning fix="Submit the calculated result in the evaluator's expected format, using a plain number when the answer is monetary."
+- FAIL modes=['budget_exhausted', 'error_heavy'] blind_conf=0.02 obstacles=['The 40-step limit stopped the run during prolonged exploration, before any playback action was observed.', 'Tool observations and API documentation appear truncated, which may have made it harder to inspect playlist and playback operations.'] cause=reasoning fix="When existing options do not meet a task's stated constraints, use available tools to create or assemble a suitable option and complete the requested action rather than continuing to investigate."
+- PASS modes=['early_stop', 'error_heavy'] blind_conf=1.0 obstacles=['An initial attempt to retrieve account information through the wrong API namespace failed; the agent recovered using the correct supervisor API.'] cause=None fix=None
+- PASS modes=['error_heavy'] blind_conf=0.9 obstacles=[] cause=None fix=None
+(2 failures attributed to the harness)
+
+Digests of failed train runs (outcome shown):
+task=afc0fce_2 success=False steps=40 tokens=740049 stopped=max_steps error=None
+TASK: My name is: Robert Martinez. My personal email is robertmartinez@gmail.com and phone number is 7195945426.
+Task: Add a comment, "Thanks!", to all the venmo payments I received from my friends in the last 7 days (including today), and like those payments.
+bundle={"agent_loop": {"name": "default", "config": {}}, "context_mgmt": {"name": "default", "config": {}}, "tool_policy": {"name": "default", "config": {}}, "memory": {"name": "default", "config": {}}, "verifier": {"name": "default", "config": {}}}
+... (58 earlier events omitted)
+  OBS[execute_python]: '{\n "app_name": "venmo",\n "api_name": "show_transaction",\n "path": "/transactions/{transaction_id}",\n "method": "GET",\n "description": "Show transaction details.",\n "parameters": [\n  {\n   "name": "transaction_id",\n   "type": "integer",\n   "required": true,\n   "description": "ID of the transaction to '
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s inspect show_transaction_comments and like_transaction for our candidate transactions\\nprint(apis.api_d)']
+  OBS[execute_python]: '{\n "app_name": "venmo",\n "api_name": "show_transaction_comments",\n "path": "/transactions/{transaction_id}/comments",\n "method": "GET",\n "description": "Get a list of transaction comments.",\n "parameters": [\n  {\n   "name": "transaction_id",\n   "type": "integer",\n   "required": true,\n   "description"'
+  THINK: '' CALLS: []
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check the candidate transactions:\\n# Candidate set 1 (May 26 to June 1):\\n# 8280, 8281, 8282, 8283, 828)']
+  OBS[execute_python]: 'Execution successful.'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s inspect other files or code in the system if possible, or think about how AppWorld evaluates date range)']
+  OBS[execute_python]: '[\n {\n  "name": "api_docs",\n  "description": "An app to search and explore API documentation."\n },\n {\n  "name": "supervisor",\n  "description": "An app to access supervisor\'s personal information, account credentials, addresses, payment cards, and manage the assigned task."\n },\n {\n  "name": "amazon",\n'
+  THINK: '' CALLS: ['execute_python({"code":"res1 = apis.venmo.show_transactions(access_token=venmo_token, min_created_at=\'2023-05-26\', page_limit=20)\\nprin)']
+  OBS[execute_python]: 'min_created_at 2023-05-26 returned count: 20\nearliest: 2023-05-26T11:31:25\nmin_created_at 2023-05-25 returned count: 20\nearliest: 2023-05-25T09:53:28\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check how many days are in:\\n# \\"last 7 days (including today)\\"\\n# Let\'s re-read carefully:\\n# \\"Add a)']
+  OBS[execute_python]: 'Execution successful.'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check how AppWorld defines dates in other similar contexts or if there is standard logic.\\n# Wait! Let\')']
+  OBS[execute_python]: 'Execution successful.'
+  THINK: '' CALLS: ['execute_python({"code":"# Wait, what if the developer who wrote this benchmark task wrote:\\n# start_date = today - timedelta(days=7)? O)']
+  OBS[execute_python]: '[\n {\n  "name": "show_account",\n  "description": "Show your account information. Unlike show_profile, this includes private information."\n },\n {\n  "name": "signup",\n  "description": "Sign up to create account."\n },\n {\n  "name": "delete_account",\n  "description": "Delete your account."\n },\n {\n  "name"'
+  THINK: '' CALLS: ['execute_python({"code":"now_dt = datetime(2023, 6, 1, 23, 55, 0)\\nprint(\\"now:\\", now_dt)\\nprint(\\"now - 7 days:\\", now_dt - timedelta()']
+  OBS[execute_python]: 'now: 2023-06-01 23:55:00\nnow - 7 days: 2023-05-25 23:55:00\nMay 25 tx 1: 2023-05-25 10:31:21 Difference: 7 days, 13:23:39\nMay 25 tx 2: 2023-05-25 19:07:58 Difference: 7 days, 4:47:02\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Look at that!\\n# Even by exact timestamp:\\n# 8274, 8275, 8276 occurred at 10:31:21 on May 25, which is 7 days)']
+  OBS[execute_python]: 'Execution successful.'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s inspect each of the 12 target transactions in detail:\\nprint(f\\"Target transactions count: {len(target_)']
+  OBS[execute_python]: 'Target transactions count: 12\n8280 2023-05-27T16:43:25 alexander-ridd@gmail.com robertmartinez@gmail.com 14.0 🍵Tea Time\n8281 2023-05-27T16:43:25 susanmiller@gmail.com robertmartinez@gmail.com 66.0 Aesthetic room decor\n8282 2023-05-27T16:43:25 ad.blackburn@gmail.com robertmartinez@gmail.com 6.0 🍰 Des'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check existing likes and comments for these 12 transactions:\\nfor t in target_txs:\\n    tid = t[\'transa)']
+  OBS[execute_python]: 'TX 8280: like_count=0, comment_count=0, comments=[]\nTX 8281: like_count=0, comment_count=0, comments=[]\nTX 8282: like_count=0, comment_count=0, comments=[]\nTX 8283: like_count=0, comment_count=0, comments=[]\nTX 8284: like_count=0, comment_count=0, comments=[]\nTX 8285: like_count=0, comment_count=0, '
+
+task=6104387_3 success=False steps=40 tokens=571461 stopped=max_steps error=None
+TASK: My name is: Christina Harrison. My personal email is chrharrison@gmail.com and phone number is 7487401121.
+Task: Export a unique list of all the songs in my song and album library and all playlists in my Spotify account into "~/backups/spotify_songs.csv" file in my file system. The file should have headers, "Title" and "Artists" and artists should be separated by "|". Terminate my account after th
+bundle={"agent_loop": {"name": "default", "config": {}}, "context_mgmt": {"name": "default", "config": {}}, "tool_policy": {"name": "default", "config": {}}, "memory": {"name": "default", "config": {}}, "verifier": {"name": "default", "config": {}}}
+... (56 earlier events omitted)
+  THINK: '' CALLS: ['execute_python({"code":"# io module is restricted. We can build the CSV string directly or use csv with a simple list.\\n# Let\'s check c)']
+  OBS[execute_python]: 'No special characters found in any title or artists!\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s inspect some of the titles and artists:\\nfor sid, s in list(songs_data.items())[:10]:\\n    artists_str )']
+  OBS[execute_python]: 'Memories Stitched in Time,Jasper Skye|Isabella Cruz|Seraphina Dawn\nThe Curse of Loving You,Lucas Grey\nYearning for a Glimpse of Heaven,Noah Bennett\nDancing Through the Veil of Dreams,Noah Bennett\nSecrets We Dare Not Speak,Noah Bennett\nForged in Fire,Noah Bennett\nBetween the Depths and Heights,Noah B'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check file_system: log in and see if ~/backups exists\\nfs_login = apis.file_system.login(username=\\"chr)']
+  OBS[execute_python]: "file_system login: {'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmaWxlX3N5c3RlbStjaHJoYXJyaXNvbkBnbWFpbC5jb20iLCJleHAiOjE2ODQ0MTI3NDF9.JeSDOHbejoYOcFW4PhWekE0XC4YdOlo723YEAdbkGA4', 'token_type': 'Bearer'}\n"
+  THINK: '' CALLS: ['execute_python({"code":"print(\\"directory_exists ~/backups:\\", apis.file_system.directory_exists(directory_path=\\"~/backups\\", access_t)']
+  OBS[execute_python]: 'Execution failed. Traceback:\n  File "<python-input>", line 2, in <module>\n    print("show_directory ~/:", apis.file_system.show_directory(directory_path="~", access_token=fs_token))\n                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nException: '
+  THINK: '' CALLS: ['execute_python({"code":"print(apis.api_docs.show_api_doc(app_name=\\"file_system\\", api_name=\\"show_directory\\"))"})']
+  OBS[execute_python]: '{\n "app_name": "file_system",\n "api_name": "show_directory",\n "path": "/directory",\n "method": "GET",\n "description": "Show a list of files and/or sub-directories, optionally recursively, in a directory.",\n "parameters": [\n  {\n   "name": "access_token",\n   "type": "string",\n   "required": true,\n   "'
+  THINK: '' CALLS: ['execute_python({"code":"print(\\"directory_exists ~/backups:\\", apis.file_system.directory_exists(directory_path=\\"~/backups\\", access_t)']
+  OBS[execute_python]: "directory_exists ~/backups: {'exists': True}\nshow_directory: ['/home/', '/home/christina/', '/home/christina/backups/', '/home/christina/backups/laptop.zip', '/home/christina/backups/phone.tar', '/home/christina/bills/', '/home/christina/bills/electricity/', '/home/christina/bills/electricity/2022-1"
+  THINK: '' CALLS: ['execute_python({"code":"print(apis.api_docs.show_api_doc(app_name=\\"spotify\\", api_name=\\"delete_account\\"))"})']
+  OBS[execute_python]: '{\n "app_name": "spotify",\n "api_name": "delete_account",\n "path": "/account",\n "method": "DELETE",\n "description": "Delete your account.",\n "parameters": [\n  {\n   "name": "access_token",\n   "type": "string",\n   "required": true,\n   "description": "Access token obtained from spotify app login.",\n   "'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s verify how the CSV content should look\\n# \\"The file should have headers, \\"Title\\" and \\"Artists\\" and)']
+  OBS[execute_python]: 'First 5 lines:\nTitle,Artists\nMemories Stitched in Time,Jasper Skye|Isabella Cruz|Seraphina Dawn\nThe Curse of Loving You,Lucas Grey\nYearning for a Glimpse of Heaven,Noah Bennett\nDancing Through the Veil of Dreams,Noah Bennett\nTotal lines (including header): 71\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s write the file to ~/backups/spotify_songs.csv\\nwrite_res = apis.file_system.write_file(\\n    file_path=)']
+  OBS[execute_python]: 'Execution failed. Traceback:\n  File "<python-input>", line 2, in <module>\n    write_res = apis.file_system.write_file(\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^\nException: No API named \'write_file\' found in the file_system app.'
+  THINK: '' CALLS: ['execute_python({"code":"for api in apis.api_docs.show_api_descriptions(app_name=\\"file_system\\"):\\n    print(api[\\"name\\"], \\":\\", api[)']
+  OBS[execute_python]: 'show_account : Show your account information. Unlike show_profile, this includes private information.\nsignup : Sign up to create account.\ndelete_account : Delete your account.\nupdate_account_name : Update your first or last name in the account profile.\nlogin : Login to your account.\nlogout : Logout '
+  THINK: '' CALLS: ['execute_python({"code":"print(apis.api_docs.show_api_doc(app_name=\\"file_system\\", api_name=\\"create_file\\"))"})']
+  OBS[execute_python]: '{\n "app_name": "file_system",\n "api_name": "create_file",\n "path": "/file",\n "method": "POST",\n "description": "Create a new file with the given content.",\n "parameters": [\n  {\n   "name": "file_path",\n   "type": "string",\n   "required": true,\n   "description": "Path of the file. Path can be absolute'
+  THINK: '' CALLS: ['execute_python({"code":"# Create the file\\ncreate_res = apis.file_system.create_file(\\n    file_path=\\"~/backups/spotify_songs.csv\\",\\n)']
+  OBS[execute_python]: "create_file result: {'message': 'File created.', 'file_path': '/home/christina/backups/spotify_songs.csv'}\n"
+
+task=d0b1f43_3 success=False steps=40 tokens=352374 stopped=max_steps error=None
+TASK: My name is: Nicholas Weber. My personal email is nicholas.weber@gmail.com and phone number is 9503658964.
+Task: How much money have I sent or received to my roommates on venmo since 1st Mar of this year?
+bundle={"agent_loop": {"name": "default", "config": {}}, "context_mgmt": {"name": "default", "config": {}}, "tool_policy": {"name": "default", "config": {}}, "memory": {"name": "default", "config": {}}, "verifier": {"name": "default", "config": {}}}
+... (56 earlier events omitted)
+  THINK: '' CALLS: ['execute_python({"code":"# Why did show_account fail with 401? Let\'s check show_account api doc!\\nprint(apis.api_docs.show_api_doc(app_n)']
+  OBS[execute_python]: '{\n "app_name": "phone",\n "api_name": "show_account",\n "path": "/account",\n "method": "GET",\n "description": "Show your account information. Unlike show_profile, this includes private information.",\n "parameters": [\n  {\n   "name": "access_token",\n   "type": "string",\n   "required": true,\n   "descript'
+  THINK: '' CALLS: ['execute_python({"code":"print(apis.api_docs.show_api_doc(app_name=\'phone\', api_name=\'show_contact_relationships\'))\\nprint(apis.api_docs)']
+  OBS[execute_python]: '{\n "app_name": "phone",\n "api_name": "show_contact_relationships",\n "path": "/contact_relationships",\n "method": "GET",\n "description": "Get a list of all relationships available in your contact book.",\n "parameters": [\n  {\n   "name": "access_token",\n   "type": "string",\n   "required": true,\n   "des'
+  THINK: '' CALLS: ['execute_python({"code":"# Access token needs to be passed to APIs explicitly!\\nphone_token = apis.phone.login(username=\'9503658964\', pa)']
+  OBS[execute_python]: "Relationships: ['brother', 'coworker', 'father', 'friend', 'manager', 'mother', 'parent', 'roommate', 'sibling', 'sister']\n"
+  THINK: '' CALLS: ['execute_python({"code":"# Find roommates\\nroommates = []\\npage = 0\\nwhile True:\\n    res = apis.phone.search_contacts(access_token=phon)']
+  OBS[execute_python]: 'Roommates found:\n{\n "contact_id": 997,\n "first_name": "Anthony",\n "last_name": "Harrison",\n "email": "an-harrison@gmail.com",\n "phone_number": "2466064078",\n "relationships": [\n  "roommate"\n ],\n "birthday": "1990-06-09",\n "home_address": "247 Salinas Pines Suite 668\\nSeattle\\nWashington\\nUnited Stat'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s inspect venmo APIs\\nprint(apis.api_docs.show_api_descriptions(app_name=\'venmo\'))\\n"})']
+  OBS[execute_python]: '[\n {\n  "name": "show_account",\n  "description": "Show your account information. Unlike show_profile, this includes private information."\n },\n {\n  "name": "signup",\n  "description": "Sign up to create account."\n },\n {\n  "name": "delete_account",\n  "description": "Delete your account."\n },\n {\n  "name"'
+  THINK: '' CALLS: ['execute_python({"code":"print(apis.api_docs.show_api_doc(app_name=\'venmo\', api_name=\'show_transactions\'))\\n"})']
+  OBS[execute_python]: '{\n "app_name": "venmo",\n "api_name": "show_transactions",\n "path": "/transactions",\n "method": "GET",\n "description": "Get a list of your transactions.",\n "parameters": [\n  {\n   "name": "access_token",\n   "type": "string",\n   "required": true,\n   "description": "Access token obtained from venmo app '
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check what the current date is again: \'Thursday, May 18, 2023\'\\n# \\"since 1st Mar of this year\\": this )']
+  OBS[execute_python]: 'Total transactions found: 169\n{\n "transaction_id": 176,\n "amount": 39.0,\n "description": "Pet Vaccination",\n "created_at": "2023-03-13T02:06:54",\n "updated_at": "2023-03-13T02:06:54",\n "private": true,\n "like_count": 0,\n "payment_card_digits": null,\n "comment_count": 0,\n "sender": {\n  "name": "Chris'
+  THINK: '' CALLS: ['execute_python({"code":"roommate_emails = {r[\'email\'] for r in roommates}\\nprint(\\"Roommate emails:\\", roommate_emails)\\n\\n# Filter tra)']
+  OBS[execute_python]: "Roommate emails: {'anita.burch@gmail.com', 'an-harrison@gmail.com', 'mel.bailey@gmail.com'}\nMatching transactions count: 17\n1242 2023-04-28T05:45:34 48.0 Anthony Harrison -> Nicholas Weber 🎠 Amusement Park 🎢🎡\n1243 2023-03-16T22:02:28 17.0 Anthony Harrison -> Nicholas Weber 🌳 Park Picnic Snacks\n3800 "
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s double check if there are other contacts with relationship \'roommate\' or if anyone else could be a room)']
+  OBS[execute_python]: 'Page 1 of roommates: []\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check all contacts in phone just in case someone has multiple relationships or \'roommates\'\\nall_contact)']
+  OBS[execute_python]: "Total contacts: 20\nAnthony Harrison ['roommate'] an-harrison@gmail.com\nAnita Burch ['roommate'] anita.burch@gmail.com\nMelissa Bailey ['roommate'] mel.bailey@gmail.com\n"
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check venmo users with those names or emails, or search_users in venmo\\nfor r in roommates:\\n    u = ap)']
+  OBS[execute_python]: "Anthony [{'first_name': 'Anthony', 'last_name': 'Harrison', 'email': 'an-harrison@gmail.com', 'registered_at': '2022-12-23T16:09:19', 'friends_since': None}, {'first_name': 'Stephen', 'last_name': 'Mccoy', 'email': 'stmcco@gmail.com', 'registered_at': '2023-01-24T12:51:50', 'friends_since': None}, {"
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s verify by querying show_transactions with user_email for each roommate directly!\\nfor email in roommate)']
+  OBS[execute_python]: 'Transactions with anita.burch@gmail.com: 1\n  3813 2023-04-13T04:32:12 86.0 Nicholas Weber -> Anita Burch\nTransactions with an-harrison@gmail.com: 12\n  1242 2023-04-28T05:45:34 48.0 Anthony Harrison -> Nicholas Weber\n  1243 2023-03-16T22:02:28 17.0 Anthony Harrison -> Nicholas Weber\n  3800 2023-05-14'
+
+task=76f2c72_3 success=False steps=11 tokens=76281 stopped=done error=None
+TASK: My name is: Christina Harrison. My personal email is chrharrison@gmail.com and phone number is 7487401121.
+Task: What is the total cost of my cable bills for this year? The bills are in "~/bills/" directory of my file system.
+bundle={"agent_loop": {"name": "default", "config": {}}, "context_mgmt": {"name": "default", "config": {}}, "tool_policy": {"name": "default", "config": {}}, "memory": {"name": "default", "config": {}}, "verifier": {"name": "default", "config": {}}}
+  THINK: 'I will check the current date and examine the available APIs in `file_system`.' CALLS: ['execute_python({"code":"import datetime\\nprint(\\"Current datetime:\\", datetime.datetime.now())\\nprint(apis.api_docs.show_api_descriptio)']
+  OBS[execute_python]: 'Current datetime: 2023-05-18 12:00:00\n[\n {\n  "name": "show_account",\n  "description": "Show your account information. Unlike show_profile, this includes private information."\n },\n {\n  "name": "signup",\n  "description": "Sign up to create account."\n },\n {\n  "name": "delete_account",\n  "description": '
+  THINK: '' CALLS: ['execute_python({"code":"print(apis.api_docs.show_api_doc(app_name=\\"file_system\\", api_name=\\"show_directory\\"))\\nprint(apis.api_docs.s)']
+  OBS[execute_python]: '{\n "app_name": "file_system",\n "api_name": "show_directory",\n "path": "/directory",\n "method": "GET",\n "description": "Show a list of files and/or sub-directories, optionally recursively, in a directory.",\n "parameters": [\n  {\n   "name": "access_token",\n   "type": "string",\n   "required": true,\n   "'
+  THINK: '' CALLS: ['execute_python({"code":"print(apis.api_docs.show_api_doc(app_name=\\"file_system\\", api_name=\\"login\\"))\\nprint(apis.api_docs.show_api_d)']
+  OBS[execute_python]: '{\n "app_name": "file_system",\n "api_name": "login",\n "path": "/auth/token",\n "method": "POST",\n "description": "Login to your account.",\n "parameters": [\n  {\n   "name": "username",\n   "type": "string",\n   "required": true,\n   "description": "Your account email.",\n   "default": null,\n   "constraints"'
+  THINK: '' CALLS: ['execute_python({"code":"creds = apis.supervisor.show_account_passwords()\\nprint(creds)\\n"})']
+  OBS[execute_python]: '[\n {\n  "account_name": "amazon",\n  "password": "rU=C=fG"\n },\n {\n  "account_name": "file_system",\n  "password": "-k$qjIu"\n },\n {\n  "account_name": "gmail",\n  "password": "CISmOIf"\n },\n {\n  "account_name": "phone",\n  "password": "y%{jm[y"\n },\n {\n  "account_name": "simple_note",\n  "password": "25MgZ4N"'
+  THINK: '' CALLS: ['execute_python({"code":"fs_login = apis.file_system.login(username=\\"chrharrison@gmail.com\\", password=\\"-k$qjIu\\")\\nprint(fs_login)\\nt)']
+  OBS[execute_python]: '{\n "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmaWxlX3N5c3RlbStjaHJoYXJyaXNvbkBnbWFpbC5jb20iLCJleHAiOjE2ODQ0MTIwOTh9.ELheHyGyLgIakv47-tdmVKL-TrukNfFHeFuFlHebxUQ",\n "token_type": "Bearer"\n}\n[\n "/home/christina/bills/cable/",\n "/home/christina/bills/cable/2022-04.txt",\n "/home/chr'
+  THINK: '' CALLS: ['execute_python({"code":"cable_files_2023 = [\\n    f for f in files if \\"/cable/\\" in f and f.endswith(\\".txt\\") and \\"2023\\" in f\\n]\\np)']
+  OBS[execute_python]: "Cable files 2023: ['/home/christina/bills/cable/2023-01.txt', '/home/christina/bills/cable/2023-02.txt', '/home/christina/bills/cable/2023-03.txt', '/home/christina/bills/cable/2023-04.txt']\n/home/christina/bills/cable/2023-01.txt {'file_id': 25862, 'path': '/home/christina/bills/cable/2023-01.txt',"
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check all files in cable directory just to be completely certain there aren\'t any other files\\ncable_fi)']
+  OBS[execute_python]: "All cable files: ['/home/christina/bills/cable/', '/home/christina/bills/cable/2022-04.txt', '/home/christina/bills/cable/2022-05.txt', '/home/christina/bills/cable/2022-06.txt', '/home/christina/bills/cable/2022-07.txt', '/home/christina/bills/cable/2022-08.txt', '/home/christina/bills/cable/2022-0"
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s verify the amounts for 2023:\\n# 2023-01: Base Charge => 57, Service Fee => $10.00, Taxes and Fees => $1)']
+  OBS[execute_python]: 'Total sum: 310\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check show_active_task description to be sure what format is expected\\nprint(apis.supervisor.show_activ)']
+  OBS[execute_python]: '{\n "instruction": "What is the total cost of my cable bills for this year? The bills are in \\"~/bills/\\" directory of my file system.",\n "status": null,\n "answer": "<<NOT_GIVEN>>"\n}\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Check general instruction:\\n# \\"You must call apis.supervisor.complete_task() after completing the task. If a)']
+  OBS[execute_python]: '{\n "app_name": "supervisor",\n "api_name": "complete_task",\n "path": "/message",\n "method": "POST",\n "description": "Mark the currently active task as complete with the given answer.",\n "parameters": [\n  {\n   "name": "answer",\n   "type": "number | integer | string",\n   "required": false,\n   "descript'
+  THINK: '' CALLS: ['execute_python({"code":"# In the doc: \\"The answer must be concise, such as a number, a yes/no, or a specific entity, name, etc, e.g., )']
+  OBS[execute_python]: '{"message": "Marked the active task complete."}\n'
+
+task=b0a8eae_1 success=False steps=40 tokens=490929 stopped=max_steps error=None
+TASK: My name is: Timothy White. My personal email is timothy.whit@gmail.com and phone number is 9465999623.
+Task: Start playing a playlist on Spotify that has enough songs for my workout today. I do not want to have to change the playlist in the middle of my workout. The workout plan is in Simple Note.
+bundle={"agent_loop": {"name": "default", "config": {}}, "context_mgmt": {"name": "default", "config": {}}, "tool_policy": {"name": "default", "config": {}}, "memory": {"name": "default", "config": {}}, "verifier": {"name": "default", "config": {}}}
+... (56 earlier events omitted)
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s re-read the prompt carefully!\\n# \\"Start playing a playlist on Spotify that has enough songs for my wor)']
+  OBS[execute_python]: 'Execution successful.'
+  THINK: '' CALLS: ['execute_python({"code":"# What about the liked playlists?\\n# Let\'s calculate the total duration of each liked playlist!\\n# Liked playli)']
+  OBS[execute_python]: "Liked playlist 447 'Weekend Warriors: Party Anthems': 1711s (28.5 mins), songs: 8\nLiked playlist 393 'Beach Bum Bliss: Ocean Vibes': 1744s (29.1 mins), songs: 7\nLiked playlist 640 'Yesteryear Yule: Vintage Christmas': 0s (0.0 mins), songs: 0\nLiked playlist 131 'Eco Tunes: Songs for Planet Earth': 19"
+  THINK: '' CALLS: ['execute_python({"code":"# None of the liked playlists are >= 85 minutes! (Maximum is 40.1 mins)\\n# Wait, let\'s search across all playli)']
+  OBS[execute_python]: 'Total playlists found with empty query: 336\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s inspect the distribution of number of songs in all_playlists\\nsong_counts = [len(p[\'song_ids\']) for p i)']
+  OBS[execute_python]: 'Max songs in a playlist: 10\nSong counts sorted descending top 20: [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Wait, max songs in ANY playlist is 10?!\\n# Let\'s check song durations. How long are songs typically?\\n# Let\'s)']
+  OBS[execute_python]: 'Song 1: 217s (3.62 mins)\nSong 2: 224s (3.73 mins)\nSong 3: 270s (4.50 mins)\nSong 4: 181s (3.02 mins)\nSong 5: 255s (4.25 mins)\nSong 6: 271s (4.52 mins)\nSong 7: 279s (4.65 mins)\nSong 8: 271s (4.52 mins)\nSong 9: 196s (3.27 mins)\nSong 10: 211s (3.52 mins)\nSong 11: 196s (3.27 mins)\nSong 12: 295s (4.92 min'
+  THINK: '' CALLS: ['execute_python({"code":"# Wait! If max songs in any existing playlist is 10, then 10 * ~4 mins = ~40 mins!\\n# Wait, can a playlist have)']
+  OBS[execute_python]: 'Song count distribution: {0: 7, 1: 1, 5: 52, 6: 61, 7: 47, 8: 56, 9: 58, 10: 54}\n'
+  THINK: '' CALLS: ['execute_python({"code":"# Wow, no playlist has more than 10 songs!\\n# And 10 songs is at most ~45 minutes. But today\'s workout is 85 mi)']
+  OBS[execute_python]: 'Execution successful.'
+  THINK: '' CALLS: ['execute_python({"code":"# Wait! Let\'s check all notes in Simple Note first! Could there be another note about workouts or playlists?\\np)']
+  OBS[execute_python]: "Total notes: 20\n3022 Habit Tracking Log for 2023-05-17 ['habit-tracker']\n3023 Habit Tracking Log for 2023-05-16 ['habit-tracker']\n3024 Habit Tracking Log for 2023-05-15 ['habit-tracker']\n3025 Habit Tracking Log for 2023-05-14 ['habit-tracker']\n3026 Habit Tracking Log for 2023-05-13 ['habit-tracker']"
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s check habit tracking logs or anything else just in case.\\n# Wait, habit tracking log for 2023-05-17:\\np)']
+  OBS[execute_python]: '# Daily Habit Tracker (yes/no questions to answer daily)\n\nexercised_atleast_30_mins: yes\nate_homemade_meals: yes\npracticed_meditation: no\nread_atleast_30_mins: yes\ndrank_adequate_water: yes\nslept_over_7_hrs: yes\nwrote_gratitude_journal: yes\nlimited_screen_time_to_1_hr: yes\npracticed_good_posture: no'
+  THINK: '' CALLS: ['execute_python({"code":"# The workout plan is definitely 3016 Weekly Workout Plan:\\n# Let\'s inspect 3016 again:\\n# day: tuesday\\n# exer)']
+  OBS[execute_python]: 'show_account - Show your account information. Unlike show_profile, this includes private information.\nsignup - Sign up to create account.\ndelete_account - Delete your account.\nupdate_account_name - Update your first or last name in the account profile.\nlogin - Login to your account.\nlogout - Logout '
+  THINK: '' CALLS: ['execute_python({"code":"# Look at this documentation for show_song_queue:\\n# \\"Get the music player song queue. Songs are played in the)']
+  OBS[execute_python]: 'Execution successful.'
+  THINK: '' CALLS: ['execute_python({"code":"# Let\'s cache all song durations first to make this super fast:\\n# How many songs are there on spotify?\\n# Let\')']
+  OBS[execute_python]: 'Total songs cached: 324\n'
+
+Frozen failure modes (targeted 2+ times without any merged mechanism; treated as not fixable by the harness
+for this model, do NOT target them): none
+
+## Current pool (status, evidence: dT = mean paired gain on targeted tasks, dS = on safe tasks, fired = tasks where
+it fired)
+- m1 [rejected] inject 'Late-budget focus' when `steps_left <= 5 and step_frac >= 0.8`: 'Few steps remain. Stop optional exploration and verification; use the available steps to perform the requested task and, if applicable, report completion.' | dT=0.033 dS=-0.2 fired=0 reason: never fired (no credit)
+- m2 [rejected] guidance 'Focused tool use' when `True`: 'Keep tool use focused on the requested outcome. Gather only the information needed to act, prefer direct documented operations over probing tool internals, and ' | dT=0.233 dS=-0.3 fired=20 reason: hurts tasks H0 always solves (3 > 0)
+
+## Output
+Propose exactly two mechanisms for ONE failure mode that is frequent and attributable to the harness:
+a "structural" one (kind inject, annotate_obs or reject_finish) and a "guidance" one (kind guidance).
+Answer ONLY with JSON:
+{"failure_mode": "<one of: hedged_answer, early_stop, budget_exhausted, error_heavy, repetition, no_tool_call, other>", "analysis": "<2-3 sentences>",
+  "structural": {"kind": "...", "slot": "<context|action_interface|tool_policy|observation|error_recovery|orchestration|termination|verification|memory>",
+                 "mechanism": "<short name>", "target_behavior": "<behaviour it changes>",
+                 "precondition": "<expression>", "text": "<message to the agent>", "max_fires": 1},
+  "guidance": {"kind": "guidance", "slot": "context", "mechanism": "...", "target_behavior": "...",
+               "precondition": "True", "text": "...", "max_fires": 1}}

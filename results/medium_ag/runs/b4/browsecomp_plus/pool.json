@@ -1,0 +1,185 @@
+[
+ {
+  "id": "m1",
+  "round": 1,
+  "branch": "structural",
+  "failure_mode": "early_stop",
+  "status": "rejected",
+  "kind": "reject_finish",
+  "precondition": "is_finish and answer_len < 5",
+  "text": "Your answer is too short to be a complete response. Provide a complete final answer before finishing.",
+  "slot": "termination",
+  "mechanism": "reject_near_empty_finish",
+  "target_behavior": "Prevent submission of an effectively empty final answer and prompt the agent to complete it.",
+  "max_fires": 1,
+  "reason": "never fired (no credit)",
+  "evidence": {
+   "dT": 0.033,
+   "dS": -0.5,
+   "lcbT": -0.1,
+   "fired": 0,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.433,
+    "n_errors": -0.633,
+    "answer_hedged": 0.6,
+    "repeat_ratio": -0.017,
+    "tokens": -313322.2
+   }
+  }
+ },
+ {
+  "id": "m2",
+  "round": 1,
+  "branch": "guidance",
+  "failure_mode": "early_stop",
+  "status": "rejected",
+  "kind": "guidance",
+  "precondition": "True",
+  "text": "Before finishing, make sure your final response is complete and directly addresses the request; do not stop mid-sentence or submit a partial answer.",
+  "slot": "context",
+  "mechanism": "complete_final_response",
+  "target_behavior": "Ensure the final response is complete and directly addresses the request before finishing.",
+  "max_fires": 1,
+  "reason": "hurts tasks H0 always solves (6 > 0)",
+  "evidence": {
+   "dT": 0.0,
+   "dS": -0.6,
+   "lcbT": -0.2,
+   "fired": 20,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.414,
+    "n_errors": -0.5,
+    "answer_hedged": 0.75,
+    "repeat_ratio": -0.012,
+    "tokens": -285397.033
+   },
+   "safe_fail": 6
+  }
+ },
+ {
+  "id": "m3",
+  "round": 2,
+  "branch": "structural",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "inject",
+  "precondition": "steps_left <= 3 and n('search') >= 5",
+  "text": "Only a few steps remain. Do not repeat broad or already-tried searches. Use the strongest evidence already retrieved to answer the question directly; if it does not support an answer, state that limitation concisely.",
+  "slot": "orchestration",
+  "mechanism": "late_budget_focus",
+  "target_behavior": "When little budget remains, stop repeating broad searches and prioritize the strongest supported answer or explicit uncertainty.",
+  "max_fires": 1,
+  "reason": "never fired (no credit)",
+  "evidence": {
+   "dT": -0.167,
+   "dS": -0.9,
+   "lcbT": -0.3,
+   "fired": 0,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.454,
+    "n_errors": -0.633,
+    "answer_hedged": 0.85,
+    "repeat_ratio": -0.015,
+    "tokens": -317585.417
+   }
+  }
+ },
+ {
+  "id": "m4",
+  "round": 2,
+  "branch": "guidance",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "guidance",
+  "precondition": "True",
+  "text": "For research questions, treat each search as a test of a specific unresolved clue. If results are irrelevant or repeat, change the query strategy or clue rather than rephrasing the same search; use retrieved documents to verify promising leads before concluding.",
+  "slot": "context",
+  "mechanism": "search_with_a_lead",
+  "target_behavior": "Make each research action advance a specific clue rather than reissuing ineffective queries.",
+  "max_fires": 1,
+  "reason": "hurts tasks H0 always solves (4 > 0)",
+  "evidence": {
+   "dT": -0.167,
+   "dS": -0.4,
+   "lcbT": -0.4,
+   "fired": 20,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.383,
+    "n_errors": -0.533,
+    "answer_hedged": 0.65,
+    "repeat_ratio": -0.012,
+    "tokens": -280371.683
+   },
+   "safe_fail": 4
+  }
+ },
+ {
+  "id": "m5",
+  "round": 3,
+  "branch": "structural",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "inject",
+  "precondition": "steps_left <= 2 and n('search') >= 8 and not is_finish",
+  "text": "Only {steps_left} steps remain. Stop opening new research paths. Use the strongest evidence already available to address the specific request in a concise, complete answer; do not invent unsupported details.",
+  "slot": "orchestration",
+  "mechanism": "late_search_budget_checkpoint",
+  "target_behavior": "Prompt the agent near the end of a search-heavy run to stop expanding research and use the best available evidence to complete the requested response.",
+  "max_fires": 1,
+  "reason": "never fired (no credit)",
+  "evidence": {
+   "dT": -0.233,
+   "dS": -0.6,
+   "lcbT": -0.4,
+   "fired": 0,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.459,
+    "n_errors": -0.45,
+    "answer_hedged": 0.75,
+    "repeat_ratio": -0.019,
+    "tokens": -322105.133
+   }
+  }
+ },
+ {
+  "id": "m6",
+  "round": 3,
+  "branch": "guidance",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "guidance",
+  "precondition": "True",
+  "text": "Treat each research call as having a cost: pursue the most discriminating unresolved clue, and avoid continuing a search path that has not produced useful evidence. Keep the requested deliverable in view and reserve time to provide a direct, complete response supported by what you found.",
+  "slot": "context",
+  "mechanism": "budgeted_research",
+  "target_behavior": "Keep research bounded and reserve enough steps to submit a direct, complete response.",
+  "max_fires": 1,
+  "reason": "hurts tasks H0 always solves (6 > 0)",
+  "evidence": {
+   "dT": -0.267,
+   "dS": -0.6,
+   "lcbT": -0.433,
+   "fired": 20,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.444,
+    "n_errors": -0.367,
+    "answer_hedged": 0.8,
+    "repeat_ratio": -0.012,
+    "tokens": -323622.8
+   },
+   "safe_fail": 6
+  }
+ }
+]

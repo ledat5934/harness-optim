@@ -1,0 +1,127 @@
+[
+ {
+  "id": "m1",
+  "round": 1,
+  "branch": "structural",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "inject",
+  "precondition": "steps_left <= 5 and step_frac >= 0.8",
+  "text": "Few steps remain. Stop optional exploration and verification; use the available steps to perform the requested task and, if applicable, report completion.",
+  "slot": "orchestration",
+  "mechanism": "Late-budget focus",
+  "target_behavior": "Prioritize completing the requested task over further exploration when few steps remain.",
+  "max_fires": 1,
+  "reason": "never fired (no credit)",
+  "evidence": {
+   "dT": 0.033,
+   "dS": -0.2,
+   "lcbT": -0.167,
+   "fired": 0,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.271,
+    "n_errors": -2.8,
+    "answer_hedged": 0.0,
+    "repeat_ratio": 0.015,
+    "tokens": -163527.383
+   }
+  }
+ },
+ {
+  "id": "m2",
+  "round": 1,
+  "branch": "guidance",
+  "failure_mode": "budget_exhausted",
+  "status": "rejected",
+  "kind": "guidance",
+  "precondition": "True",
+  "text": "Keep tool use focused on the requested outcome. Gather only the information needed to act, prefer direct documented operations over probing tool internals, and complete the requested action as soon as you have enough information.",
+  "slot": "context",
+  "mechanism": "Focused tool use",
+  "target_behavior": "Use tools efficiently and move from gathering necessary information to completing the task.",
+  "max_fires": 1,
+  "reason": "hurts tasks H0 always solves (3 > 0)",
+  "evidence": {
+   "dT": 0.233,
+   "dS": -0.3,
+   "lcbT": 0.067,
+   "fired": 20,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.304,
+    "n_errors": -2.9,
+    "answer_hedged": 0.0,
+    "repeat_ratio": 0.004,
+    "tokens": -195925.75
+   },
+   "safe_fail": 3
+  }
+ },
+ {
+  "id": "m3",
+  "round": 2,
+  "branch": "structural",
+  "failure_mode": "error_heavy",
+  "status": "rejected",
+  "kind": "inject",
+  "precondition": "err_streak >= 2",
+  "text": "The last two observations look like errors. Pause the current approach: use the error details and relevant documented interface to identify what failed, then make one corrected attempt or choose a different supported operation. Avoid repeating the same failing call or probing unrelated internals.",
+  "slot": "error_recovery",
+  "mechanism": "Consecutive-error recovery",
+  "target_behavior": "After consecutive tool errors, diagnose the failed operation and make a corrected, evidence-based attempt instead of continuing speculative exploration.",
+  "max_fires": 1,
+  "reason": "hurts tasks H0 always solves (2 > 1)",
+  "evidence": {
+   "dT": -0.033,
+   "dS": -0.2,
+   "lcbT": -0.233,
+   "fired": 15,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.242,
+    "n_errors": -1.6,
+    "answer_hedged": 0.0,
+    "repeat_ratio": 0.003,
+    "tokens": -163422.7
+   },
+   "safe_fail": 2
+  }
+ },
+ {
+  "id": "m4",
+  "round": 2,
+  "branch": "guidance",
+  "failure_mode": "error_heavy",
+  "status": "admitted",
+  "kind": "guidance",
+  "precondition": "True",
+  "text": "When an operation fails, use its error details to revise that operation or select a supported alternative. Keep successful results, avoid repeating an unchanged failure, and return to the requested outcome once the immediate issue is resolved.",
+  "slot": "context",
+  "mechanism": "Evidence-led error handling",
+  "target_behavior": "Treat errors as feedback about a specific operation and recover while preserving successful progress.",
+  "max_fires": 1,
+  "evidence": {
+   "dT": 0.133,
+   "dS": 0.0,
+   "lcbT": -0.067,
+   "fired": 20,
+   "n": 20,
+   "errors": 0,
+   "behavior_delta": {
+    "step_frac": -0.277,
+    "n_errors": -2.85,
+    "answer_hedged": 0.0,
+    "repeat_ratio": -0.003,
+    "tokens": -165757.733
+   },
+   "safe_fail": 0
+  },
+  "conflicts": [
+   []
+  ]
+ }
+]
