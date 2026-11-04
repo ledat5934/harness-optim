@@ -49,7 +49,7 @@ MODE_FREEZE = 2                 # v3: a failure mode is frozen after this many u
 SAFE_SLACK = 1                  # safe-task failures tolerated for a conditional mechanism (global ones: 0)
 N_REPORT_FAIL, N_REPORT_PASS = 6, 2
 SEED = int(os.environ.get("B4_SEED", "0"))  # independent repeat: proposer/sampling rng + output names
-TAG = "b4" if SEED == 0 else f"b4s{SEED}"
+TAG = os.environ.get("B4_TAG") or ("b4" if SEED == 0 else f"b4s{SEED}")
 FINISH = {"browsecomp_plus": "finish"}
 
 # ---------------------------------------------------------------- behaviour
@@ -385,6 +385,38 @@ def val_run(bench, split, ids, mechs, name, ws, client, out, cfg, r) -> tuple[fl
 
 
 # ---------------------------------------------------------------- main loop
+def profile_distance(a: dict, b: dict) -> float:
+    """Mean relative difference over the shared numeric profile keys (0 = same behaviour)."""
+    ks = [k for k in a if k in b and isinstance(a[k], (int, float)) and isinstance(b[k], (int, float))]
+    if not ks:
+        return 1.0
+    return round(sum(abs(a[k] - b[k]) / (abs(a[k]) + abs(b[k]) + 1e-9) for k in ks) / len(ks), 3)
+
+
+def load_priors(bench: str, prof0: dict, k: int = 2) -> tuple[list[dict], list[dict]]:
+    """v3 cross-model transfer: B4_PRIOR = comma-separated B4 run roots (e.g. runs of another model). Mechanisms of
+    their final sets are ranked by the behaviour-profile distance between that source model's H0 profile and this
+    model's; the k closest are screened first (round 1) instead of new proposals."""
+    out, src = [], []
+    for d in filter(None, os.environ.get("B4_PRIOR", "").split(",")):
+        root = Path(d) / bench
+        if not (root / "final.json").exists():
+            continue
+        sp = json.loads((root / "profile.json").read_text()).get("profile", {}) if (root / "profile.json").exists() else {}
+        dist = profile_distance(prof0, sp)
+        src.append({"run": str(root), "distance": dist})
+        for m in json.loads((root / "final.json").read_text()).get("set", []):
+            out.append((dist, m))
+    seen, pri = set(), []
+    for dist, m in sorted(out, key=lambda x: x[0]):
+        key = (m["kind"], str(m.get("precondition")))
+        if key not in seen:
+            seen.add(key)
+            pri.append({**{x: m.get(x) for x in ("kind", "slot", "mechanism", "target_behavior", "precondition", "text",
+                                                  "max_fires")}, "source_distance": dist})
+    return pri[:k], src
+
+
 def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     ws = C.RUNS / TAG / bench
     if ws.exists():
@@ -420,13 +452,14 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     prof0 = profile([sig_by_path[r["trajectory_path"]] for r in shared["h0_train"] if r.get("trajectory_path") in sig_by_path])
     (ws / "profile.json").write_text(json.dumps({"model": client.model, "harness": "h0", "profile": prof0}, indent=1))
 
+    priors, prior_src = load_priors(bench, prof0)
     pool: list[dict] = []
     incumbent: list[dict] = []
     inc_val, inc_tok = C.score(shared["h0_val"]), sum(r.get("tokens") or 0 for r in shared["h0_val"])
     inc_root = C.H0_ROOT
     inc_vrecs = list(shared["h0_val"])
     cur_recs, cur_sigs = list(shared["h0_train"]), dict(sig_by_path)  # evidence of the current harness
-    log = {"rounds": [], "profile_h0": prof0}
+    log = {"rounds": [], "profile_h0": prof0, "prior_sources": prior_src, "priors": priors}
     p_base, sig_base = dict(p_h0), sig_by_task   # current harness's per-task success estimate / signals on train
     mode_tries: Counter = Counter()
     frozen: set[str] = set()
@@ -446,19 +479,26 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         digests = [C.summarize_trajectory(x["trajectory_path"], max_events=24, max_chars=300, task_chars=400)
                    for x in dig_src[:5]]
         prof = profile([cur_sigs[x["trajectory_path"]] for x in cur_recs if x.get("trajectory_path") in cur_sigs])
-        d, raw = propose(client, bench, prof, modes, reps, digests, pool, linter.tools, r, ws, frozen)
+        if r == 1 and priors:  # transfer round: screen the prior repertoire on this model before proposing anew
+            d = {"failure_mode": "transfer", "analysis": "prior mechanisms from closest behaviour profiles"}
+            d.update({f"prior{i}": p for i, p in enumerate(priors)})
+            branches = [f"prior{i}" for i in range(len(priors))]
+        else:
+            d, raw = propose(client, bench, prof, modes, reps, digests, pool, linter.tools, r, ws, frozen)
+            branches = ["structural", "guidance"]
         rd["failure_mode"] = d.get("failure_mode")
         rd["analysis"] = str(d.get("analysis", ""))[:500]
         admitted = []
         fm_frozen = d.get("failure_mode") in frozen
-        for branch in ("structural", "guidance"):
+        for branch in branches:
             cid = f"m{len(pool) + 1}"
             spec = d.get(branch)
             entry = {"id": cid, "round": r, "branch": branch, "failure_mode": d.get("failure_mode"), "status": "",
                      "kind": "", "precondition": "", "text": ""}
             try:
                 m = R.validate_mechanism({**(spec or {}), "id": cid})
-                if branch == "guidance" and m["kind"] != "guidance" or branch == "structural" and m["kind"] == "guidance":
+                if branch == "guidance" and m["kind"] != "guidance" or branch == "structural" and m["kind"] == "guidance" \
+                        or branch.startswith("prior") and not spec:
                     raise ValueError(f"branch {branch} got kind {m['kind']}")
                 entry.update(m)
                 if fm_frozen:
