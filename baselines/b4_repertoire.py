@@ -298,6 +298,56 @@ def make_root(ws: Path, name: str, mechs: list[dict]) -> Path:
     return root
 
 
+# ---------------------------------------------------------------- resume (B4_RESUME=1)
+# Container restarts kill long runs. With B4_RESUME=1 the workspace and output are kept; episodes already in the
+# output jsonl (same run_tag + task_id) are reused and the method's own LLM calls (tags "b4:*") are replayed in
+# order from ws/llm_cache.jsonl, so the seeded run retraces its earlier decisions and continues where it died.
+RESUME = os.environ.get("B4_RESUME") == "1"
+
+
+class _Replay:
+    def __init__(self, client, path: Path):
+        self.c, self.path, self.i = client, path, 0
+        self.cache = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()] \
+            if (RESUME and path.exists()) else []
+        if not RESUME and path.exists():
+            path.unlink()
+
+    def chat(self, msgs, tag="", **kw):
+        if not str(tag).startswith("b4:"):
+            return self.c.chat(msgs, tag=tag, **kw)
+        if self.i < len(self.cache) and self.cache[self.i]["tag"] == tag:
+            self.i += 1
+            return type("Resp", (), {"content": self.cache[self.i - 1]["content"]})()
+        self.cache = self.cache[:self.i]
+        r = self.c.chat(msgs, tag=tag, **kw)
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({"tag": tag, "content": r.content or ""}) + "\n")
+        self.cache.append({"tag": tag, "content": r.content or ""})
+        self.i += 1
+        return r
+
+    def __getattr__(self, k):
+        return getattr(self.c, k)
+
+
+def _evaluate(bench, split, task_ids, root, client, run_tag, out, **kw):
+    done = {}
+    if RESUME and out.exists():
+        for l in out.read_text(encoding="utf-8").splitlines():
+            try:
+                rec = json.loads(l)
+            except Exception:
+                continue
+            if rec.get("run_tag") == run_tag and rec.get("task_id") in task_ids and not rec.get("error"):
+                done[rec["task_id"]] = rec
+    todo = [t for t in task_ids if t not in done]
+    if done:
+        print(f"    [{run_tag}] resume: {len(done)} cached, {len(todo)} to run", flush=True)
+    new = {r["task_id"]: r for r in (C.evaluate(bench, split, todo, root, client, run_tag, out, **kw) if todo else [])}
+    return [done.get(t) or new[t] for t in task_ids]
+
+
 def h0_task_stats(h0_train: list[dict]) -> dict[str, float]:
     by = defaultdict(list)
     for r in h0_train:
@@ -331,7 +381,7 @@ def screen(bench, split, cand: dict, ws: Path, client, out: Path, cfg: dict, p_h
     if not ok:
         return {"status": "rejected", "reason": "static gate: " + glog[-200:]}
     tag = f"{TAG}_{bench}_r{r}_{cand['id']}"
-    recs = C.evaluate(bench, split, target + safe, root, client, tag, out, workers=cfg["workers"],
+    recs = _evaluate(bench, split, target + safe, root, client, tag, out, workers=cfg["workers"],
                       label={"method": "b4", "phase": "screen", "round": r, "cand": cand["id"], "base": [m["id"] for m in base]})
     dT, dS, fired, bdelta = [], [], 0, defaultdict(list)
     for rec in recs:
@@ -379,7 +429,7 @@ def paired_margin(new: list[dict], old: list[dict]) -> tuple[int, int]:
 
 def val_run(bench, split, ids, mechs, name, ws, client, out, cfg, r) -> tuple[float, int, list[dict], Path]:
     root = make_root(ws, name, mechs)
-    recs = C.evaluate(bench, split, ids, root, client, f"{TAG}_{bench}_r{r}_{name}_val", out, workers=cfg["workers"],
+    recs = _evaluate(bench, split, ids, root, client, f"{TAG}_{bench}_r{r}_{name}_val", out, workers=cfg["workers"],
                       label={"method": "b4", "phase": "val", "round": r, "set": [m["id"] for m in mechs]})
     return C.score(recs), sum(x.get("tokens") or 0 for x in recs), recs, root
 
@@ -419,10 +469,13 @@ def load_priors(bench: str, prof0: dict, k: int = 2) -> tuple[list[dict], list[d
 
 def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     ws = C.RUNS / TAG / bench
-    if ws.exists():
+    if ws.exists() and not RESUME:
         shutil.rmtree(ws)
-    ws.mkdir(parents=True)
+    ws.mkdir(parents=True, exist_ok=True)
     out = C.OUT / f"{TAG}_{bench}.jsonl"
+    if out.exists() and not RESUME:
+        out.unlink()
+    client = _Replay(client, ws / "llm_cache.jsonl")
     ledger = ws / "ledger.jsonl"
     tasks = shared["tasks"]
     tr_split, val_split = tasks["train"][0], tasks["val"][0]
@@ -551,7 +604,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             # Estimate = mean of the H0 rolls and this roll (shrinks the single noisy roll toward H0); a task is
             # "safe" (=1.0) only if H0 always solved it and the new set solved it too.
             C.budget_check(f"b4[{bench}] incumbent train r{r}")
-            cur = C.evaluate(bench, tr_split, list(p_h0), inc_root, client, f"{TAG}_{bench}_r{r}_inc_train", out,
+            cur = _evaluate(bench, tr_split, list(p_h0), inc_root, client, f"{TAG}_{bench}_r{r}_inc_train", out,
                              workers=cfg["workers"], label={"method": "b4", "phase": "inc_train", "round": r})
             sig_base = defaultdict(list)
             for x in cur:
@@ -584,9 +637,9 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     if alternates:
         alt = max(alternates, key=lambda a: a["val"])
         C.budget_check(f"b4[{bench}] reselect")
-        inc2 = C.evaluate(bench, val_split, val_ids, inc_root, client, f"{TAG}_{bench}_reselect_inc", out,
+        inc2 = _evaluate(bench, val_split, val_ids, inc_root, client, f"{TAG}_{bench}_reselect_inc", out,
                           workers=cfg["workers"], label={"method": "b4", "phase": "val2", "set": [c["id"] for c in incumbent]})
-        alt2 = C.evaluate(bench, val_split, val_ids, alt["root"], client, f"{TAG}_{bench}_reselect_alt", out,
+        alt2 = _evaluate(bench, val_split, val_ids, alt["root"], client, f"{TAG}_{bench}_reselect_alt", out,
                           workers=cfg["workers"], label={"method": "b4", "phase": "val2", "set": [c["id"] for c in alt["mechs"]]})
         w1, l1 = paired_margin(alt["vrecs"], inc_vrecs)
         w2, l2 = paired_margin(alt2, inc2)
@@ -605,7 +658,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     (ws / "final.json").write_text(json.dumps({"final_root": str(inc_root), "set": incumbent, "val": inc_val},
                                               indent=1, default=str))
     C.budget_check(f"b4[{bench}] test")
-    test = C.evaluate(bench, tasks["test"][0], tasks["test"][1], inc_root, client, f"{TAG}_{bench}_test", out,
+    test = _evaluate(bench, tasks["test"][0], tasks["test"][1], inc_root, client, f"{TAG}_{bench}_test", out,
                       workers=cfg["workers"], label={"method": "b4", "phase": "test"})
     fired = Counter(m for x in test for m in R.trajectory_signals(x.get("trajectory_path") or "", fin).get("mech_fired", []))
     log["test"] = {"success": C.score(test), "n": len(test), "fired": dict(fired)}
