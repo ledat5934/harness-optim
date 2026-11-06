@@ -199,7 +199,7 @@ def evaluate(bench: str, split: str, task_ids: list[str], root: Path | str, clie
         t0 = time.time()
         r = ad.run_episode(tid, h, client, split=split, run_tag=run_tag)
         rec = {**dataclasses.asdict(r), "split": split, "run_tag": run_tag, "root": str(root),
-               "wall_s": round(time.time() - t0, 1), **(label or {})}
+               "wall_s": round(time.time() - t0, 1), "model": getattr(client, "model", None), **(label or {})}
         if getattr(h, "last", None) is not None:
             rec["bundle"] = h.last.bundle
             rec["composer_meta"] = h.last.meta

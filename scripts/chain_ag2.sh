@@ -1,5 +1,5 @@
 cd /home/user/harness-optim
-export B4_RESUME=1 RESULTS_SUFFIX=ag2 LLM_MODEL=ag/gemini-3.8-flash APPWORLD_ROOT=/root/appworld_root
+export DOTENV_KEEP=LLM_MODEL B4_RESUME=1 RESULTS_SUFFIX=ag2 LLM_MODEL=ag/gemini-3.8-flash APPWORLD_ROOT=/root/appworld_root
 mkdir -p results/medium_ag2/logs; L=results/medium_ag2/logs
 P=/home/user/harness-optim/results/medium_luna/runs/b4,/home/user/harness-optim/results/medium_luna/runs/b4s1
 chain() { # $1 bench $2 python $3 short

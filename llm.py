@@ -38,6 +38,11 @@ FULL_LOG: Path | None = None
 VERBOSE = False
 
 
+# Comma-separated variable names the caller pins over .env, e.g. DOTENV_KEEP=LLM_MODEL for a run on another model.
+# Without it .env silently overrode an exported LLM_MODEL and a "cross-model" run used the .env model instead.
+_KEEP = {x.strip() for x in os.environ.get("DOTENV_KEEP", "").split(",") if x.strip()}
+
+
 def _load_dotenv(path: Path = ROOT / ".env") -> None:
     if not path.exists():
         return
@@ -46,6 +51,8 @@ def _load_dotenv(path: Path = ROOT / ".env") -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         k, v = line.split("=", 1)
+        if k.strip() in _KEEP:  # explicitly pinned by the caller (see DOTENV_KEEP)
+            continue
         os.environ[k.strip()] = v.strip()  # project .env wins over a stale system-wide var
 
 
