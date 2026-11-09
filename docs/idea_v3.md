@@ -121,5 +121,5 @@ Bước xa hơn là cho phép ứng viên dạng code: một variant H0 đầy �
 3. Khi có P3 và P4, chạy lại cả hai benchmark với 2 seed.
 
 **Ghi chú hạ tầng:**
-- `runs/` (gitignored) đã mất khi container khởi động lại, kể cả pool của luna v3. Muốn dùng `B4_GRAPH`/`B4_PRIOR` thì phải chạy lại, hoặc lưu `final.json` và `graph.json` vào `results/`.
+- `runs/` (gitignored) bị xoá khi container khởi động lại. Bản sao các lần chạy luna v1–v3 vẫn còn trong `results/medium_luna/runs/` (`b4`, `b4s1`, …), dùng được cho `B4_PRIOR`. Muốn dùng `B4_GRAPH` thì cần sinh `graph.json` từ `pool.json` bằng `G.build_graph`: đã thử trên pool thật và chạy đúng.
 - Token luna đã hết hạn; cần đăng nhập lại Codex trong 9router.
