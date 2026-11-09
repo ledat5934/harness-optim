@@ -151,6 +151,17 @@ def eval_pre(code, tr: Tracker, sig: dict | None = None) -> bool:
         return False
 
 
+def eval_pre_sig(code, sig: dict) -> bool:
+    """Evaluate a compiled precondition on a saved end-of-episode signature (trajectory_signals)."""
+    tc = sig.get("tool_counts") or {}
+    env = {k: v for k, v in sig.items() if k in SIGNALS}
+    env.update(n=lambda t: tc.get(t, 0), min=min, max=max, abs=abs)
+    try:
+        return bool(eval(code, {"__builtins__": {}}, env))  # noqa: S307 - whitelisted AST, no builtins
+    except Exception:
+        return False
+
+
 KINDS = ("guidance", "inject", "annotate_obs", "reject_finish")
 
 
@@ -358,5 +369,5 @@ def trajectory_signals(path: str, finish_tool: str | None = None) -> dict:
     out = d.get("outcome")
     s.update(success=bool(d.get("success")), stopped=(out or {}).get("stopped") if isinstance(out, dict) else out,
              tokens=d.get("tokens") or 0, mech_fired=sorted({e.get("id") for e in ev if e["type"] == "mech"}),
-             answered=last_answer is not None)
+             answered=last_answer is not None, tool_counts={t: tr.n(t) for t in set(tr.tools) if t})
     return s

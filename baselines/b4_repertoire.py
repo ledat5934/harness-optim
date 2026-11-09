@@ -28,6 +28,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from baselines import common as C
+from baselines import b4_modes as G
 from baselines.hg import runtime as R
 from baselines.proposer_io import extract_json
 
@@ -48,6 +49,8 @@ MIN_ROUNDS = 3                  # never stop before this round (seed 0 AppWorld 
 MODE_FREEZE = 2                 # v3: a failure mode is frozen after this many unmerged rounds targeting it
 SAFE_SLACK = 1                  # safe-task failures tolerated for a conditional mechanism (global ones: 0)
 N_REPORT_FAIL, N_REPORT_PASS = 6, 2
+N_LABEL = int(os.environ.get("B4_N_LABEL", "16"))  # v4: failed runs given an open hindsight label per round
+LLM_MODES = os.environ.get("B4_LLM_MODES", "1") == "1"  # v4: LLM-discovered failure modes (0 = v3 rule modes)
 SEED = int(os.environ.get("B4_SEED", "0"))  # independent repeat: proposer/sampling rng + output names
 TAG = os.environ.get("B4_TAG") or ("b4" if SEED == 0 else f"b4s{SEED}")
 FINISH = {"browsecomp_plus": "finish"}
@@ -144,7 +147,8 @@ stopping/termination rules, step budget, error handling) could reasonably be cha
 "reasoning" = the model had what it needed but reasoned wrongly; "ambiguous" = the task itself is unclear;
 "environment" = infrastructure/tool failure outside the agent's control.
 Answer ONLY with JSON: {{"cause": "harness|reasoning|ambiguous|environment", "why": "<one sentence>",
-"general_fix": "<one sentence, phrased as a rule that would apply to many tasks, or empty>"}}"""
+"general_fix": "<one sentence, phrased as a rule that would apply to many tasks, or empty>",
+"failure_label": "<3-8 words naming the general behaviour that went wrong, no task entities>"}}"""
 
 
 def _ask_json(client, prompt: str, tag: str, max_tokens: int = 1200) -> dict:
@@ -171,6 +175,15 @@ def reports(client, recs: list[dict], sigs: dict, rng: random.Random, bench: str
         if not r["success"]:
             row["hindsight"] = _ask_json(client, HINDSIGHT.format(digest=dig), f"b4:{bench}:hindsight")
         out.append(row)
+    # v4: open labels for more failed runs (hindsight only), the input of the LLM failure-mode clustering
+    if LLM_MODES:
+        rest = [r for r in fails if r not in sample]
+        for r in rng.sample(rest, min(max(0, N_LABEL - N_REPORT_FAIL), len(rest))):
+            dig = C.summarize_trajectory(r["trajectory_path"], max_events=30, max_chars=300, show_outcome=False,
+                                         task_chars=600)
+            out.append({"task_id": r["task_id"], "success": False, "label_only": True,
+                        "modes": failure_modes(sigs.get(r["trajectory_path"], {})),
+                        "hindsight": _ask_json(client, HINDSIGHT.format(digest=dig), f"b4:{bench}:hindsight")})
     return out
 
 
@@ -221,7 +234,7 @@ Each mechanism fires at most `max_fires` times per episode (1..5).
 Model behaviour profile under the current harness (means over train runs):
 {profile}
 
-Failure modes of the current harness on train (count of failed runs per behaviour signature):
+Failure modes of the current harness on train ({modes_src}):
 {modes}
 
 Self-reports of sampled runs (blind = before knowing the outcome; hindsight = after being told it failed):
@@ -233,6 +246,13 @@ Digests of failed train runs (outcome shown):
 Frozen failure modes (targeted {frozen_n}+ times without any merged mechanism; treated as not fixable by the harness
 for this model, do NOT target them): {frozen}
 
+## Mechanism graph of this run (failure mode -> mechanisms tried for it, with evidence; build on what helped,
+## do not repeat what hurt or was tried)
+{graph}
+
+## Graphs of earlier runs (other seeds / other models; transferable ideas, not proof for this model)
+{prior_graph}
+
 ## Current pool (status, evidence: dT = mean paired gain on targeted tasks, dS = on safe tasks, fired = tasks where
 it fired)
 {pool}
@@ -241,7 +261,7 @@ it fired)
 Propose exactly two mechanisms for ONE failure mode that is frequent and attributable to the harness:
 a "structural" one (kind inject, annotate_obs or reject_finish) and a "guidance" one (kind guidance).
 Answer ONLY with JSON:
-{{"failure_mode": "<one of: {mode_names}>", "analysis": "<2-3 sentences>",
+{{"failure_mode": "<exactly one of: {mode_names}>", "analysis": "<2-3 sentences>",
   "structural": {{"kind": "...", "slot": "<context|action_interface|tool_policy|observation|error_recovery|orchestration|termination|verification|memory>",
                  "mechanism": "<short name>", "target_behavior": "<behaviour it changes>",
                  "precondition": "<expression>", "text": "<message to the agent>", "max_fires": 1}},
@@ -262,10 +282,13 @@ def pool_view(pool: list[dict]) -> str:
 
 
 def propose(client, bench: str, prof: dict, modes: Counter, reps: list[dict], digests: list[str], pool: list[dict],
-            tools: set[str], r: int, ws: Path, frozen: set[str] = frozenset()) -> tuple[dict, str]:
+            tools: set[str], r: int, ws: Path, frozen: set[str] = frozenset(), mode_info: dict | None = None,
+            graph: str = "(empty)") -> tuple[dict, str]:
     usable = [x for x in reps if not x["success"] and x.get("hindsight", {}).get("cause") == "harness"]
     rep_lines = []
     for x in reps:
+        if x.get("label_only"):
+            continue
         h = x.get("hindsight") or {}
         rep_lines.append(f"- {'PASS' if x['success'] else 'FAIL'} modes={x['modes']} blind_conf={x['blind'].get('confidence')} "
                          f"obstacles={x['blind'].get('harness_obstacles')} cause={h.get('cause')} fix={h.get('general_fix')!r}")
@@ -273,10 +296,14 @@ def propose(client, bench: str, prof: dict, modes: Counter, reps: list[dict], di
         signals="\n".join(f"  {k}: {v}" for k, v in R.SIGNALS.items()), tools=sorted(tools),
         finish_note="This benchmark has a finish tool." if bench in FINISH else
         "This benchmark has NO finish tool (the task ends inside the environment), so reject_finish never fires here.",
-        profile=json.dumps(prof), modes=json.dumps(dict(modes.most_common())),
+        profile=json.dumps(prof),
+        modes_src="LLM-discovered from hindsight labels: failed tasks per mode and definition" if mode_info else
+        "count of failed runs per behaviour signature",
+        modes=json.dumps(mode_info, indent=1) if mode_info else json.dumps(dict(modes.most_common())),
+        graph=graph, prior_graph=G.prior_graphs(bench),
         reports="\n".join(rep_lines) + f"\n({len(usable)} failures attributed to the harness)",
         digests="\n\n".join(digests), pool=pool_view(pool), frozen=sorted(frozen) or "none", frozen_n=MODE_FREEZE,
-        mode_names=", ".join(m for m in MODES if m not in frozen))
+        mode_names=", ".join(list(mode_info) if mode_info else [m for m in MODES if m not in frozen]))
     (ws / f"propose_r{r}.txt").write_text(prompt, encoding="utf-8")
     resp = client.chat([{"role": "user", "content": prompt}], tag=f"b4:{bench}:propose", max_tokens=4000,
                        fallback_no_reasoning=True)
@@ -363,13 +390,16 @@ def bootstrap_lcb(xs: list[float], rng: random.Random, n: int = 1000) -> float:
 
 
 def screen(bench, split, cand: dict, ws: Path, client, out: Path, cfg: dict, p_h0: dict, sig_by_task: dict,
-           rng: random.Random, r: int, ledger: Path, base: list[dict] = ()) -> dict:
+           rng: random.Random, r: int, ledger: Path, base: list[dict] = (), mt: dict | None = None) -> dict:
     """v3 marginal screening: candidate on top of the CURRENT set `base` (H0 when empty), paired with the current
     harness's per-task success estimate `p_h0` on tasks it fails (targeted) and tasks it always solves (safe).
     Screening against H0 alone could not see interactions: every multi-mechanism merge lost on val in v1/v2."""
     mode = cand.get("failure_mode")
-    target = [t for t, p in p_h0.items() if p < 1 and any(mode in failure_modes(s) for s in sig_by_task.get(t, [])
-                                                          if not s["success"])]
+    if mt and mode in mt:  # v4: LLM-discovered mode -> its labelled / hint-matched failed tasks
+        target = [t for t, p in p_h0.items() if p < 1 and t in mt[mode]]
+    else:
+        target = [t for t, p in p_h0.items() if p < 1 and any(mode in failure_modes(s) for s in sig_by_task.get(t, [])
+                                                              if not s["success"])]
     others = [t for t, p in p_h0.items() if p < 1 and t not in target]
     rng.shuffle(target), rng.shuffle(others)
     target = (target + others)[:N_TARGET]
@@ -515,6 +545,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     log = {"rounds": [], "profile_h0": prof0, "prior_sources": prior_src, "priors": priors}
     p_base, sig_base = dict(p_h0), sig_by_task   # current harness's per-task success estimate / signals on train
     mode_tries: Counter = Counter()
+    registry: dict = {}                           # v4: LLM failure-mode registry (graph mode nodes)
     frozen: set[str] = set()
     stall = 0
     alternates: list[dict] = []                   # val-tested sets that were not merged (for final reselection)
@@ -527,6 +558,16 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         reps = reports(client, cur_recs, cur_sigs, rng, bench)
         rd["calibration"] = calibration(reps)
         rd["causes"] = dict(Counter((x.get("hindsight") or {}).get("cause") for x in reps if not x["success"]))
+        mt, mode_info = {}, None
+        if LLM_MODES:
+            labelled = [{"task_id": x["task_id"], "label": str(h.get("failure_label") or h.get("why") or "")[:120],
+                         "why": str(h.get("why") or "")[:200], "cause": h.get("cause"), "rule_modes": x["modes"]}
+                        for x in reps if not x["success"] for h in [x.get("hindsight") or {}] if h.get("cause")]
+            registry = G.discover_modes(client, bench, labelled, registry, linter.tools, _ask_json)
+            mt = G.mode_tasks(registry, fails, cur_sigs)
+            mode_info = G.mode_counts(registry, mt, frozen) or None
+            rd["modes_llm"] = {n: {"n": len(mt.get(n, ())), "fixable": m["harness_fixable"], "hint": m["signal_hint"]}
+                               for n, m in registry.items()}
         dig_src = [x for x in fails if x.get("trajectory_path")]
         rng.shuffle(dig_src)
         digests = [C.summarize_trajectory(x["trajectory_path"], max_events=24, max_chars=300, task_chars=400)
@@ -537,7 +578,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             d.update({f"prior{i}": p for i, p in enumerate(priors)})
             branches = [f"prior{i}" for i in range(len(priors))]
         else:
-            d, raw = propose(client, bench, prof, modes, reps, digests, pool, linter.tools, r, ws, frozen)
+            d, raw = propose(client, bench, prof, modes, reps, digests, pool, linter.tools, r, ws, frozen, mode_info,
+                             G.graph_view(G.build_graph(pool, registry)))
             branches = ["structural", "guidance"]
         rd["failure_mode"] = d.get("failure_mode")
         rd["analysis"] = str(d.get("analysis", ""))[:500]
@@ -566,7 +608,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                 pool.append(entry)
                 continue
             entry.update(screen(bench, tr_split, entry, ws, client, out, cfg, p_base, sig_base, rng, r, ledger,
-                                incumbent))
+                                incumbent, mt))
             pool.append(entry)
             if entry["status"] == "admitted":
                 admitted.append(entry)
@@ -617,13 +659,14 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             stall = 0
         else:
             stall += 1
-            if d.get("failure_mode") in MODES:
+            if d.get("failure_mode") and d.get("failure_mode") != "transfer":
                 mode_tries[d["failure_mode"]] += 1
                 if mode_tries[d["failure_mode"]] >= MODE_FREEZE:
                     frozen.add(d["failure_mode"])
         rd["frozen"] = sorted(frozen)
         log["rounds"].append(rd)
         (ws / "pool.json").write_text(json.dumps(pool, indent=1, default=str))
+        (ws / "graph.json").write_text(json.dumps(G.build_graph(pool, registry, client.model), indent=1, default=str))
         (ws / "log.json").write_text(json.dumps(log, indent=1, default=str))
         print(f"  [b4 {bench}] round {r}: mode={rd['failure_mode']} "
               f"cands={[(c['id'], c['status'], (c.get('evidence') or {}).get('dT')) for c in pool if c['round'] == r]} "
