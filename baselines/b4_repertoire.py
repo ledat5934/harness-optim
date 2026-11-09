@@ -720,7 +720,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             entry = {"id": cid, "round": r, "branch": branch, "failure_mode": d.get("failure_mode"), "status": "",
                      "kind": "", "precondition": "", "text": ""}
             try:
-                m = R.validate_mechanism({**(spec or {}), "id": cid})
+                m = R.validate_mechanism({**(spec or {}), "id": cid, **({} if LLM_CHECK else {"llm_check": ""})})
                 if branch == "guidance" and m["kind"] != "guidance" or branch == "structural" and m["kind"] == "guidance" \
                         or branch.startswith("prior") and not spec:
                     raise ValueError(f"branch {branch} got kind {m['kind']}")
