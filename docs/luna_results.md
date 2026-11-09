@@ -257,3 +257,59 @@ Ghép cặp trên 100 task test: v4 vs H0 7W/8L, v3 vs H0 8W/8L, v4 vs v3 8W/9L 
 - Mode do LLM tìm ra cụ thể và dễ hiểu hơn (`weak_search_abandonment` 9 run, `unsupported_candidate_commitment` 5 run, mode sau được đánh dấu không sửa được bằng harness), nhưng proposer v4 vẫn đề xuất cùng loại cơ chế như v3. Ứng viên `inject` của v4 vòng 1 không kích hoạt lần nào (precondition quá hẹp) → cần P3 (precondition hai tầng).
 - Val 30 task không phân biệt được: m2 vào bộ với dT=+0.067 trên sàng lọc nhưng test không đổi.
 - Việc cần làm tiếp: chạy thêm seed (≥2) cho cả hai, và chạy AppWorld, trước khi kết luận về P1/P2.
+
+## 12. B4 v5 (precondition hai tầng, kiểm tra trước bằng replay, tính điểm trên task có kích hoạt), BCP, 2 seed
+
+**Thay đổi so với v4** (nhánh `claude-2/b4-v4-improve`; tắt bằng `B4_V5=0 B4_LLM_CHECK=0`):
+- **Precondition hai tầng (idea_v3 P3):** cơ chế có thể kèm `llm_check`, một câu hỏi yes/no chỉ được hỏi khi tầng tín hiệu đúng, tối đa 3 lần mỗi episode.
+- **Kiểm tra trước bằng replay:** trước khi sàng lọc, precondition được chạy lại trên trajectory đã lưu của harness hiện tại.
+  - Đếm số run thất bại mục tiêu và số run thành công mà nó sẽ kích hoạt.
+  - Nếu dự đoán là 0, proposer được sửa 1 lần. Vẫn 0 thì loại, không tốn episode.
+- **Tính điểm chỉ trên task có kích hoạt:** cơ chế có cổng không đổi gì cho tới khi kích hoạt. Vì vậy dT/dS khi sàng lọc và margin khi gộp trên val chỉ tính trên task mà cơ chế kích hoạt; task không kích hoạt chỉ là nhiễu.
+
+**Thiết lập**
+- H0 mới cho train/val (`results/medium_luna5`, cùng `h0_hash` `7afc5eefa6e3`): train 19,3%, val 26,7%.
+- H0 test lấy lại từ `medium_luna` (24%).
+- Bốn run song song qua `scripts/run_b4_cmp.py`, mỗi run 1 tag:
+  - v4: `b4v4c` (seed 0), `b4v4cs1` (seed 1);
+  - v5: `b4v5` (seed 0), `b4v5s1` (seed 1).
+
+| run | bộ cuối | val | test | vs H0 (ghép cặp) | task kích hoạt: W/L | task không kích hoạt: W/L |
+|---|---|---|---|---|---|---|
+| H0 | – | 0.267 | 24% | – | – | – |
+| v4 s0 | (rỗng, dừng sau vòng 3) | 0.267 | 18% | 5W/11L | – | 5W/11L |
+| v4 s1 | (rỗng; m3, m4 qua sàng lọc nhưng thua trên val) | 0.267 | 23% | 9W/10L | – | 9W/10L |
+| v5 s0 | (rỗng; m6 qua sàng lọc nhưng thua trên val) | 0.267 | 27% | 8W/5L | – | 8W/5L |
+| v5 s1 | m1: `reject_finish` khi `is_finish and answer_hedged and n('search') >= 2 and steps_left > 0` | 0.367 | **33%** | 14W/5L (p=0.06) | 61 task: 5W/3L (p=0.73) | 39 task: 9W/2L |
+
+Bảng do `python scripts/b4_paired.py results/medium_luna5 browsecomp_plus b4v4c b4v4cs1 b4v5 b4v5s1` sinh ra.
+
+**Nhận xét**
+- **Nhiễu test của BCP rất lớn.** Ba run có bộ rỗng dùng đúng harness H0 nhưng được 18%, 23% và 27% (H0 gốc 24%). Hai run cùng harness có thể chênh 4W/13L (p=0.05).
+  - Hệ quả: một run 1 seed vượt H0 vài điểm không chứng minh được gì.
+  - Từ nay nên báo cáo kèm cột tách task có/không kích hoạt.
+- **33% của v5 s1 phần lớn không do m1.**
+  - Trên 39 task m1 không kích hoạt, episode giống H0 trừ nhiễu lấy mẫu, nhưng vẫn được 9W/2L.
+  - Trên 61 task m1 kích hoạt, chỉ được 5W/3L.
+  - Hiệu ứng có thể quy cho m1 là khoảng +2 task/100, chưa có ý nghĩa thống kê.
+- **Cơ chế được chọn ổn định qua các lần chạy:** `reject_finish` khi trả lời lấp lửng sau vài lần search.
+  - Cùng loại với v3 (§8, §11), v4 s1 (m3) và v5 s0 (m3).
+  - Mode do LLM gom cụm cũng ổn định: `weak_search_abandonment` / `unproductive_search_abandonment`.
+- **Kiểm tra trước bằng replay hoạt động đúng.**
+  - v5 s0 m5 (`inject` khi `steps_left == 1 and n_actions == 0`) được dự đoán kích hoạt 0/121, vẫn 0 sau khi sửa, nên bị loại mà không tốn episode sàng lọc.
+  - Với v4, loại lỗi này chỉ lộ ra sau khi đã chạy xong sàng lọc ("never fired", v4 s1 m5).
+  - Dự đoán khớp thực tế: m1 của v5 s1 dự đoán 31/35 run mục tiêu, 0/24 run thành công; khi sàng lọc kích hoạt 10/10 task mục tiêu, 0 task an toàn.
+- **`llm_check` ít được proposer dùng:** 1/12 ứng viên v5 (v5 s0 m1).
+  - Ứng viên đó hỏi 18 lần (12 YES, 6 NO). Tầng 1 một mình được dự đoán kích hoạt trên 13/24 run thành công (54%); khi sàng lọc, có thêm tầng 2 thì chỉ kích hoạt trên 2/8 task an toàn được lấy mẫu.
+  - Nhưng vẫn không cải thiện task mục tiêu. Chưa đủ dữ liệu để đánh giá P3.
+- **Guidance luôn bật** (tầng 1 = `True`, 12 ứng viên ở 4 run):
+  - 9 bị loại khi sàng lọc, trong đó 6 vì làm hỏng task H0 luôn giải được;
+  - 3 qua sàng lọc nhưng không vào bộ cuối (thua trên val).
+- **Replay còn sửa được precondition:** v5 s1 m5 (`inject`) được proposer sửa sau kiểm tra trước, rồi qua sàng lọc (dT=+0.1, nhưng dS=−0.167), và không vào bộ cuối.
+- **Chi phí:** qua 9router (Codex OAuth, `cx/gpt-6-luna`) các lời gọi được ghi `unpriced_gateway` ($0).
+
+**Việc tiếp theo**
+- Tăng số seed hoặc dùng 2 lần lặp test cho mỗi run để giảm nhiễu trước khi so v4/v5.
+- Báo cáo test theo cột có/không kích hoạt.
+- Khuyến khích proposer dùng `llm_check` cho `inject` (đang ít được chọn).
+- Chạy AppWorld (cần `aw-venv` Python 3.12 và dữ liệu appworld).
