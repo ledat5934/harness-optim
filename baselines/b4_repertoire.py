@@ -14,6 +14,16 @@ Each round:
      fires gets no credit; one that hurts the safe tasks is rejected.
   6. merge (R3): incumbent set + admitted candidates is validated on val against the incumbent set; when the merged
      set loses and two were admitted, the stronger one alone is tried. Losing combinations are recorded as conflicts.
+v5 (B4_V5=1, default): credit only where a mechanism fired, plus a free pre-check before any episode is spent:
+  - fired-only credit: a lazily activated mechanism leaves an episode unchanged until it first fires, so on tasks
+    where it never fired the candidate and the base harness are the same harness and their paired difference is pure
+    sampling noise. Screening gains (dT, dS, safe failures) and the val merge margin are computed on the tasks where
+    the new mechanism(s) fired.
+  - replay pre-check: the precondition is replayed over the saved trajectories of the current harness
+    (runtime.replay_fires). A structural candidate that would have fired on none of its targeted failed runs is sent
+    back to the proposer once with the observed signal values; if it still would not fire it is rejected without
+    running episodes. Targeted tasks on which it is predicted to fire are screened first.
+  - two-tier preconditions (`llm_check`, runtime.py) are offered to the proposer (B4_LLM_CHECK=1).
 The pool is append-only (immutable ids); the evidence ledger (ledger.jsonl) holds one row per candidate episode.
 At test time the final set is frozen; mechanisms fire lazily on their preconditions.
 """
@@ -54,6 +64,8 @@ LLM_MODES = os.environ.get("B4_LLM_MODES", "1") == "1"  # v4: LLM-discovered fai
 SEED = int(os.environ.get("B4_SEED", "0"))  # independent repeat: proposer/sampling rng + output names
 TAG = os.environ.get("B4_TAG") or ("b4" if SEED == 0 else f"b4s{SEED}")
 FINISH = {"browsecomp_plus": "finish"}
+V5 = os.environ.get("B4_V5", "1") == "1"            # v5: fired-only credit + replay pre-check
+LLM_CHECK = os.environ.get("B4_LLM_CHECK", "1") == "1"  # v5: proposer may add a tier-2 llm_check
 
 # ---------------------------------------------------------------- behaviour
 MODES = {
@@ -113,7 +125,7 @@ class Linter:
             self.shingles.update(" ".join(w[i:i + 6]) for i in range(len(w) - 5))
 
     def check(self, m: dict) -> str | None:
-        blob = f"{m['text']} {m['precondition']}"
+        blob = f"{m['text']} {m['precondition']} {m.get('llm_check') or ''}"
         low = blob.lower()
         for t in self.ids:
             if t.lower() in low:
@@ -228,7 +240,7 @@ Functions: n('<tool name>') (times a tool was called), min, max, abs. Tool names
 - annotate_obs: a note appended to the tool observation just returned when the precondition holds.
 - reject_finish: refuse the agent's final answer with `text` as feedback when the precondition holds (only for tasks
   with a finish tool; the final forced answer on the last step is never refused). {finish_note}
-Each mechanism fires at most `max_fires` times per episode (1..5).
+Each mechanism fires at most `max_fires` times per episode (1..5).{check_note}
 
 ## Evidence
 Model behaviour profile under the current harness (means over train runs):
@@ -264,9 +276,57 @@ Answer ONLY with JSON:
 {{"failure_mode": "<exactly one of: {mode_names}>", "analysis": "<2-3 sentences>",
   "structural": {{"kind": "...", "slot": "<context|action_interface|tool_policy|observation|error_recovery|orchestration|termination|verification|memory>",
                  "mechanism": "<short name>", "target_behavior": "<behaviour it changes>",
-                 "precondition": "<expression>", "text": "<message to the agent>", "max_fires": 1}},
+                 "precondition": "<expression>", "text": "<message to the agent>", "max_fires": 1{check_field}}},
   "guidance": {{"kind": "guidance", "slot": "context", "mechanism": "...", "target_behavior": "...",
                "precondition": "True", "text": "...", "max_fires": 1}}}}"""
+
+
+CHECK_NOTE = """
+Optional for structural kinds: "llm_check", a short yes/no question about the CURRENT state of the run (e.g. "Has any
+retrieved document actually confirmed the answer being submitted?", "Did the last few steps make progress toward the
+goal?"). It is asked to a model only when the precondition already holds, and the mechanism fires only on YES. Use it
+when the failure is about the CONTENT of the run, which the numeric signals cannot see; keep the precondition as a
+cheap filter (each check costs a model call). Leave it empty otherwise. Same generalization rules as `text`."""
+
+REVISE = """A mechanism you proposed would not have fired where it is needed.
+
+Mechanism: {mech}
+
+Replaying the saved runs of the current harness, its precondition `{pre}` would have been true (at the hook points of
+kind {kind}) on {a} of {n} failed runs of the target failure mode, and on {b} of {m} runs the harness solved.
+A mechanism that never fires cannot help. End-of-run signal values (median [min..max]) of the target failed runs:
+{sig_fail}
+and of the solved runs:
+{sig_ok}
+Note: `inject` is checked before every model call, `annotate_obs` after every tool result, `reject_finish` when the
+agent calls the finish tool; signals grow during the run, so an end-of-run value is an upper bound for earlier steps.
+
+Revise the precondition (and the text if needed) so that it holds on the target failure behaviour but rarely on solved
+runs. Same rules as before (general, no task specifics). Answer ONLY with the JSON object of the revised mechanism
+(same fields)."""
+
+SIG_KEYS = ("step", "steps_left", "step_frac", "n_actions", "n_errors", "err_streak", "repeat_streak", "repeat_ratio",
+            "same_obs_streak", "distinct_tools", "finish_attempts", "answer_hedged")
+
+
+def sig_summary(sigs: list[dict]) -> str:
+    if not sigs:
+        return "  (none)"
+    rows = []
+    for k in SIG_KEYS:
+        v = sorted(float(s.get(k) or 0) for s in sigs if k in s)
+        if v:
+            rows.append(f"  {k}: {round(v[len(v) // 2], 2)} [{round(v[0], 2)}..{round(v[-1], 2)}]")
+    tc = Counter()
+    for s in sigs:
+        tc.update({t: 1 for t in (s.get("tool_counts") or {})})
+    rows.append(f"  tools used (runs): {dict(tc.most_common(8))}")
+    return "\n".join(rows)
+
+
+def predicted_fires(m: dict, paths: list[str], fin) -> int:
+    code = R.compile_pre(m["precondition"])
+    return sum(1 for p in paths if R.replay_fires(code, p, m["kind"], fin))
 
 
 def pool_view(pool: list[dict]) -> str:
@@ -303,7 +363,8 @@ def propose(client, bench: str, prof: dict, modes: Counter, reps: list[dict], di
         graph=graph, prior_graph=G.prior_graphs(bench),
         reports="\n".join(rep_lines) + f"\n({len(usable)} failures attributed to the harness)",
         digests="\n\n".join(digests), pool=pool_view(pool), frozen=sorted(frozen) or "none", frozen_n=MODE_FREEZE,
-        mode_names=", ".join(list(mode_info) if mode_info else [m for m in MODES if m not in frozen]))
+        mode_names=", ".join(list(mode_info) if mode_info else [m for m in MODES if m not in frozen]),
+        check_note=CHECK_NOTE if LLM_CHECK else "", check_field=', "llm_check": "<yes/no question or empty>"' if LLM_CHECK else "")
     (ws / f"propose_r{r}.txt").write_text(prompt, encoding="utf-8")
     resp = client.chat([{"role": "user", "content": prompt}], tag=f"b4:{bench}:propose", max_tokens=4000,
                        fallback_no_reasoning=True)
@@ -318,8 +379,8 @@ def make_root(ws: Path, name: str, mechs: list[dict]) -> Path:
     root = ws / "roots" / name
     C.new_candidate(root, C.H0_ROOT, {"mechanisms": [m["id"] for m in mechs]})
     (root / "variants" / "agent_loop" / "hooked.py").write_text(HOOKED_VARIANT, encoding="utf-8")
-    spec = [{k: m[k] for k in ("id", "slot", "kind", "mechanism", "target_behavior", "precondition", "text", "max_fires")}
-            for m in mechs]
+    spec = [{k: m.get(k, "") for k in ("id", "slot", "kind", "mechanism", "target_behavior", "precondition", "text",
+                                       "max_fires", "llm_check")} for m in mechs]
     (root / "bundle.json").write_text(json.dumps({"agent_loop": {"name": "hooked", "config": {"mechanisms": spec}}},
                                                  indent=1), encoding="utf-8")
     return root
@@ -390,7 +451,8 @@ def bootstrap_lcb(xs: list[float], rng: random.Random, n: int = 1000) -> float:
 
 
 def screen(bench, split, cand: dict, ws: Path, client, out: Path, cfg: dict, p_h0: dict, sig_by_task: dict,
-           rng: random.Random, r: int, ledger: Path, base: list[dict] = (), mt: dict | None = None) -> dict:
+           rng: random.Random, r: int, ledger: Path, base: list[dict] = (), mt: dict | None = None,
+           pred: set[str] | None = None) -> dict:
     """v3 marginal screening: candidate on top of the CURRENT set `base` (H0 when empty), paired with the current
     harness's per-task success estimate `p_h0` on tasks it fails (targeted) and tasks it always solves (safe).
     Screening against H0 alone could not see interactions: every multi-mechanism merge lost on val in v1/v2."""
@@ -402,6 +464,9 @@ def screen(bench, split, cand: dict, ws: Path, client, out: Path, cfg: dict, p_h
                                                               if not s["success"])]
     others = [t for t, p in p_h0.items() if p < 1 and t not in target]
     rng.shuffle(target), rng.shuffle(others)
+    if pred is not None:  # v5: tasks where the replayed precondition fires first (stable sort keeps the shuffle)
+        target.sort(key=lambda t: t not in pred)
+        others.sort(key=lambda t: t not in pred)
     target = (target + others)[:N_TARGET]
     safe = [t for t, p in p_h0.items() if p == 1]
     rng.shuffle(safe)
@@ -414,12 +479,15 @@ def screen(bench, split, cand: dict, ws: Path, client, out: Path, cfg: dict, p_h
     recs = _evaluate(bench, split, target + safe, root, client, tag, out, workers=cfg["workers"],
                       label={"method": "b4", "phase": "screen", "round": r, "cand": cand["id"], "base": [m["id"] for m in base]})
     dT, dS, fired, bdelta = [], [], 0, defaultdict(list)
+    fT, fS = [], []  # v5: the same differences restricted to tasks where the candidate fired
     for rec in recs:
         s = R.trajectory_signals(rec.get("trajectory_path") or "", FINISH.get(bench))
         f = cand["id"] in s.get("mech_fired", [])
         fired += f
         d = (1.0 if rec["success"] else 0.0) - p_h0[rec["task_id"]]
         (dT if rec["task_id"] in target else dS).append(d)
+        if f:
+            (fT if rec["task_id"] in target else fS).append(d)
         bsig = sig_by_task.get(rec["task_id"], [])
         for k in ("step_frac", "n_errors", "answer_hedged", "repeat_ratio", "tokens"):
             if bsig and k in s:
@@ -430,10 +498,21 @@ def screen(bench, split, cand: dict, ws: Path, client, out: Path, cfg: dict, p_h
                                 "error": rec.get("error"), "modes": failure_modes(s) if s else []})
     ev = {"dT": round(sum(dT) / max(1, len(dT)), 3), "dS": round(sum(dS) / max(1, len(dS)), 3),
           "lcbT": bootstrap_lcb(dT, rng), "fired": fired, "n": len(recs),
+          "fired_target": len(fT), "fired_safe": len(fS), "pred_target": sum(1 for t in target if pred and t in pred),
           "errors": sum(1 for x in recs if x.get("error")),
           "behavior_delta": {k: round(sum(v) / len(v), 3) for k, v in bdelta.items() if v}}
     if fired == 0:
         return {"status": "rejected", "reason": "never fired (no credit)", "evidence": ev}
+    if V5 and not is_global(cand):
+        # fired-only credit: where the mechanism did not fire the episode ran the base harness, so it carries no
+        # information about the candidate (only noise). Global mechanisms fire everywhere: unchanged.
+        ev["dT_all"], ev["dS_all"] = ev["dT"], ev["dS"]
+        if not fT:
+            return {"status": "rejected", "reason": "never fired on a targeted task", "evidence": ev}
+        ev["dT"] = round(sum(fT) / len(fT), 3)
+        ev["dS"] = round(sum(fS) / len(fS), 3) if fS else 0.0
+        ev["lcbT"] = bootstrap_lcb(fT, rng)
+        dS = fS
     # harm budget: a mechanism that is active on every task (always-true precondition) changes every episode, so it
     # gets no slack on the tasks H0 always solves; a conditional one may lose SAFE_SLACK of them (sampling noise).
     n_safe_fail = sum(1 for x in dS if x < 0)
@@ -446,11 +525,61 @@ def screen(bench, split, cand: dict, ws: Path, client, out: Path, cfg: dict, p_h
     return {"status": "admitted", "evidence": ev}
 
 
+def precheck_revise(client, bench, m, mode, mt, fails, cur_recs, cur_sigs, p_base, linter, fin, r, ws):
+    """v5: replay the precondition over the current harness's saved train runs; one revision round if it would not
+    fire on any failed run of the target mode. Returns (mechanism, precheck evidence)."""
+    if mt and mode in mt:
+        tgt = [x for x in fails if x["task_id"] in mt[mode]]
+    else:
+        tgt = [x for x in fails if mode in failure_modes(cur_sigs.get(x.get("trajectory_path"), {}))]
+    tgt = [x for x in tgt if x.get("trajectory_path")] or [x for x in fails if x.get("trajectory_path")]
+    ok = [x for x in cur_recs if x["success"] and p_base.get(x["task_id"]) == 1 and x.get("trajectory_path")]
+    allf = [x for x in fails if x.get("trajectory_path")]
+
+    def stats(mm):
+        code = R.compile_pre(mm["precondition"])
+        hit = [x for x in tgt if R.replay_fires(code, x["trajectory_path"], mm["kind"], fin)]
+        hit_all = {x["task_id"] for x in allf if R.replay_fires(code, x["trajectory_path"], mm["kind"], fin)}
+        return {"pred_fail": len(hit), "n_fail": len(tgt),
+                "pred_ok": sum(1 for x in ok if R.replay_fires(code, x["trajectory_path"], mm["kind"], fin)),
+                "n_ok": len(ok), "pred_tasks": sorted({x["task_id"] for x in hit} | hit_all)}
+    pc = stats(m)
+    if pc["pred_fail"] > 0 or not tgt:
+        return m, pc
+    prompt = REVISE.format(mech=json.dumps({k: m[k] for k in ("kind", "slot", "mechanism", "target_behavior",
+                                                                "precondition", "text", "max_fires", "llm_check")}),
+                           pre=m["precondition"], kind=m["kind"], a=pc["pred_fail"], n=pc["n_fail"], b=pc["pred_ok"],
+                           m=pc["n_ok"], sig_fail=sig_summary([cur_sigs.get(x["trajectory_path"], {}) for x in tgt]),
+                           sig_ok=sig_summary([cur_sigs.get(x["trajectory_path"], {}) for x in ok]))
+    (ws / f"revise_r{r}_{m['id']}.txt").write_text(prompt, encoding="utf-8")
+    d = _ask_json(client, prompt, f"b4:{bench}:revise", 2500)
+    try:
+        m2 = R.validate_mechanism({**m, **{k: v for k, v in d.items() if k in ("precondition", "text", "max_fires",
+                                                                               "llm_check")}, "id": m["id"]})
+        if linter.check(m2):
+            raise ValueError("lint")
+    except Exception as e:
+        pc["revise"] = f"failed: {str(e)[:120]}"
+        return m, pc
+    pc2 = stats(m2)
+    pc2.update(revised_from=m["precondition"], before={"pred_fail": pc["pred_fail"], "pred_ok": pc["pred_ok"]})
+    return m2, pc2
+
+
 def is_global(m: dict) -> bool:
     return m["kind"] == "guidance" or str(m.get("precondition", "")).strip() in ("True", "1", "")
 
 
-def paired_margin(new: list[dict], old: list[dict]) -> tuple[int, int]:
+def fired_tasks(recs: list[dict], ids: set[str], fin) -> set[str]:
+    return {x["task_id"] for x in recs
+            if ids & set(R.trajectory_signals(x.get("trajectory_path") or "", fin).get("mech_fired", []))}
+
+
+def paired_margin(new: list[dict], old: list[dict], only: set[str] | None = None) -> tuple[int, int]:
+    """Paired wins/losses of `new` vs `old` per task; v5: `only` restricts to tasks where the new mechanism(s) fired
+    (elsewhere both runs used the same harness and a difference is noise)."""
+    if only is not None:
+        new = [r for r in new if r["task_id"] in only]
     o = {r["task_id"]: r["success"] for r in old}
     w = sum(1 for r in new if r["task_id"] in o and r["success"] and not o[r["task_id"]])
     l = sum(1 for r in new if r["task_id"] in o and not r["success"] and o[r["task_id"]])
@@ -601,6 +730,12 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                 why = linter.check(m)
                 if why:
                     raise ValueError("generalization gate: " + why)
+                if V5 and m["kind"] != "guidance":
+                    m, pc = precheck_revise(client, bench, m, d.get("failure_mode"), mt, fails, cur_recs, cur_sigs,
+                                            p_base, linter, fin, r, ws)
+                    entry.update(m, precheck=pc)
+                    if pc["pred_fail"] == 0:
+                        raise ValueError(f"precheck: predicted to fire on 0 of {pc['n_fail']} targeted failed runs")
             except Exception as e:
                 entry.update(status="rejected", reason=str(e)[:200], kind=(spec or {}).get("kind", ""),
                              precondition=str((spec or {}).get("precondition", "")),
@@ -608,7 +743,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                 pool.append(entry)
                 continue
             entry.update(screen(bench, tr_split, entry, ws, client, out, cfg, p_base, sig_base, rng, r, ledger,
-                                incumbent, mt))
+                                incumbent, mt, set((entry.get("precheck") or {}).get("pred_tasks", [])) if V5 else None))
             pool.append(entry)
             if entry["status"] == "admitted":
                 admitted.append(entry)
@@ -626,6 +761,10 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                 rd.setdefault("val_trials", []).append({"set": [c["id"] for c in mechs], "val": v, "tokens": tok})
                 w, l = paired_margin(vrecs, inc_vrecs)
                 rd["val_trials"][-1].update(wins=w, losses=l)
+                if V5 and not any(is_global(c) for c in tset):
+                    ft = fired_tasks(vrecs, {c["id"] for c in tset}, fin)
+                    w, l = paired_margin(vrecs, inc_vrecs, ft)
+                    rd["val_trials"][-1].update(fired=len(ft), wins_fired=w, losses_fired=l)
                 if w - l >= MERGE_MARGIN:  # small val sets: require a paired margin, not just a higher mean
                     incumbent, inc_val, inc_tok, inc_root, inc_vrecs = mechs, v, tok, root, vrecs
                     for c in tset:
