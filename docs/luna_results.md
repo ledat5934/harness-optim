@@ -239,3 +239,21 @@ Lần chạy seed 1 đầu tiên (`b4s1a_*`) dừng sau vòng 2 mà không gộp
 
 - B4 cao hơn B1 trên cả 4 cặp (benchmark × seed). Riêng từng benchmark thì chưa có ý nghĩa thống kê, nhưng gộp lại có (p = 0,02).
 - B4 ổn định hơn: trên BCP, B1 dao động 28 → 19 giữa hai seed, còn B4 chỉ 29 → 28.
+
+## 11. Ablation v3 vs v4 (mode do LLM tìm + graph), BCP, seed 0
+
+Chạy lại cả hai cấu hình cùng seed, cùng H0 luna (`scripts/run_b4_cmp.py`, tag `b4v3cmp` / `b4v4cmp`).
+
+| cấu hình | mode được chọn | bộ cuối | val | test |
+|---|---|---|---|---|
+| H0 | – | – | – | 24% |
+| v3 (`B4_LLM_MODES=0`) | `early_stop` (luật) | m3: `reject_finish` khi `is_finish and answer_hedged and n('search') >= 3 and steps_left > 1` | 0.267 | 24% |
+| v4 (`B4_LLM_MODES=1`) | `weak_search_abandonment` (LLM gom cụm) | m2: `guidance` luôn bật, "đổi manh mối khi kết quả lặp/không liên quan" | 0.200 | 23% |
+
+Ghép cặp trên 100 task test: v4 vs H0 7W/8L, v3 vs H0 8W/8L, v4 vs v3 8W/9L (sign test p=1.0 cả ba).
+
+**Nhận xét**
+- Không cấu hình nào hơn H0 ở lần chạy này. Lần chạy v3 seed 0 trước (§8) đạt 29% với một cơ chế cùng loại; chênh lệch giữa hai lần chạy cùng cấu hình (24% vs 29%) lớn hơn chênh lệch v3/v4, nên trên BCP kết quả 1 seed không đủ để so v3 với v4.
+- Mode do LLM tìm ra cụ thể và dễ hiểu hơn (`weak_search_abandonment` 9 run, `unsupported_candidate_commitment` 5 run, mode sau được đánh dấu không sửa được bằng harness), nhưng proposer v4 vẫn đề xuất cùng loại cơ chế như v3. Ứng viên `inject` của v4 vòng 1 không kích hoạt lần nào (precondition quá hẹp) → cần P3 (precondition hai tầng).
+- Val 30 task không phân biệt được: m2 vào bộ với dT=+0.067 trên sàng lọc nhưng test không đổi.
+- Việc cần làm tiếp: chạy thêm seed (≥2) cho cả hai, và chạy AppWorld, trước khi kết luận về P1/P2.
