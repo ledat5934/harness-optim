@@ -62,7 +62,7 @@ FEATURES = {
     "distinct_actions": "different (tool, arguments) pairs among them",
     "distinct_tools": "different tools used",
     "repeat_ratio": "share of tool calls that repeat an earlier identical call",
-    "n_errors": "tool results that look like an error",
+    "n_errors": "short tool results (an error message, not content) that look like an error",
     "obs_chars": "characters of all tool results returned by the environment",
     "answered": "1 if the run ended with a final answer, else 0",
     "answer_len": "characters of the final answer",
@@ -90,6 +90,16 @@ def compile_metric(expr: str):
     return compile(tree, "<metric>", "eval")
 
 
+ERR_MAX_CHARS = 400   # an error message is short; a long result that merely mentions "error" is content
+_ERR = re.compile(r"\b(error|exception|traceback|failed|failure|invalid|not found|denied|unauthori[sz]ed|forbidden|"
+                  r"does not exist|no such|not allowed|missing required|unexpected)\b", re.I)
+
+
+def _is_error(obs) -> bool:
+    o = str(obs or "").strip()
+    return len(o) <= ERR_MAX_CHARS and bool(_ERR.search(o))
+
+
 def features(path: str, fin: str | None) -> dict:
     """End-of-run behaviour features of a saved trajectory."""
     s = R.trajectory_signals(path, fin)
@@ -101,7 +111,7 @@ def features(path: str, fin: str | None) -> dict:
     return {"steps": len(steps), "step_frac": len(steps) / max(1, int(task.get("max_steps") or 30)),
             "llm_calls": sum(1 for e in ev if e.get("type") == "llm"), "n_actions": len(acts),
             "distinct_actions": len(set(keys)), "distinct_tools": len({k[0] for k in keys}),
-            "repeat_ratio": float(s.get("repeat_ratio") or 0), "n_errors": float(s.get("n_errors") or 0),
+            "repeat_ratio": float(s.get("repeat_ratio") or 0), "n_errors": float(sum(_is_error(e.get("observation")) for e in acts)),
             "obs_chars": sum(len(str(e.get("observation") or "")) for e in acts),
             "answered": float(bool(s.get("answered"))), "answer_len": float(s.get("answer_len") or 0),
             "answer_hedged": float(bool(s.get("answer_hedged"))),
