@@ -78,8 +78,13 @@ class DiffLLM:
             self.live, self.fork_call = True, self.i
         if self.dry and self.live:
             raise DryStop(f"diverged at call {self.fork_call}")
-        if not agent and not self.live and not self.judge:  # an unchanged run keeps its saved verdict: no judge call
-            return _saved({})
+        if not agent and not self.live:
+            if not str(tag).startswith("judge"):  # an auxiliary model call the source harness never made
+                self.live, self.fork_call = True, self.i
+                if self.dry:
+                    raise DryStop(f"diverged at call {self.fork_call}")
+            elif not self.judge:  # an unchanged run keeps its saved verdict: no judge call
+                return _saved({})
         return self.real.chat(msgs, tools=tools, tag=tag, **kw)
 
     def __getattr__(self, k):
