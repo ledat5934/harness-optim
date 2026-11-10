@@ -1,5 +1,6 @@
 """Run one B4 configuration on one benchmark, reusing an existing H0 (allow_stale), for the v3-vs-v4 comparison.
-Env: RESULTS_SUFFIX (H0 folder, e.g. luna), B4_TAG, B4_LLM_MODES, B4_GRAPH, B4_RESUME as usual; B4_BRANCH=1 runs v6."""
+Env: RESULTS_SUFFIX (H0 folder, e.g. luna), B4_TAG, B4_LLM_MODES, B4_GRAPH, B4_RESUME as usual; B4_BRANCH=1 runs v6,
+B4_COMP=1 runs v7 (component edits with behaviour hypotheses, baselines/b4_comp.py)."""
 import sys
 
 from baselines import common as C
@@ -18,7 +19,12 @@ print(f"shared H0 {bench}: train={len(shared['h0_train'])} val={len(shared['h0_v
       f"test={len(shared.get('h0_test') or [])}", flush=True)
 import os
 
-if os.environ.get("B4_BRANCH") == "1":  # v6: trigger-point branching (baselines/b4_branch.py)
+if os.environ.get("B4_COMP") == "1":  # v7: component edits, behaviour hypothesis tested before the outcome
+    from baselines import b4_comp as M
+    res = M.run(bench, shared, llm_mod.LLM(), cfg=C.MEDIUM)
+    print(f"DONE {bench} tag done, test={res['log']['test']['success']} merged={res['log']['final']['merged']} "
+          f"test_branch={res['log']['test_branch']}", flush=True)
+elif os.environ.get("B4_BRANCH") == "1":  # v6: trigger-point branching (baselines/b4_branch.py)
     from baselines import b4_branch as V
     res = V.run(bench, shared, llm_mod.LLM(), cfg=C.MEDIUM)
     print(f"DONE {bench} tag done, test={res['log']['test']['success']} "
