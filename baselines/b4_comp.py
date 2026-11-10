@@ -256,7 +256,11 @@ def review(client, bench: str, row: dict, state: str, can_revise: bool = False) 
         as_predicted=sh.get("as_predicted"), opposite=sh.get("opposite"), n_shift=sh.get("n"), W=t.get("W"),
         L=t.get("L"), n=t.get("n"), p=t.get("p"), same=t.get("n", 0) - t.get("W", 0) - t.get("L", 0),
         net=t.get("W", 0) - t.get("L", 0), revise=REVISE if can_revise else "",
-        can_success="possible: the gain is statistically reliable" if V.reliable(t) else
+        can_success=("possible: the gain is statistically reliable" + (
+            f" ({t.get('Wt', 0)} of the wins came where the saved run had already given its final answer and the "
+            "edit alone changed the ending: such a win is caused by the edit, it is not run-to-run variation, so "
+            "the sign test above understates the evidence)" if t.get("Wt", 0) - t.get("Lt", 0) >= V.MARGIN else ""))
+        if V.reliable(t) else
         "not possible: the gain is not statistically reliable",
         can_other="possible: no net loss of success was measured" if t.get("W", 0) - t.get("L", 0) >= 0 else
         "not possible: more losses than wins",
