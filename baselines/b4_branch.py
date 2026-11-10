@@ -21,7 +21,7 @@ The same estimator is used at every stage:
   - test: `test_branch` = H0's test runs with the fired ones replaced by the mean of K branches. A standard full
     re-run of the final harness is still reported as `test`, for comparison with B1-B3.
 Proposer, failure modes, lint and replay pre-check are those of b4_repertoire (v4/v5).
-Env: B4_N_FORK (24), B4_K_VAL (2), B4_K_TEST (3), B4_ALPHA (0.15), plus the b4_repertoire ones (B4_TAG, B4_SEED, ...).
+Env: B4_N_FORK (24), B4_K_VAL (2), B4_K_TEST (3), B4_ALPHA (0.15), B4_NSTRUCT (3), plus the b4_repertoire ones (B4_TAG, B4_SEED, ...).
 """
 from __future__ import annotations
 
@@ -47,6 +47,7 @@ N_FORK = int(os.environ.get("B4_N_FORK", "24"))     # forks per screening stage 
 K_VAL = int(os.environ.get("B4_K_VAL", "2"))        # branches per fired val run
 K_TEST = int(os.environ.get("B4_K_TEST", "3"))      # branches per fired test run
 ALPHA = float(os.environ.get("B4_ALPHA", "0.15"))   # one-sided sign test level for admission after screening
+N_STRUCT = int(os.environ.get("B4_NSTRUCT", "3"))   # structural candidates asked per round (forks make them cheap)
 MARGIN = 2                                          # wins - losses needed at screening and at confirmation
 
 
@@ -132,7 +133,10 @@ def run_forks(bench: str, split: str, srcs: list[dict], root: Path, client, tag:
         rec = {**dataclasses.asdict(res), "split": split, "run_tag": run_tag, "root": str(root),
                "wall_s": round(time.time() - t0, 1), "model": getattr(client, "model", None), **(label or {}),
                "fork_of": src["trajectory_path"], "src_success": bool(src["success"]), "k": k,
-               "branched": bool(bl.fired), "fork_call": bl.fork_call, "replayed": bl.i}
+               "branched": bool(bl.fired), "fork_call": bl.fork_call, "replayed": bl.i,
+               # terminal fork: the mechanism fired on the saved run's last response (e.g. its final answer), so
+               # the saved run has no further model call: its outcome from this state is certain, not a sample
+               "terminal": bool(bl.fired and bl.fork_call is not None and bl.fork_call >= len(bl.saved))}
         if not bl.live and not rec.get("error"):  # nothing changed: this is the saved run (the judge is not re-asked)
             rec["success"] = bool(src["success"])
         C.append_jsonl(out, rec)
@@ -158,9 +162,20 @@ def tally(recs: list[dict]) -> dict:
     b = [x for x in recs if x.get("branched") and not x.get("error")]
     w = sum(1 for x in b if x["success"] and not x["src_success"])
     l = sum(1 for x in b if x["src_success"] and not x["success"])
-    return {"W": w, "L": l, "n": len(b), "ran": len(recs), "p": round(sign_p(w, l), 4),
+    wt = sum(1 for x in b if x.get("terminal") and x["success"] and not x["src_success"])
+    lt = sum(1 for x in b if x.get("terminal") and x["src_success"] and not x["success"])
+    return {"W": w, "L": l, "n": len(b), "ran": len(recs), "p": round(sign_p(w, l), 4), "Wt": wt, "Lt": lt,
             "errors": sum(1 for x in recs if x.get("error")),
             "tokens": sum(x.get("tokens") or 0 for x in recs)}
+
+
+def reliable(t: dict) -> bool:
+    """Admission after screening. A win at a terminal fork is not a draw from two noisy arms: the saved run was
+    over, so the changed outcome is caused by the mechanism. A net of MARGIN such wins is enough; otherwise the
+    wins must also pass the one-sided sign test (both arms are samples)."""
+    if t["W"] - t["L"] < MARGIN:
+        return False
+    return t.get("Wt", 0) - t.get("Lt", 0) >= MARGIN or t["p"] <= ALPHA
 
 
 def predicted(mechs: list[dict], recs: list[dict], fin) -> list[dict]:
@@ -204,7 +219,7 @@ def branch_screen(bench, split, cand: dict, base: list[dict], cur: list[dict], w
     res = {"evidence": ev, "_recs": recs, "_root": root}
     if t["n"] == 0:
         return {**res, "status": "rejected", "reason": "never fired (no credit)"}
-    if t["W"] - t["L"] < MARGIN or t["p"] > ALPHA:
+    if not reliable(t):
         return {**res, "status": "rejected",
                 "reason": f"no reliable gain at the fork points ({t['W']}W/{t['L']}L of {t['n']}, p={t['p']})"}
     return {**res, "status": "admitted"}
@@ -319,7 +334,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                    for x in dig[:5]]
         prof = B.profile([sigs[x["trajectory_path"]] for x in cur])
         d, _ = B.propose(client, bench, prof, modes, reps, digests, pool, linter.tools, r, ws, frozen, mode_info,
-                         G.graph_view(G.build_graph(pool, registry)))
+                         G.graph_view(G.build_graph(pool, registry)), n_struct=N_STRUCT)
         rd["failure_mode"] = d.get("failure_mode")
         rd["analysis"] = str(d.get("analysis", ""))[:500]
         by_task = defaultdict(list)
@@ -327,9 +342,11 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             by_task[x["task_id"]].append(1.0 if x["success"] else 0.0)
         p_base = {t: sum(v) / len(v) for t, v in by_task.items()}
         admitted, extra = [], {}
-        for branch in ("structural", "guidance"):
+        for branch in ["structural"] + [f"structural{i}" for i in range(2, N_STRUCT + 1)] + ["guidance"]:
             cid = f"m{len(pool) + 1}"
             spec = d.get(branch)
+            if not spec and branch.startswith("structural") and branch != "structural":
+                continue  # alternatives are optional
             entry = {"id": cid, "round": r, "branch": branch, "failure_mode": d.get("failure_mode"), "status": "",
                      "kind": "", "precondition": "", "text": ""}
             try:
@@ -365,7 +382,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         # confirmation on held-out tasks: forks of the current harness's val runs, K_VAL branches each
         merged = False
         if admitted:
-            trials = [admitted] + ([[max(admitted, key=lambda c: c["evidence"]["gain"])]] if len(admitted) == 2 else [])
+            # most promising first; each admitted candidate is confirmed alone on top of the set built so far
+            trials = [[c] for c in sorted(admitted, key=lambda c: -c["evidence"]["gain"])]
             for tset in trials:
                 mechs = incumbent + tset
                 name = f"r{r}_set{len(mechs)}_" + "_".join(c["id"] for c in tset)

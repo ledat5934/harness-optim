@@ -271,14 +271,14 @@ it fired)
 
 ## Output
 Propose exactly two mechanisms for ONE failure mode that is frequent and attributable to the harness:
-a "structural" one (kind inject, annotate_obs or reject_finish) and a "guidance" one (kind guidance).
+a "structural" one (kind inject, annotate_obs or reject_finish) and a "guidance" one (kind guidance).{alt_note}
 Answer ONLY with JSON:
 {{"failure_mode": "<exactly one of: {mode_names}>", "analysis": "<2-3 sentences>",
   "structural": {{"kind": "...", "slot": "<context|action_interface|tool_policy|observation|error_recovery|orchestration|termination|verification|memory>",
                  "mechanism": "<short name>", "target_behavior": "<behaviour it changes>",
                  "precondition": "<expression>", "text": "<message to the agent>", "max_fires": 1{check_field}}},
   "guidance": {{"kind": "guidance", "slot": "context", "mechanism": "...", "target_behavior": "...",
-               "precondition": "True", "text": "...", "max_fires": 1}}}}"""
+               "precondition": "True", "text": "...", "max_fires": 1}}{alt_field}}}"""
 
 
 CHECK_NOTE = """
@@ -289,6 +289,12 @@ documents retrieved so far?", "Have the last few steps failed to make progress t
 means "everything is fine". Use it when the failure is about the CONTENT of the run, which the numeric signals cannot
 see; keep the precondition as a cheap filter (each check costs a model call). Leave it empty otherwise. Same
 generalization rules as `text`."""
+
+ALT_NOTE = """
+Candidates are cheap to test here (each is tried at the exact points of saved runs where it would have fired), so
+also give up to {n} ALTERNATIVE structural mechanisms for the same failure mode ("structural2", ...). Each must
+differ from the others in kind or in WHEN it fires (earlier in the run, at a different signal, at the final answer),
+not only in wording or in a threshold."""
 
 REVISE = """A mechanism you proposed would not have fired where it is needed.
 
@@ -345,7 +351,7 @@ def pool_view(pool: list[dict]) -> str:
 
 def propose(client, bench: str, prof: dict, modes: Counter, reps: list[dict], digests: list[str], pool: list[dict],
             tools: set[str], r: int, ws: Path, frozen: set[str] = frozenset(), mode_info: dict | None = None,
-            graph: str = "(empty)") -> tuple[dict, str]:
+            graph: str = "(empty)", n_struct: int = 1) -> tuple[dict, str]:
     usable = [x for x in reps if not x["success"] and x.get("hindsight", {}).get("cause") == "harness"]
     rep_lines = []
     for x in reps:
@@ -366,6 +372,8 @@ def propose(client, bench: str, prof: dict, modes: Counter, reps: list[dict], di
         reports="\n".join(rep_lines) + f"\n({len(usable)} failures attributed to the harness)",
         digests="\n\n".join(digests), pool=pool_view(pool), frozen=sorted(frozen) or "none", frozen_n=MODE_FREEZE,
         mode_names=", ".join(list(mode_info) if mode_info else [m for m in MODES if m not in frozen]),
+        alt_note=ALT_NOTE.format(n=n_struct - 1) if n_struct > 1 else "",
+        alt_field="".join(f', "structural{i}": {{...same fields as "structural"...}}' for i in range(2, n_struct + 1)),
         check_note=CHECK_NOTE if LLM_CHECK else "", check_field=', "llm_check": "<yes/no question or empty>"' if LLM_CHECK else "")
     (ws / f"propose_r{r}.txt").write_text(prompt, encoding="utf-8")
     resp = client.chat([{"role": "user", "content": prompt}], tag=f"b4:{bench}:propose", max_tokens=4000,

@@ -116,6 +116,23 @@ def test_tally_and_sign_test():
     assert abs(V.sign_p(4, 1) - 6 / 32) < 1e-9 and V.sign_p(3, 0) == 0.125 and V.sign_p(0, 0) == 1.0
 
 
+def test_terminal_wins_need_no_sign_test():
+    base = {"W": 2, "L": 0, "n": 48, "p": V.sign_p(2, 0)}
+    assert not V.reliable({**base, "Wt": 0, "Lt": 0})      # two noisy-arm wins: p = 0.25
+    assert V.reliable({**base, "Wt": 2, "Lt": 0})           # two wins after a finished run
+    assert V.reliable({"W": 4, "L": 0, "n": 24, "p": V.sign_p(4, 0), "Wt": 0, "Lt": 0})
+    assert not V.reliable({"W": 3, "L": 2, "n": 24, "p": V.sign_p(3, 2), "Wt": 3, "Lt": 2})
+
+
+def test_terminal_flag():
+    m = {"id": "m1", "kind": "reject_finish", "precondition": "answer_hedged", "text": "Do not give up yet: search again."}
+    _, bl, _, _ = _run([m], {"m1"})
+    assert bl.fork_call >= len(bl.saved)
+    m = {"id": "m1", "kind": "inject", "precondition": "n('search') >= 1", "text": "Open a document before searching."}
+    _, bl, _, _ = _run([m], {"m1"})
+    assert bl.fork_call < len(bl.saved)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     for f in fns:
