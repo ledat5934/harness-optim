@@ -242,6 +242,9 @@ class HookedLoop:
                     continue
                 fired[i] = fired.get(i, 0) + 1
                 rec.note("mech", id=m["id"], mkind=kind, step=tr.step)
+                cb = getattr(self._llm, "on_fire", None)  # v6 branch evaluation: a replayed run goes live here
+                if cb:
+                    cb(m["id"])
                 out.append(render(m["text"], sig))
         return out
 
@@ -250,6 +253,11 @@ class HookedLoop:
         if self._checks.get(i, 0) >= MAX_CHECKS or self._llm is None:
             return False
         self._checks[i] = self._checks.get(i, 0) + 1
+        sc = getattr(self._llm, "saved_check", None)  # v6: a replayed prefix reuses the recorded verdicts
+        saved = sc(m["id"]) if sc else None
+        if saved is not None:
+            rec.note("mech_check", id=m["id"], step=tr.step, yes=bool(saved), replayed=True)
+            return bool(saved)
         recent = []
         for msg in self._state.history[-6:]:
             c = str(msg.get("content") or "")
