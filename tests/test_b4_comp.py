@@ -108,7 +108,20 @@ def test_trial_supported_candidate():
     M.SHIFT_MARGIN, M.SHIFT_ALPHA = 1, 1.0
     good = (T.VARIANTS / "verifier" / "unread_items.py").read_text()
     row = _trial(tmp, src, Client(lambda v, i: good.replace('"unread_items"', f'"{v}"')))
-    assert row["status"] == "admitted" and row["verdict"].startswith("SUPPORTED"), row["verdict"]
+    assert row["verdict"].startswith("SUPPORTED") and row["status"] == "rejected", row["verdict"]  # not yet reviewed
+    feats = lambda p: M.features(p, "finish")  # noqa: E731
+    assert row["effects"]["steps"]["up"] == 2 and "steps: 2.0 -> " in M.effects_view(row["effects"], only_clear=False)
+    # the review chooses, the measurements bound it: success needs reliable wins, another benefit its claimed effect
+    yes = {"decision": "adopt", "benefit": "success", "reason": "wins"}
+    assert M.apply_review(dict(row), yes, feats)["status"] == "admitted"
+    assert M.apply_review({**row, "outcome": {**row["outcome"], "W": 1, "Wt": 0, "p": 0.5}}, yes, feats)["status"] == "rejected"
+    eff = {"decision": "adopt", "benefit": "efficiency", "reason": "cheaper", "claim": {"behaviour": "steps", "direction": "up"}}
+    got = M.apply_review(dict(row), eff, feats)
+    assert got["status"] == "admitted" and got["basis"] == "efficiency" and got["claim_shift"]["shifted"]
+    assert M.apply_review(dict(row), {**eff, "claim": {"behaviour": "steps", "direction": "down"}}, feats)["status"] == "rejected"
+    assert M.apply_review(dict(row), {k: v for k, v in eff.items() if k != "claim"}, feats)["status"] == "rejected"
+    no = M.apply_review(dict(row), {"decision": "reject", "benefit": "success", "reason": "too costly"}, feats)
+    assert no["status"] == "rejected" and "too costly" in no["decision"]
     assert row["coverage"] == 1.0 and row["shift"]["shifted"] and row["shift"]["before"] == 2.0
     assert row["outcome"]["W"] == 2 and row["outcome"]["Wt"] == 2 and len(row["_recs"]) == 2
     assert "_root" not in M.public(row)
@@ -148,12 +161,47 @@ def test_trial_lint_feedback_reaches_the_proposer():
     assert "previous attempt was rejected" not in seen[0] and "hardcoded tool name" in seen[1]
 
 
+def test_review_answer_is_normalised():
+    row = {**_cand(), "round": 1, "coverage": 1.0, "verdict": "REFUTED: x", "effects": {},
+           "shift": {"before": 5, "after": 9, "as_predicted": 12, "opposite": 1, "n": 16}, "outcome": {"W": 1, "L": 1, "n": 32, "p": 0.75}}
+
+    def ask(answer):
+        seen = []
+        c = SimpleNamespace(chat=lambda msgs, **kw: (seen.append((msgs[0]["content"], kw.get("tag"))),
+                                                     SimpleNamespace(content=json.dumps(answer)))[1])
+        return M.review(c, "toy", row, "success rate 20%"), seen
+    rv, seen = ask({"decision": "Adopt", "benefit": "Efficiency", "reason": "half the tokens",
+                    "claim": {"behaviour": "tokens", "direction": "down"}})
+    assert rv == {"decision": "adopt", "benefit": "efficiency", "reason": "half the tokens",
+                  "claim": {"behaviour": "tokens", "direction": "down"}}
+    assert seen[0][1] == "b4:toy:review" and "net change +0" in seen[0][0] and "30 ended like" in seen[0][0] and "success rate 20%" in seen[0][0]
+    assert "claim" not in ask({"decision": "adopt", "benefit": "efficiency", "claim": {"behaviour": "os.x", "direction": "down"}})[0]
+    assert ask({"nonsense": 1})[0]["decision"] == "reject"
+    assert "another benefit (e.g. lower cost at equal success): possible" in seen[0][0] and "more successes: not possible" in seen[0][0]
+    # three reviews, the most frequent decision wins; a tie goes to the cautious side
+    answers = iter([{"decision": "adopt", "benefit": "efficiency", "claim": {"behaviour": "tokens", "direction": "down"}},
+                    {"decision": "reject"}, {"decision": "adopt", "benefit": "efficiency"},
+                    {"decision": "adopt", "benefit": "success"}, {"decision": "reject"}, {"decision": "revise", "revision": "x"}])
+    c = SimpleNamespace(chat=lambda msgs, **kw: SimpleNamespace(content=json.dumps(next(answers))))
+    rv = M.review_vote(c, "toy", row, "s", can_revise=True)
+    assert rv["decision"] == "adopt" and rv["claim"]["behaviour"] == "tokens" and rv["votes"] == {"adopt": 2, "reject": 1}
+    assert M.review_vote(c, "toy", row, "s", can_revise=True)["decision"] == "reject"
+
+
+def test_select_keeps_proposer_order_unless_runs_speak_clearly():
+    o = lambda a, d: {"observational": {"agree": a, "disagree": d}}  # noqa: E731
+    assert M.select([o(2, 1), o(0, 3), o(3, 0), o(0, 0)]) == [2, 0, 3, 1]
+
+
 def test_pooled_and_ledger_view():
     t = M.pooled({"W": 3, "L": 0, "n": 40, "Wt": 1, "Lt": 0}, {"W": 1, "L": 1, "n": 10, "Wt": 0, "Lt": 0})
     assert (t["W"], t["L"], t["n"]) == (4, 1, 50) and t["p"] == round(V.sign_p(4, 1), 4)
     row = {**_cand(), "round": 2, "coverage": 0.7, "verdict": "REFUTED: x",
            "shift": {"before": 5, "after": 9, "as_predicted": 12, "opposite": 1, "n": 16}, "outcome": {"W": 1, "L": 1, "n": 32}}
+    row.update(effects={"tokens": {"before": 9.0, "after": 4.0, "up": 0, "down": 30, "n": 32, "clear": True}},
+               decision="ADOPTED for efficiency (held-out runs agree): cheaper")
     v = M.ledger_view([row])
+    assert "tokens: 9.0 -> 4.0" in v and "ADOPTED for efficiency" in v
     assert "REFUTED" in v and "5 -> 9" in v and "1 wins / 1 losses of 32" in v and M.ledger_view([]).startswith("(empty")
 
 

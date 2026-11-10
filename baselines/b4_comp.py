@@ -49,6 +49,8 @@ N_PROBE = int(os.environ.get("B4_N_PROBE", "16"))   # branches of the behaviour 
 N_SCREEN = int(os.environ.get("B4_N_SCREEN", "64"))  # branches of the outcome screen, probe included
 K_VAL = int(os.environ.get("B4_K_VAL", "3"))        # branches per touched val run
 K_TEST = int(os.environ.get("B4_K_TEST", "2"))      # branches per touched test run
+N_REVIEW = int(os.environ.get("B4_N_REVIEW", "3"))  # independent adoption reviews per tested candidate
+OBS_MARGIN = 2                                      # tasks (agree - disagree) for saved runs to move a hypothesis
 SHIFT_MARGIN, SHIFT_ALPHA = 3, 0.1                  # behaviour shift: net pairs in the stated direction, sign test
 MAX_LITERAL = 400                                   # longest string constant in a component (no prompt edits)
 SLOTS = ("tool_policy", "context_mgmt", "verifier", "agent_loop")  # memory (cross-episode) cannot be forked
@@ -176,6 +178,142 @@ def behaviour_shift(code, direction: str, recs: list[dict], feats) -> dict:
             "p": round(p, 4), "shifted": bool(up - down >= SHIFT_MARGIN and p <= SHIFT_ALPHA)}
 
 
+def effects(recs: list[dict], feats) -> dict:
+    """Every feature (not only the predicted one) on each branch against the saved run it forks: what else the edit
+    changed (cost, length of runs, kind of answers). Two-sided sign test per feature."""
+    pairs = [(feats(x["fork_of"]), feats(x["trajectory_path"])) for x in recs
+             if x.get("branched") and not x.get("error") and x.get("trajectory_path")]
+    out = {}
+    for k in FEATURES if pairs else ():
+        up = sum(1 for a, b in pairs if b[k] - a[k] > 1e-9)
+        down = sum(1 for a, b in pairs if a[k] - b[k] > 1e-9)
+        out[k] = {"before": round(sum(a[k] for a, _ in pairs) / len(pairs), 3),
+                  "after": round(sum(b[k] for _, b in pairs) / len(pairs), 3), "up": up, "down": down, "n": len(pairs),
+                  "clear": bool(abs(up - down) >= SHIFT_MARGIN and min(V.sign_p(up, down), V.sign_p(down, up)) <= SHIFT_ALPHA)}
+    return out
+
+
+def effects_view(eff: dict, only_clear: bool = True) -> str:
+    rows = [f"{k}: {e['before']} -> {e['after']} (higher in {e['up']}, lower in {e['down']} of {e['n']} branches)"
+            for k, e in (eff or {}).items() if e.get("clear") or not only_clear]
+    return "; ".join(rows) or "(no feature changed clearly)"
+
+
+REVIEW = """You decide whether a tested edit of the scaffolding ("harness") around an AI agent is adopted into the
+harness. The agent model is fixed. The measurements below are facts; the decision is a judgement of value.
+
+## The edit ({slot})
+hypothesis: {hypothesis}
+mechanism: {mechanism}
+
+## Measured on training tasks
+Each branch replays a saved run of the current harness under the edited harness up to the first point where the
+edit changes something, and continues live from there; it is compared with the saved run it forks (same task).
+- share of saved runs the edit changes: {coverage}
+- predicted behaviour `{behaviour}` ({direction}): {before} -> {after} ({as_predicted} branches as predicted,
+  {opposite} against, of {n_shift})
+- success: of {n} branches, {same} ended like the saved run they fork, {W} succeeded where the saved run failed,
+  {L} failed where it succeeded: net change {net:+d} (one-sided sign test of a gain: p = {p}). Two runs of the SAME
+  harness on a task also differ now and then, so a few wins and losses in equal number are what "no change" looks like.
+- reading of the hypothesis: {verdict}
+- every feature that changed clearly (mean before -> after): {effects}
+Features: {features}
+
+## What the measurements allow (checked by the pipeline, not for you to re-judge)
+- adoption for more successes: {can_success}
+- adoption for another benefit (e.g. lower cost at equal success): {can_other}
+
+## The current harness
+{state}
+
+## Decision
+Your part is the judgement of value: is the harness better with this edit than without it? Better can be: more
+successes; or the same successes at a clearly lower cost (tokens, steps); or another measured benefit you can name.
+A higher cost is acceptable when it buys successes. A large measured benefit outweighs small side effects; an edit
+whose only effects are neutral or unwanted is rejected (every component adds complexity).
+Whatever you rely on is measured again on held-out tasks before the edit is merged; for a benefit other than
+success, `claim` is the measured effect you rely on (it must appear again there, with no loss of success).
+{revise}
+Answer ONLY with JSON:
+{{"decision": "{choices}", "benefit": "success|efficiency|other",
+ "claim": {{"behaviour": "<numeric expression over the features>", "direction": "up|down"}},
+ "revision": "<only for revise: what the mechanism must do differently, as precondition -> action>",
+ "reason": "<2-3 sentences>"}}"""
+
+REVISE = """If the edit has a real measured benefit together with a side effect that moved the wrong way, you may instead
+ask for ONE revision of the code that keeps the benefit and removes the side effect (decision "revise"); the revised
+edit is measured again from scratch.
+"""
+
+
+def review(client, bench: str, row: dict, state: str, can_revise: bool = False) -> dict:
+    """The adoption decision is a judgement of value (is this trade worth it), made by the LLM from the measured
+    effects; `apply_review` and the held-out check keep it inside what the measurements support."""
+    sh, t = row.get("shift") or {}, row.get("outcome") or {}
+    d = B._ask_json(client, REVIEW.format(
+        slot=row["slot"], hypothesis=row["hypothesis"], mechanism=row["mechanism"], coverage=row.get("coverage"),
+        behaviour=row["behaviour"], direction=row["direction"], before=sh.get("before"), after=sh.get("after"),
+        as_predicted=sh.get("as_predicted"), opposite=sh.get("opposite"), n_shift=sh.get("n"), W=t.get("W"),
+        L=t.get("L"), n=t.get("n"), p=t.get("p"), same=t.get("n", 0) - t.get("W", 0) - t.get("L", 0),
+        net=t.get("W", 0) - t.get("L", 0), revise=REVISE if can_revise else "",
+        can_success="possible: the gain is statistically reliable" if V.reliable(t) else
+        "not possible: the gain is not statistically reliable",
+        can_other="possible: no net loss of success was measured" if t.get("W", 0) - t.get("L", 0) >= 0 else
+        "not possible: more losses than wins",
+        choices="adopt|reject|revise" if can_revise else "adopt|reject", verdict=row["verdict"], effects=effects_view(row.get("effects")),
+        features="; ".join(f"{k} = {v}" for k, v in FEATURES.items()), state=state), f"b4:{bench}:review")
+    dec = str(d.get("decision") or "").strip().lower()
+    rv = {"decision": dec if dec == "adopt" or (dec == "revise" and can_revise and d.get("revision")) else "reject",
+          "benefit": str(d.get("benefit") or "").strip().lower()[:20] or "other",
+          "reason": str(d.get("reason") or d.get("_error") or "no usable answer")[:400]}
+    if rv["decision"] == "revise":
+        rv["revision"] = str(d["revision"])[:600]
+    c = d.get("claim") if isinstance(d.get("claim"), dict) else {}
+    beh, direction = str(c.get("behaviour") or "").strip(), str(c.get("direction") or "").strip().lower()
+    try:
+        compile_metric(beh)
+        if direction in ("up", "down"):
+            rv["claim"] = {"behaviour": beh, "direction": direction}
+    except Exception:
+        pass
+    return rv
+
+
+def review_vote(client, bench: str, row: dict, state: str, can_revise: bool = False) -> dict:
+    """Single answers to the same evidence differ: N_REVIEW independent reviews, the most frequent decision wins
+    (a tie goes to the more cautious one)."""
+    rvs = [review(client, bench, row, state, can_revise) for _ in range(N_REVIEW)]
+    n = Counter(x["decision"] for x in rvs)
+    dec = min(n, key=lambda d: (-n[d], ("reject", "revise", "adopt").index(d)))
+    pick = [x for x in rvs if x["decision"] == dec]
+    best = Counter(x["benefit"] for x in pick).most_common(1)[0][0]
+    rv = next(x for x in pick if x["benefit"] == best and (best == "success" or "claim" in x or dec != "adopt"))\
+        if any(x["benefit"] == best and (best == "success" or "claim" in x or dec != "adopt") for x in pick) else pick[0]
+    return {**rv, "votes": dict(n)}
+
+
+def apply_review(row: dict, rv: dict, feats) -> dict:
+    """Guard rails around the review. The LLM chooses; it cannot adopt on grounds the training branches do not
+    show: 'success' needs reliable wins, any other benefit needs no net loss and its claimed effect measured."""
+    t = row["outcome"]
+    row["review"] = rv
+    if rv["decision"] == "revise":
+        row.update(status="revise", decision=f"REVISION ASKED (review): {rv['revision']}")
+    elif rv["decision"] != "adopt":
+        row.update(status="rejected", decision=f"NOT ADOPTED (review): {rv['reason']}")
+    elif rv["benefit"] == "success":
+        ok = V.reliable(t)
+        row.update(status="admitted" if ok else "rejected", basis="success",
+                   decision="" if ok else "NOT ADOPTED: the review relied on a success gain that is not reliable")
+    else:
+        c = rv.get("claim")
+        sh = behaviour_shift(compile_metric(c["behaviour"]), c["direction"], row["_recs"], feats) if c else None
+        ok = bool(sh and sh["shifted"] and t["W"] - t["L"] >= 0)
+        row.update(status="admitted" if ok else "rejected", basis=rv["benefit"], claim_shift=sh,
+                   decision="" if ok else "NOT ADOPTED: the benefit the review relied on is not in the measurements")
+    return row
+
+
 # ---------------------------------------------------------------- generalisation lint for component code
 IMPORTS = {"__future__", "json", "re", "math", "collections", "itertools", "functools", "dataclasses", "typing",
            "hashlib", "difflib", "string", "statistics", "copy", "textwrap", "heapq", "h0.protocols",
@@ -283,12 +421,13 @@ Digests of failed runs:
 ## Experiment ledger (earlier candidates of this search; "behaviour" = did the agent act differently, "outcome" =
 paired wins/losses of branches against the saved runs)
 {ledger}
-Read the ledger as experimental results. A behaviour marked REFUTED was caused successfully and did not help: do not
-target it again. INEFFECTIVE means the code did not cause the behaviour: the idea is still open, by another route.
+Read the ledger as experimental results. A behaviour marked REFUTED was caused successfully and did not raise
+success: do not target it again ("adoption" says whether the edit was kept anyway, e.g. for its lower cost). INEFFECTIVE means the code did not cause the behaviour: the idea is still open, by another route.
 
 ## Task
 Propose {n} DIFFERENT candidate edits, in at least two different slots. Each is a hypothesis in two parts:
-(a) the edit makes the agent behave differently in a measurable way, (b) that behaviour raises the success rate.
+(a) the edit makes the agent behave differently in a measurable way, (b) that behaviour raises the success rate
+(or keeps it while making runs clearly cheaper: a reviewer weighs every measured effect before an edit is adopted).
 `behaviour` is a numeric expression over these end-of-run features (and n('<tool name>') = calls of that tool;
 tool names seen: {tools}):
 {features}
@@ -399,7 +538,9 @@ def ledger_view(ledger: list[dict]) -> str:
             f"{o.get('disagree', 0)} disagree; runs touched: {e.get('coverage', '?')}\n"
             f"    behaviour: {sh.get('before')} -> {sh.get('after')} ({sh.get('as_predicted', 0)} as predicted / "
             f"{sh.get('opposite', 0)} opposite of {sh.get('n', 0)}); outcome: {t.get('W', 0)} wins / {t.get('L', 0)} "
-            f"losses of {t.get('n', 0)} branches\n    verdict: {e['verdict']}")
+            f"losses of {t.get('n', 0)} branches\n    verdict on the hypothesis: {e['verdict']}"
+            + (f"\n    other clear effects: {effects_view(e['effects'])}" if e.get("effects") else "")
+            + (f"\n    adoption: {e['decision']}" if e.get("decision") else ""))
     return "\n".join(rows)
 
 
@@ -574,13 +715,12 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
 
 
 def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, out: Path, linter, cfg, rng, fin,
-          feats, r: int, facts: str = "") -> dict:
+          feats, r: int, facts: str = "", fb: str = "", suffix: str = "") -> dict:
     """Stages 1-3 for one candidate. Returns its ledger row (and private fields `_root`, `_recs`, `_touched`)."""
     code = compile_metric(cand["behaviour"])
     row = {k: cand[k] for k in ("id", "name", "slot", "edit_type", "failure_mode", "hypothesis", "mechanism",
                                 "behaviour", "direction", "observational")}
     row.update(round=r, verdict="", status="rejected")
-    fb, suffix = "", ""
     for rev in range(2):
         try:
             b = build(client, bench, split, cand, inc_root, cur, ws, linter, cfg, feedback=fb, suffix=suffix, facts=facts)
@@ -607,7 +747,7 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
                   f"meant to cause did not appear: `{cand['behaviour']}` went from {sh['before']} to {sh['after']} over "
                   f"{sh['n']} branched runs ({sh['as_predicted']} in the predicted direction, {sh['opposite']} against). "
                   "Change the mechanism so that the agent actually behaves differently.")
-            suffix = "_rev"
+            suffix += "_rev"
             continue
         row.update(verdict="INEFFECTIVE: the code did not cause the behaviour (after one revision); "
                            "the hypothesis itself is untested")
@@ -625,10 +765,10 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
             break
     sh, t = behaviour_shift(code, cand["direction"], recs, feats), V.tally(recs)
     gain = dmap["coverage"] * (t["W"] - t["L"]) / max(1, t["n"])
-    row.update(shift=sh, outcome=t, gain=round(gain, 4), _recs=recs)
+    row.update(shift=sh, outcome=t, gain=round(gain, 4), _recs=recs, effects=effects(recs, feats))
     how = "behaviour changed as predicted" if sh["shifted"] else "behaviour did NOT change as predicted"
     if V.reliable(t):
-        row.update(status="admitted", verdict=f"SUPPORTED on training runs ({how})")
+        row.update(verdict=f"SUPPORTED on training runs ({how})")
     elif t["L"] > t["W"]:
         row.update(verdict=f"HARMFUL: {how}, more losses than wins" if not sh["shifted"] else
                    "REFUTED: behaviour changed as predicted and success went down")
@@ -655,6 +795,23 @@ def advance(bench, split, recs, touched_paths: set, have: dict, root, src_root, 
 
 def public(row: dict) -> dict:
     return {k: v for k, v in row.items() if not k.startswith("_")}
+
+
+def select(hyps: list[dict]) -> list[int]:
+    """Order in which hypotheses get code. The saved runs rarely contain enough tasks with both outcomes to rank by
+    them: the proposer's own order is kept, moved only by clear observational evidence (for: first, against: last)."""
+    def cls(h):
+        d = h["observational"]["agree"] - h["observational"]["disagree"]
+        return 0 if d >= OBS_MARGIN else 2 if d <= -OBS_MARGIN else 1
+    return sorted(range(len(hyps)), key=lambda i: (cls(hyps[i]), i))
+
+
+def harness_state(recs: list[dict], fmap: dict, merged: list[dict]) -> str:
+    fs = [fmap[x["trajectory_path"]] for x in recs]
+    m = lambda k: sum(f[k] for f in fs) / max(1, len(fs))  # noqa: E731
+    return (f"success rate on training tasks {C.score(recs):.1%}; per run: {m('tokens'):.0f} tokens, {m('steps'):.1f} "
+            f"steps ({m('step_frac'):.0%} of the step budget), {m('obs_chars'):.0f} characters of tool results\n"
+            "edits adopted so far: " + ("; ".join(f"{e['slot']}/{e['name']} ({e.get('basis')})" for e in merged) or "none"))
 
 
 # ---------------------------------------------------------------- main loop
@@ -733,11 +890,18 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             except Exception as e:
                 rd.setdefault("invalid", []).append({"name": str((h or {}).get("name"))[:40] if isinstance(h, dict) else "?",
                                                      "reason": str(e)[:200]})
-        ranked = sorted(range(len(hyps)), key=lambda i: (-hyps[i]["observational"]["score"], i))
-        rd["hypotheses"] = [{**{k: hyps[i][k] for k in ("name", "slot", "behaviour", "direction", "observational")},
-                             "chosen": j < N_CAND} for j, i in enumerate(ranked)]
-        rows = []
-        for i in ranked[:N_CAND]:
+        ranked = select(hyps)
+        rows, tried, per_slot, revised = [], set(), Counter(), False
+        state = harness_state(cur, fmap, [e for e in ledger if e.get("status") == "merged"])
+        for i in ranked:
+            # a candidate whose code never ran on a real run cost no agent runs: the next hypothesis takes its place
+            if sum(1 for x in rows if not x["id"].endswith("r")
+                   and not x["verdict"].startswith(("DEAD CODE", "NOT BUILT"))) >= N_CAND:
+                break
+            if per_slot[hyps[i]["slot"]] >= max(1, N_CAND - 1):  # not all of a round in one slot
+                continue
+            tried.add(i)
+            per_slot[hyps[i]["slot"]] += 1
             n_c += 1
             cand = {**hyps[i], "id": f"c{n_c}"}
             cand["vname"] = f"{cand['id']}_{cand['name']}"
@@ -746,12 +910,35 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             row = trial(client, bench, tr_split, cand, inc_root, cur, ws, out, linter, cfg, rng, fin, feats, r,
                         ctx["facts"])
             rows.append(row)
+            if row.get("effects") and row["outcome"]["L"] - row["outcome"]["W"] < V.MARGIN:  # not clearly harmful
+                apply_review(row, review_vote(client, bench, row, state, can_revise=not revised), feats)
             print(f"  [b4 {bench}] round {r} {cand['id']}: cover={row.get('coverage')} shift={row.get('shift')} "
                   f"outcome={ {k: (row.get('outcome') or {}).get(k) for k in ('W', 'L', 'n', 'p')} } "
                   f"-> {row['verdict']}", flush=True)
+            if row.get("review"):
+                print(f"    [{cand['id']}] effects: {effects_view(row['effects'])}\n    [{cand['id']}] review: "
+                      f"{row['review']} -> {row['status']}", flush=True)
+            if row["status"] == "revise":  # one revision per round: the reviewer's change, measured from scratch
+                revised = True
+                c2 = {**cand, "id": cand["id"] + "r", "mechanism": (cand["mechanism"] + " REVISED: " + row["review"]["revision"])[:1500]}
+                fb = (f"An earlier version of this edit was measured on {row['outcome']['n']} runs. Clear effects: "
+                      f"{effects_view(row['effects'])}. Success: {row['outcome']['W']} wins / {row['outcome']['L']} losses. "
+                      f"The reviewer asks for this change: {row['review']['revision']}\nThe earlier code:\n```python\n"
+                      + (row["_root"] / "variants" / cand["slot"] / f"{cand['vname']}.py").read_text(encoding="utf-8")[:9000] + "\n```")
+                row2 = trial(client, bench, tr_split, c2, inc_root, cur, ws, out, linter, cfg, rng, fin, feats, r,
+                             ctx["facts"], fb=fb)
+                rows.append(row2)
+                if row2.get("effects") and row2["outcome"]["L"] - row2["outcome"]["W"] < V.MARGIN:
+                    apply_review(row2, review_vote(client, bench, row2, state), feats)
+                print(f"  [b4 {bench}] round {r} {c2['id']}: shift={row2.get('shift')} outcome={row2.get('outcome')} "
+                      f"-> {row2['verdict']} | effects: {effects_view(row2.get('effects'))} | review: "
+                      f"{row2.get('review')} -> {row2['status']}", flush=True)
+        rd["hypotheses"] = [{**{k: hyps[i][k] for k in ("name", "slot", "behaviour", "direction", "observational")},
+                             "chosen": i in tried} for i in ranked]
         # stage 4: confirmation on held-out tasks, most promising first; one merge per round
         merged = False
-        for row in sorted([x for x in rows if x["status"] == "admitted"], key=lambda x: -x.get("gain", 0)):
+        for row in sorted([x for x in rows if x["status"] == "admitted"],
+                          key=lambda x: (x.get("basis") != "success", -x.get("gain", 0))):
             root = row["_root"]
             vtag = f"{B.TAG}_{bench}_{root.name}_val"
             vdry = D.run_diff(bench, val_split, curv, root, inc_root, client, vtag, None, ref_cache(bench, inc_root),
@@ -766,8 +953,15 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             both = pooled(row["outcome"], tv)
             row["val"] = {k: tv[k] for k in ("W", "L", "n", "p", "Wt", "Lt")}
             row["pooled"] = both
-            # held-out runs must not contradict the training evidence, and the pooled evidence must stay reliable
-            if tv["W"] - tv["L"] >= 0 and V.reliable(both):
+            # held-out runs must not contradict the training evidence. Adopted for success: the pooled evidence must
+            # stay reliable. Adopted for another benefit: no net loss, and the claimed effect appears again.
+            if row["basis"] == "success":
+                confirmed = tv["W"] - tv["L"] >= 0 and V.reliable(both)
+            else:
+                c = row["review"]["claim"]
+                row["val_claim"] = behaviour_shift(compile_metric(c["behaviour"]), c["direction"], vrecs, feats)
+                confirmed = tv["L"] - tv["W"] < V.MARGIN and both["W"] - both["L"] >= 0 and row["val_claim"]["shifted"]
+            if confirmed:
                 lab = {"method": "b4", "phase": "inc_train", "round": r, "cand": row["id"]}
                 cur = advance(bench, tr_split, cur, {s["trajectory_path"] for s in row["_touched"]},
                               {x["fork_of"]: x for x in row["_recs"] if x["k"] == 0}, root, inc_root, client,
@@ -777,12 +971,18 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                                {**lab, "phase": "inc_val"})
                 inc_root, merged = root, True
                 merged_ids.append(row["id"])
-                row.update(status="merged", verdict=row["verdict"].replace("SUPPORTED on training runs",
-                                                                           "SUPPORTED and MERGED (held-out runs agree)"))
+                row.update(status="merged", decision=f"ADOPTED for {row['basis']} (held-out runs agree): "
+                                                     f"{row['review']['reason']}",
+                           verdict=row["verdict"].replace("SUPPORTED on training runs",
+                                                          "SUPPORTED and MERGED (held-out runs agree)"))
                 rd["result"] = f"merged {row['id']} ({row['slot']}/{row['name']}): train={C.score(cur):.3f} val={C.score(curv):.3f}"
                 break
-            row.update(status="not_confirmed", verdict="NOT CONFIRMED: gain on training runs, not on held-out runs "
-                                                       f"({tv['W']} wins / {tv['L']} losses of {tv['n']})")
+            row.update(status="not_confirmed", decision=f"NOT ADOPTED: the {row['basis']} benefit measured on training "
+                       f"runs was not confirmed on held-out runs ({tv['W']} wins / {tv['L']} losses of {tv['n']}"
+                       + (f"; claim {row['val_claim']['as_predicted']} as predicted / {row['val_claim']['opposite']} "
+                          f"against" if row.get("val_claim") else "") + ")")
+            if row["basis"] == "success":
+                row["verdict"] = "NOT CONFIRMED: gain on training runs, not on held-out runs"
         if not merged:
             rd["result"] = "no merge" if any(x["status"] == "not_confirmed" for x in rows) else "no candidate admitted"
         ledger += [public(x) for x in rows]
