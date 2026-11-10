@@ -262,6 +262,8 @@ Kinds of edit you may consider:
 ## Evidence from {n_runs} saved runs of the current harness on training tasks (success rate {succ})
 Behaviour features, mean over successful runs vs failed runs:
 {feat_table}
+How the runs look (a precondition that these numbers rule out will never hold):
+{facts}
 Failure modes (from run reviews): {modes}
 Reviews of single runs:
 {reports}
@@ -347,6 +349,21 @@ def feat_table(recs: list[dict], feats: dict) -> str:
     return "\n".join(rows)
 
 
+def run_facts(recs: list[dict], feats: dict, budget=None) -> str:
+    """Distributions the proposer needs to choose a precondition that actually holds on runs of this harness."""
+    def q(xs):
+        xs = sorted(xs)
+        return "no data" if not xs else f"10% <= {xs[len(xs) // 10]:.0f}, median {xs[len(xs) // 2]:.0f}, 90% <= {xs[(9 * len(xs)) // 10]:.0f}, max {xs[-1]:.0f}"
+    fs = [feats[x["trajectory_path"]] for x in recs]
+    per = [f["obs_chars"] / f["n_actions"] for f in fs if f["n_actions"]]
+    return (f"  steps per run: {q([f['steps'] for f in fs])}" + (f" (step budget {budget})" if budget else "") + "\n"
+            f"  characters per tool result (run average): {q(per)}\n"
+            f"  repeated identical calls: in {sum(1 for f in fs if f['repeat_ratio'] > 0)} of {len(fs)} runs; "
+            f"error-like results: in {sum(1 for f in fs if f['n_errors'] > 0)}; runs ending without a final answer: "
+            f"{sum(1 for f in fs if not f['answered'])}; final answers saying 'unknown': "
+            f"{sum(1 for f in fs if f['answer_hedged'])}")
+
+
 def reports_view(reps: list[dict]) -> str:
     out = []
     for x in reps:
@@ -378,7 +395,7 @@ def ledger_view(ledger: list[dict]) -> str:
 
 def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path) -> dict:
     prompt = HYP.format(edit_types=EDIT_TYPES, tree=ctx["tree"], n_runs=ctx["n_runs"], succ=ctx["succ"],
-                        feat_table=ctx["feat_table"], modes=ctx["modes"], reports=ctx["reports"],
+                        feat_table=ctx["feat_table"], facts=ctx["facts"], modes=ctx["modes"], reports=ctx["reports"],
                         digests="\n\n".join(ctx["digests"]), ledger=ledger_view(ledger), n=N_HYP,
                         tools=sorted(ctx["tools"]),
                         features="\n".join(f"  {k}: {v}" for k, v in FEATURES.items()))
@@ -512,7 +529,7 @@ class Reject(Exception):
 
 
 def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, linter, cfg, tries: int = 2,
-          feedback: str = "", suffix: str = "") -> dict:
+          feedback: str = "", suffix: str = "", facts: str = "") -> dict:
     """Code + gates for one candidate: static gate, lint, dry replay on the saved train runs (the edit must change
     at least one, without raising). One repair per failed gate, `tries` attempts in total."""
     why = ""
@@ -537,7 +554,8 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
             elif dmap["touched"] == 0:
                 why = (f"the edit changed nothing in any of {dmap['n']} saved runs replayed under it: its condition "
                        "never held, or its action left every model request and every executed action unchanged. "
-                       "Make the condition one that holds on ordinary runs of this harness.")
+                       "Make the condition one that holds on ordinary runs of this harness."
+                       + (" The saved runs look like this:\n" + facts if facts else ""))
             else:
                 return {"root": root, "dry": dry, "map": dmap, "attempts": attempt + 1}
         print(f"    [{cand['id']}] attempt {attempt}: {why[:160]}", flush=True)
@@ -546,7 +564,7 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
 
 
 def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, out: Path, linter, cfg, rng, fin,
-          feats, r: int) -> dict:
+          feats, r: int, facts: str = "") -> dict:
     """Stages 1-3 for one candidate. Returns its ledger row (and private fields `_root`, `_recs`, `_touched`)."""
     code = compile_metric(cand["behaviour"])
     row = {k: cand[k] for k in ("id", "name", "slot", "edit_type", "failure_mode", "hypothesis", "mechanism",
@@ -555,7 +573,7 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
     fb, suffix = "", ""
     for rev in range(2):
         try:
-            b = build(client, bench, split, cand, inc_root, cur, ws, linter, cfg, feedback=fb, suffix=suffix)
+            b = build(client, bench, split, cand, inc_root, cur, ws, linter, cfg, feedback=fb, suffix=suffix, facts=facts)
         except Reject as e:
             row.update(verdict=f"{e.verdict}: {e}"[:300] if rev == 0 else
                        "INEFFECTIVE: the code did not cause the behaviour and its revision was not built; "
@@ -689,7 +707,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         rng.shuffle(dig)
         fmap = {x["trajectory_path"]: feats(x["trajectory_path"]) for x in cur}
         ctx = {"tree": C.tree_text(inc_root, None), "n_runs": len(cur), "succ": f"{C.score(cur):.1%}",
-               "feat_table": feat_table(cur, fmap), "modes": json.dumps(mode_info, default=str)[:2500],
+               "feat_table": feat_table(cur, fmap), "facts": run_facts(cur, fmap), "modes": json.dumps(mode_info, default=str)[:2500],
                "reports": reports_view(reps), "tools": tools,
                "digests": [C.summarize_trajectory(x["trajectory_path"], max_events=24, max_chars=300, task_chars=400)
                            for x in dig[:5]]}
@@ -715,7 +733,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             cand["vname"] = f"{cand['id']}_{cand['name']}"
             print(f"  [b4 {bench}] round {r} {cand['id']} {cand['slot']}/{cand['name']}: `{cand['behaviour']}` "
                   f"{cand['direction']} obs={cand['observational']}", flush=True)
-            row = trial(client, bench, tr_split, cand, inc_root, cur, ws, out, linter, cfg, rng, fin, feats, r)
+            row = trial(client, bench, tr_split, cand, inc_root, cur, ws, out, linter, cfg, rng, fin, feats, r,
+                        ctx["facts"])
             rows.append(row)
             print(f"  [b4 {bench}] round {r} {cand['id']}: cover={row.get('coverage')} shift={row.get('shift')} "
                   f"outcome={ {k: (row.get('outcome') or {}).get(k) for k in ('W', 'L', 'n', 'p')} } "
