@@ -459,8 +459,11 @@ mechanism: {mechanism}
 ## Interfaces (h0/protocols.py and benchmarks/common.py)
 {protocols}
 
-class TaskSpec: task_id, benchmark, instruction, initial_observation, tools (list of OpenAI function schemas),
-    guidance, finish_tool (name of the tool that submits the final answer), max_steps, meta
+class TaskSpec: task_id, benchmark, instruction, initial_observation, tools, guidance, finish_tool (name of the
+    tool that submits the final answer), max_steps, meta
+    task.tools is a list of OpenAI function schemas, each exactly
+    {{"type": "function", "function": {{"name": ..., "description": ..., "parameters": {{...}}}}}}:
+    a tool's name is t["function"]["name"] (t.get("name") is always None).
 class StepResult: observation (str), done (bool), info (dict)
 
 ## Current code
@@ -475,7 +478,7 @@ class StepResult: observation (str), done (bool), info (dict)
 - All parameters have defaults (the factory is called with an empty config).
 - Imports allowed: {imports}. No file, network or environment access.
 - General: no tool names, task text, entities or benchmark names in the file. Find tools through `task.tools`
-  (schemas: name, description, parameters) and `task.finish_tool`.
+  (`t["function"]["name"]`, `["description"]`, `["parameters"]`) and `task.finish_tool`.
 - No prompt edits: do not add standing advice to the system prompt or to every message. Text shown to the model
   must be produced by the mechanism from the state of the run (e.g. what was cut, what was refused and why), and
   no string constant may exceed {max_literal} characters.
