@@ -428,8 +428,10 @@ success: do not target it again ("adoption" says whether the edit was kept anywa
 Propose {n} DIFFERENT candidate edits, in at least two different slots. Each is a hypothesis in two parts:
 (a) the edit makes the agent behave differently in a measurable way, (b) that behaviour raises the success rate
 (or keeps it while making runs clearly cheaper: a reviewer weighs every measured effect before an edit is adopted).
-`behaviour` is a numeric expression over these end-of-run features (and n('<tool name>') = calls of that tool;
-tool names seen: {tools}):
+`behaviour` is ONE numeric expression computed on ONE run from these end-of-run features (and n('<tool name>') =
+calls of that tool; tool names seen: {tools}); `direction` says which way the edit moves it. Only feature names,
+numbers, + - * / ( ), min, max, abs: for example `n_actions - distinct_actions` or `obs_chars / max(1, n_actions)`.
+No mean(...), no second metric, no words.
 {features}
 Rules:
 - General principle only, of the form "precondition observable during a run -> action of the harness". Nothing
@@ -544,18 +546,20 @@ def ledger_view(ledger: list[dict]) -> str:
     return "\n".join(rows)
 
 
-def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path) -> dict:
+def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path, feedback: str = "") -> dict:
     prompt = HYP.format(edit_types=EDIT_TYPES, tree=ctx["tree"], n_runs=ctx["n_runs"], succ=ctx["succ"],
                         feat_table=ctx["feat_table"], facts=ctx["facts"], modes=ctx["modes"], reports=ctx["reports"],
                         digests="\n\n".join(ctx["digests"]), ledger=ledger_view(ledger), n=N_HYP,
                         tools=sorted(ctx["tools"]),
                         features="\n".join(f"  {k}: {v}" for k, v in FEATURES.items()))
-    (ws / f"r{r}_hyp_prompt.txt").write_text(prompt, encoding="utf-8")
+    if feedback:
+        prompt += "\n\nYour previous answer could not be used:\n" + feedback + "\nAnswer again, complete."
+    (ws / f"r{r}_hyp_prompt{'_retry' if feedback else ''}.txt").write_text(prompt, encoding="utf-8")
     d = {}
     for attempt in range(2):
         resp = client.chat([{"role": "user", "content": prompt}], tag=f"b4:{bench}:hyp", max_tokens=6000,
                            fallback_no_reasoning=True)
-        (ws / f"r{r}_hyp_reply_{attempt}.txt").write_text(resp.content or "", encoding="utf-8")
+        (ws / f"r{r}_hyp_reply{'_retry' if feedback else ''}_{attempt}.txt").write_text(resp.content or "", encoding="utf-8")
         d = extract_json(resp.content or "", key="candidates")
         if isinstance(d, dict) and isinstance(d.get("candidates"), list) and d["candidates"]:
             return d
@@ -878,18 +882,27 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                "reports": reports_view(reps), "tools": tools,
                "digests": [C.summarize_trajectory(x["trajectory_path"], max_events=24, max_chars=300, task_chars=400)
                            for x in dig[:5]]}
-        d = propose(client, bench, ctx, ledger, r, ws)
+        # stage 0: hypotheses against the saved runs (free); one re-ask when too few are usable
+        hyps, why = [], ""
+        for ask in range(2):
+            d = propose(client, bench, ctx, ledger, r, ws, feedback=why)
+            hyps, bad = [], []
+            for h in (d.get("candidates") or [])[:N_HYP + 2]:
+                try:
+                    c = validate_hyp(h, ledger)
+                    c["observational"] = observe(compile_metric(c["behaviour"]), c["direction"], cur, fmap)
+                    hyps.append(c)
+                except Exception as e:
+                    bad.append({"name": str((h or {}).get("name"))[:40] if isinstance(h, dict) else "?",
+                                "behaviour": str((h or {}).get("behaviour"))[:120] if isinstance(h, dict) else "",
+                                "reason": str(e)[:200]})
+            if bad:
+                rd.setdefault("invalid", []).extend(bad)
+            if len(hyps) >= N_CAND:
+                break
+            why = "\n".join(f"- {b['name']}: behaviour `{b['behaviour']}` rejected ({b['reason']})" for b in bad) \
+                or "- no usable candidates"
         rd["analysis"] = str(d.get("analysis", ""))[:600]
-        # stage 0: hypotheses against the saved runs (free)
-        hyps = []
-        for h in (d.get("candidates") or [])[:N_HYP + 2]:
-            try:
-                c = validate_hyp(h, ledger)
-                c["observational"] = observe(compile_metric(c["behaviour"]), c["direction"], cur, fmap)
-                hyps.append(c)
-            except Exception as e:
-                rd.setdefault("invalid", []).append({"name": str((h or {}).get("name"))[:40] if isinstance(h, dict) else "?",
-                                                     "reason": str(e)[:200]})
         ranked = select(hyps)
         rows, tried, per_slot, revised = [], set(), Counter(), False
         state = harness_state(cur, fmap, [e for e in ledger if e.get("status") == "merged"])
