@@ -282,11 +282,13 @@ Answer ONLY with JSON:
 
 
 CHECK_NOTE = """
-Optional for structural kinds: "llm_check", a short yes/no question about the CURRENT state of the run (e.g. "Has any
-retrieved document actually confirmed the answer being submitted?", "Did the last few steps make progress toward the
-goal?"). It is asked to a model only when the precondition already holds, and the mechanism fires only on YES. Use it
-when the failure is about the CONTENT of the run, which the numeric signals cannot see; keep the precondition as a
-cheap filter (each check costs a model call). Leave it empty otherwise. Same generalization rules as `text`."""
+Optional for structural kinds: "llm_check", a short yes/no question about the CURRENT state of the run. It is asked
+to a model only when the precondition already holds, and the mechanism fires ONLY when the answer is YES. So phrase
+it so that YES means "the problem is present, intervene now" (e.g. "Is the answer being submitted unsupported by the
+documents retrieved so far?", "Have the last few steps failed to make progress toward the goal?"), never so that YES
+means "everything is fine". Use it when the failure is about the CONTENT of the run, which the numeric signals cannot
+see; keep the precondition as a cheap filter (each check costs a model call). Leave it empty otherwise. Same
+generalization rules as `text`."""
 
 REVISE = """A mechanism you proposed would not have fired where it is needed.
 
