@@ -53,8 +53,9 @@ class DiffLLM:
     """Serves a saved run's agent responses while the harness sends the reference requests; goes live at the first
     request that differs. `ref=None` records the reference hashes instead (and never calls the model)."""
 
-    def __init__(self, real, events: list[dict], ref: list[str] | None = None, dry: bool = False):
-        self.real, self.ref, self.dry = real, ref, dry
+    def __init__(self, real, events: list[dict], ref: list[str] | None = None, dry: bool = False,
+                 judge: bool = False):
+        self.real, self.ref, self.dry, self.judge = real, ref, dry, judge
         self.saved = [e for e in events if e.get("type") == "llm" and "check" not in e]
         self.hashes: list[str] = []
         self.i, self.live, self.fork_call = 0, False, None
@@ -77,6 +78,8 @@ class DiffLLM:
             self.live, self.fork_call = True, self.i
         if self.dry and self.live:
             raise DryStop(f"diverged at call {self.fork_call}")
+        if not agent and not self.live and not self.judge:  # an unchanged run keeps its saved verdict: no judge call
+            return _saved({})
         return self.real.chat(msgs, tools=tools, tag=tag, **kw)
 
     def __getattr__(self, k):
@@ -141,6 +144,10 @@ def run_diff(bench: str, split: str, srcs: list[dict], root, src_root, client, t
         res = ad.run_episode(src["task_id"], C.LazyHarness(root), bl, split=split, run_tag=run_tag)
         err = None if dry and bl.live else res.error
         same = not bl.live and not err and bl.i == len(bl.saved) and _steps(V.load_events(res.trajectory_path)) == _steps(ev)
+        if not same and not bl.live and not err and not dry:  # ended differently without a new request: judge it
+            bl = DiffLLM(client, ev, ref["hashes"], judge=True)
+            res = ad.run_episode(src["task_id"], C.LazyHarness(root), bl, split=split, run_tag=run_tag)
+            err = res.error
         rec = {**dataclasses.asdict(res), **base, "error": err, "wall_s": round(time.time() - t0, 1),
                "model": getattr(client, "model", None), "branched": not same and not err, "fork_call": bl.fork_call,
                "replayed": bl.i, "n_saved": len(bl.saved),
