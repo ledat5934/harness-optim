@@ -493,7 +493,8 @@ class StepResult: observation (str), done (bool), info (dict)
 - Keep per-run state on the instance keyed by task.task_id, or in `state.notes` (a fresh harness object is built
   for every run).
 {feedback}
-Output exactly one file, nothing else:
+Output exactly one file as text in your answer, nothing else (you do not need any tool: the pipeline saves the
+block below itself):
 ### FILE: variants/{slot}/{vname}.py
 ```python
 <complete file>
