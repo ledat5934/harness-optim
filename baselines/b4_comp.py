@@ -901,6 +901,18 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
     return row
 
 
+def branch_mean(recs, branches) -> float:
+    """Success rate of the new harness on `recs`, averaging every branch of a touched run (an untouched run counts as
+    itself). Less noisy than the one branch per run that `advance` keeps as the next incumbent."""
+    by = defaultdict(list)
+    for b in branches:
+        if b.get("branched") and not b.get("error"):
+            by[b["fork_of"]].append(bool(b.get("success")))
+    vals = [sum(by[x["trajectory_path"]]) / len(by[x["trajectory_path"]]) if by.get(x["trajectory_path"])
+            else float(bool(x.get("success"))) for x in recs]
+    return sum(vals) / max(1, len(vals))
+
+
 def advance(bench, split, recs, touched_paths: set, have: dict, root, src_root, client, tag, out, cfg, label):
     """Runs of the harness after a merge: an untouched saved run IS a run of the new harness; a touched one is
     replaced by one branch (`have`: branches already run, by source path)."""
@@ -1097,6 +1109,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                 cur = advance(bench, tr_split, cur, {s["trajectory_path"] for s in row["_touched"]},
                               {x["fork_of"]: x for x in row["_recs"] if x["k"] == 0}, root, inc_root, client,
                               f"{B.TAG}_{bench}_{root.name}", out, cfg, lab)
+                val_est = branch_mean(curv, vrecs)
                 curv = advance(bench, val_split, curv, {s["trajectory_path"] for s in vhit},
                                {x["fork_of"]: x for x in vrecs if x["k"] == 0}, root, inc_root, client, vtag, out, cfg,
                                {**lab, "phase": "inc_val"})
@@ -1106,7 +1119,9 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                                                      f"{row['review']['reason']}",
                            verdict=row["verdict"].replace("SUPPORTED on training runs",
                                                           "SUPPORTED and MERGED (held-out runs agree)"))
-                rd["result"] = f"merged {row['id']} ({row['slot']}/{row['name']}): train={C.score(cur):.3f} val={C.score(curv):.3f}"
+                rd["result"] = (f"merged {row['id']} ({row['slot']}/{row['name']}): train={C.score(cur):.3f} "
+                                f"val={C.score(curv):.3f} (val over all {K_VAL} branches per touched run: "
+                                f"{val_est:.3f})")
                 break
             row.update(status="not_confirmed", decision=f"NOT ADOPTED: the {row['basis']} benefit measured on training "
                        f"runs was not confirmed on held-out runs ({tv['W']} wins / {tv['L']} losses of {tv['n']}"
