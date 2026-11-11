@@ -469,7 +469,7 @@ class TaskSpec: task_id, benchmark, instruction, initial_observation, tools, gui
     {{"type": "function", "function": {{"name": ..., "description": ..., "parameters": {{...}}}}}}:
     a tool's name is t["function"]["name"] (t.get("name") is always None).
 class StepResult: observation (str), done (bool), info (dict)
-
+{shapes}
 ## Current code
 {code}
 
@@ -478,7 +478,9 @@ class StepResult: observation (str), done (bool), info (dict)
   `reg.register("{slot}", "{vname}", lambda c: <YourClass>(...), "<one-line description>")`.
 - The slot currently runs variant "{base}" with config {base_cfg}. Keep its behaviour except for your edit: either
   wrap it (`reg.instantiate("{slot}", "{base}", {base_cfg})` inside the factory, then delegate) or copy its code
-  into your file and change it. Files cannot import each other.
+  into your file and change it. The file is loaded on its own: it cannot import another variant file, `variants`,
+  `h0` or any project module (no `from variants...`, no relative imports). Whatever you need from the current code,
+  get it through `reg.instantiate` or copy it.
 - All parameters have defaults (the factory is called with an empty config).
 - Imports allowed: {imports}. No file, network or environment access.
 - General: no tool names, task text, entities or benchmark names in the file. Find tools through `task.tools`
@@ -505,6 +507,45 @@ def feat_table(recs: list[dict], feats: dict) -> str:
         b = [feats[x["trajectory_path"]][k] for x in recs if not x["success"]]
         rows.append(f"  {k:17s} success={sum(a) / max(1, len(a)):9.2f}  failed={sum(b) / max(1, len(b)):9.2f}")
     return "\n".join(rows)
+
+
+def _shape(v, depth: int = 0) -> str:
+    """Structure of a value without its content: keys, types, sizes."""
+    if isinstance(v, dict):
+        if depth >= 3:
+            return "{...}"
+        return "{" + ", ".join(f"{json.dumps(str(k))}: {_shape(x, depth + 1)}" for k, x in list(v.items())[:12]) + "}"
+    if isinstance(v, list):
+        return f"[{len(v)} x {_shape(v[0], depth + 1)}]" if v else "[]"
+    if isinstance(v, str):
+        return f"str({len(v)} chars)"
+    return type(v).__name__
+
+
+def obs_shapes(recs: list[dict], per_kind: int = 1, scan: int = 12) -> str:
+    """What tool results look like on saved runs, as structure only (field names, types, sizes; no content): the
+    implementer must not guess field names. Results are grouped by the argument names of the call, not tool names."""
+    seen: dict = {}
+    for x in recs[:scan]:
+        try:
+            ev = V.load_events(x["trajectory_path"])
+        except Exception:
+            continue
+        for e in ev:
+            if e.get("type") != "step" or e.get("observation") is None:
+                continue
+            kind = ", ".join(sorted((e.get("args") or {}).keys())) if isinstance(e.get("args"), dict) else ""
+            if len(seen.setdefault(kind, [])) >= per_kind:
+                continue
+            obs = str(e["observation"])
+            try:
+                shape = "JSON text: " + _shape(json.loads(obs))
+            except (TypeError, ValueError):
+                shape = "plain text: " + _shape(obs)
+            if shape not in seen[kind]:
+                seen[kind].append(shape)
+    return "\n".join(f"- result of a call with arguments ({k or 'none'}): {s_[:900]}"
+                     for k, v in seen.items() for s_ in v)
 
 
 def run_facts(recs: list[dict], feats: dict, budget=None) -> str:
@@ -606,7 +647,8 @@ def root_bundle_raw(root: Path) -> dict:
     return {s: ({"name": v} if isinstance(v, str) else v) for s, v in raw.items()}
 
 
-def implement(client, bench: str, cand: dict, parent: Path, dest: Path, feedback: str = "") -> tuple[bool, str]:
+def implement(client, bench: str, cand: dict, parent: Path, dest: Path, feedback: str = "",
+              shapes: str = "") -> tuple[bool, str]:
     """One proposer call that writes the variant file into a fresh copy of `parent`, selects it in bundle.json, and
     runs the static gate. Returns (ok, reason)."""
     slot, vname = cand["slot"], cand["vname"]
@@ -624,6 +666,8 @@ def implement(client, bench: str, cand: dict, parent: Path, dest: Path, feedback
                          direction=cand["direction"], mechanism=cand["mechanism"], protocols=proto, code=code,
                          vname=vname, base=cur["name"], base_cfg=json.dumps(cur.get("config") or {}),
                          imports=", ".join(sorted(IMPORTS - {"__future__"})), max_literal=MAX_LITERAL,
+                         shapes=("\n## What tool results look like on saved runs (structure only; read fields by these "
+                                 "names, do not guess others)\n" + shapes + "\n") if shapes else "",
                          feedback=("\n## Your previous attempt was rejected\n" + feedback + "\n") if feedback else "")
     C.new_candidate(dest, parent, {"method": "b4", "cand": cand["id"], "slot": slot, "variant": vname})
     resp = client.chat([{"role": "user", "content": prompt}], tag=f"b4:{bench}:impl", max_tokens=12000,
@@ -695,9 +739,10 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
     """Code + gates for one candidate: static gate, lint, dry replay on the saved train runs (the edit must change
     at least one, without raising). One repair per failed gate, `tries` attempts in total."""
     why = ""
+    shapes = obs_shapes(cur)
     for attempt in range(tries):
         root = ws / "roots" / f"{cand['id']}{suffix}_a{attempt}"
-        ok, why = implement(client, bench, cand, inc_root, root, feedback)
+        ok, why = implement(client, bench, cand, inc_root, root, feedback, shapes)
         if ok:
             known = set().union(*(str_consts(f.read_text(encoding="utf-8"))
                                   for f in (Path(inc_root) / "variants").rglob("*.py")))
