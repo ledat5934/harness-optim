@@ -59,6 +59,8 @@ SLOTS = ("tool_policy", "context_mgmt", "verifier", "agent_loop")  # memory (cro
 FEATURES = {
     "steps": "environment steps taken (tool calls executed, the final answer included)",
     "step_frac": "steps / step budget (0..1)",
+    "loop_frac": "share of the step budget the loop consumed, calls it did not execute included (0..1)",
+    "unexecuted_calls": "steps spent on a call (native or parsed from text) that the harness did not execute",
     "llm_calls": "model calls made",
     "n_actions": "tool calls other than the final answer",
     "distinct_actions": "different (tool, arguments) pairs among them",
@@ -110,7 +112,13 @@ def features(path: str, fin: str | None) -> dict:
     acts = [e for e in steps if not (fin and e.get("tool") == fin)]
     keys = [(e.get("tool"), json.dumps(e.get("args"), sort_keys=True, default=str)) for e in acts]
     task = next((e for e in ev if e.get("type") == "task"), {})
-    return {"steps": len(steps), "step_frac": len(steps) / max(1, int(task.get("max_steps") or 30)),
+    llm = [e for e in ev if e.get("type") == "llm" and "check" not in e]
+    budget = max(1, int(task.get("max_steps") or 30))
+    # the loop's own step counter also advances on calls it did not execute (tool not offered, answer not accepted)
+    loop = max([int(e["step"]) + 1 for e in llm if isinstance(e.get("step"), int)] or [len(steps)])
+    return {"steps": len(steps), "step_frac": len(steps) / budget,
+            "loop_frac": min(1.0, max(loop, len(steps)) / budget),
+            "unexecuted_calls": max(0, loop - len(steps)),
             "llm_calls": sum(1 for e in ev if e.get("type") == "llm"), "n_actions": len(acts),
             "distinct_actions": len(set(keys)), "distinct_tools": len({k[0] for k in keys}),
             "repeat_ratio": float(s.get("repeat_ratio") or 0), "n_errors": float(sum(_is_error(e.get("observation")) for e in acts)),
@@ -598,14 +606,20 @@ def _endings(fs: list[dict]) -> str:
     un = [f for f in fs if not f["answered"]]
     if not un:
         return "  every run ended with a final answer"
-    full = sum(1 for f in un if f["step_frac"] >= 0.95)
-    idle = [f["llm_calls"] - f["steps"] for f in un]
+    full = sum(1 for f in un if f["loop_frac"] >= 0.95)
+    idle = sorted(f["llm_calls"] - f["steps"] for f in un)
+    unex = sorted(f["unexecuted_calls"] for f in un)
     by_tools = Counter(f["distinct_tools"] for f in un)
-    return (f"  of the {len(un)} runs without a final answer: {full} used the whole step budget, {len(un) - full} "
-            f"stopped before it (the loop gives up after consecutive model replies that call no tool); model replies "
-            f"without an executed tool call in these runs: median {sorted(idle)[len(idle) // 2]}; different tools "
-            f"they used: " + ", ".join(f"{k} tool(s) in {v} runs" for k, v in sorted(by_tools.items()))
-            + f" (runs WITH a final answer: "
+    return (f"  of the {len(un)} runs without a final answer: {full} used the whole step budget of the loop, "
+            f"{len(un) - full} stopped before it (the loop gives up after consecutive model replies that call no "
+            f"tool). In these runs, median {idle[len(idle) // 2]} model replies led to no executed tool call; median "
+            f"{unex[len(unex) // 2]} steps of the budget were spent on a call (native, or parsed from the reply text, "
+            f"a final answer included) that the harness did NOT execute because the tool was not offered at that "
+            f"step or the answer was not accepted (answered runs: median "
+            f"{(sorted(f['unexecuted_calls'] for f in fs if f['answered']) or [0])[len([f for f in fs if f['answered']]) // 2]}). "
+            f"Different tools they used: "
+            + ", ".join(f"{k} tool(s) in {v} runs" for k, v in sorted(by_tools.items()))
+            + " (runs WITH a final answer: "
             + ", ".join(f"{k} in {v}" for k, v in sorted(Counter(f['distinct_tools'] for f in fs if f['answered']).items()))
             + ")")
 
