@@ -560,7 +560,24 @@ def run_facts(recs: list[dict], feats: dict, budget=None) -> str:
             f"  repeated identical calls: in {sum(1 for f in fs if f['repeat_ratio'] > 0)} of {len(fs)} runs; "
             f"error-like results: in {sum(1 for f in fs if f['n_errors'] > 0)}; runs ending without a final answer: "
             f"{sum(1 for f in fs if not f['answered'])}; final answers saying 'unknown': "
-            f"{sum(1 for f in fs if f['answer_hedged'])}")
+            f"{sum(1 for f in fs if f['answer_hedged'])}\n" + _endings(fs))
+
+
+def _endings(fs: list[dict]) -> str:
+    """Why runs end without a final answer: a precondition on 'the last step' is dead code when they stop earlier."""
+    un = [f for f in fs if not f["answered"]]
+    if not un:
+        return "  every run ended with a final answer"
+    full = sum(1 for f in un if f["step_frac"] >= 0.95)
+    idle = [f["llm_calls"] - f["steps"] for f in un]
+    by_tools = Counter(f["distinct_tools"] for f in un)
+    return (f"  of the {len(un)} runs without a final answer: {full} used the whole step budget, {len(un) - full} "
+            f"stopped before it (the loop gives up after consecutive model replies that call no tool); model replies "
+            f"without an executed tool call in these runs: median {sorted(idle)[len(idle) // 2]}; different tools "
+            f"they used: " + ", ".join(f"{k} tool(s) in {v} runs" for k, v in sorted(by_tools.items()))
+            + f" (runs WITH a final answer: "
+            + ", ".join(f"{k} in {v}" for k, v in sorted(Counter(f['distinct_tools'] for f in fs if f['answered']).items()))
+            + ")")
 
 
 def reports_view(reps: list[dict]) -> str:
