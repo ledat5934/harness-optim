@@ -546,8 +546,36 @@ def obs_shapes(recs: list[dict], per_kind: int = 1, scan: int = 12) -> str:
                 shape = "plain text: " + _shape(obs)
             if shape not in seen[kind]:
                 seen[kind].append(shape)
-    return "\n".join(f"- result of a call with arguments ({k or 'none'}): {s_[:900]}"
-                     for k, v in seen.items() for s_ in v)
+    return "\n".join([f"- result of a call with arguments ({k or 'none'}): {s_[:900]}"
+                      for k, v in seen.items() for s_ in v] + reply_shapes(recs))
+
+
+def reply_shapes(recs: list[dict]) -> list[str]:
+    """Form of the model replies that carried no tool call (counts only, no content): code that reads such a reply
+    must match the form replies really have, not an assumed markup."""
+    n = tagged = as_json = last = 0
+    lens = []
+    for x in recs:
+        try:
+            ev = V.load_events(x["trajectory_path"])
+        except Exception:
+            continue
+        llm = [e for e in ev if e.get("type") == "llm" and "check" not in e]
+        for i, e in enumerate(llm):
+            text = str(e.get("content") or "").strip()
+            if e.get("tool_calls"):
+                continue
+            n += 1
+            lens.append(len(text))
+            tagged += bool(re.search(r"<([A-Za-z_]+)>.*?</\1>", text, re.S))
+            as_json += text[:1] in ("{", "[")
+            last += i == len(llm) - 1
+    if not n:
+        return ["- model replies without a tool call: none on the saved runs"]
+    lens.sort()
+    return [f"- model replies without a tool call: {n} on {len(recs)} runs ({last} of them are the last reply of their "
+            f"run); they are free prose, median {lens[len(lens) // 2]} characters; {tagged} contain an XML-like tag "
+            f"pair, {as_json} start as JSON. Do not expect any markup the counts do not show."]
 
 
 def run_facts(recs: list[dict], feats: dict, budget=None) -> str:
