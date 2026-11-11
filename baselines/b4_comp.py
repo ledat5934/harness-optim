@@ -470,7 +470,8 @@ class TaskSpec: task_id, benchmark, instruction, initial_observation, tools, gui
     a tool's name is t["function"]["name"] (t.get("name") is always None).
 class StepResult: observation (str), done (bool), info (dict)
 {shapes}
-## Current code
+## Current code (the slot you edit, the loop that calls it, and every edit already adopted in another slot: they
+## are active on every run, so your mechanism must work together with them)
 {code}
 
 ## Requirements
@@ -676,6 +677,11 @@ def implement(client, bench: str, cand: dict, parent: Path, dest: Path, feedback
         files.append(parent / "variants" / "agent_loop" / f"{(root_bundle_raw(parent).get('agent_loop') or {'name': 'default'})['name']}.py")
     if cur["name"] != "default":  # a wrapper: show what it wraps
         files.append(parent / "variants" / slot / "default.py")
+    for s2, sel in sorted(root_bundle_raw(parent).items()):  # edits already adopted in other slots act on every run
+        if isinstance(sel, dict) and sel.get("name") not in (None, "default"):
+            f2 = parent / "variants" / s2 / f"{sel['name']}.py"
+            if f2 not in files:
+                files.append(f2)
     code = "\n\n".join(f"### FILE: {f.relative_to(parent).as_posix()}\n{f.read_text(encoding='utf-8')}"
                        for f in files if f.exists())
     proto = (C.ROOT / "h0" / "protocols.py").read_text(encoding="utf-8")
