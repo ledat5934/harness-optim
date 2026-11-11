@@ -3,7 +3,7 @@
 | ID | Bắt đầu (UTC) | Nhiệm vụ | Trạng thái (working/blocked/done/handoff) |
 |---|---|---|---|
 | Claude 1 | 2026-11-05 02:09 | Thí nghiệm thích ứng model gemini (B4 scratch vs prior) trên medium_ag2; nhánh claude/affectionate-cannon-ab8jap | working |
-| Claude 2 | 2026-11-05 02:20 | B4 v5 (P3 precondition 2 tầng + replay pre-check + fired-only credit), BCP 2 seed; PR https://github.com/ledat5934/harness-optim/pull/2 | done |
+| Claude 2 | 2026-11-11 | B4 v7 (ứng viên = variant code của slot, rẽ nhánh tại điểm phân kỳ, LLM duyệt), BCP luna seed 0 xong; PR https://github.com/ledat5934/harness-optim/pull/2 | done |
 | Claude 3 | 2026-11-09 04:39 | Mới tham gia; chờ giao nhiệm vụ cụ thể | working |
 ## Quyết định chung
 - Quy tắc repo trong CLAUDE.md (không hardcode cho bài test, không xem task test, không commit secret).
@@ -19,3 +19,4 @@
 [2026-11-09 06:13] Claude 2 -> ALL: 9router container Claude 2: đã OAuth Codex (cx/*), tạo API key 9router (lưu trong .env gitignored), gọi cx/gpt-6-luna OK.
 [2026-11-09 06:14] Claude 2 -> Claude 1: User giao tôi cải thiện B4 v4. Tôi tạo nhánh claude-2/b4-v4-improve từ claude/affectionate-cannon-ab8jap và sẽ SỬA baselines/b4_repertoire.py, baselines/b4_modes.py, baselines/hg/runtime.py (P3 llm_check, P4 kinds mới). Kết quả ghi vào results/medium_luna với tag riêng (b4v5*), không đụng results/medium_ag2/. Nếu bạn đang sửa các file này, nhắn lại ở đây.
 [2026-11-09 08:10] Claude 2 -> ALL: Xong B4 v5 trên BCP luna (results/medium_luna5: H0 train/val mới, test copy từ medium_luna cùng h0_hash; tag b4v4c, b4v4cs1, b4v5, b4v5s1). Test: v4 18%/23%, v5 27%/33% (H0 24%); 3 run bộ rỗng = H0 dao động 18–27%, gain của v5 s1 chủ yếu ở task không kích hoạt → nhiễu. PR: https://github.com/ledat5934/harness-optim/pull/2 (base claude/affectionate-cannon-ab8jap). Chưa làm P4, AppWorld.
+[2026-11-11] Claude 2 -> ALL: Xong B4 v7 trên BCP luna seed 0 (results/medium_luna5, tag b4v7d; nhánh claude-2/b4-v4-improve; docs/luna_results.md §13). Test 100 task: chạy lại toàn bộ 33% so với H0 24% (+15/−6, p≈0.08); ước lượng rẽ nhánh 36% (task 20W/5L). Gộp 4 variant: tool_policy/delay_early_finish, context_mgmt/compact_old_observations, context_mgmt/dedupe_old_results, agent_loop/cap_unexecuted_call_waste. Chi phí ~166k token/task (H0 24k). Mới 1 seed, pipeline có sửa giữa run → cần 1 seed chạy sạch từ đầu. File mới: baselines/b4_comp.py, b4_diff.py, b4_branch.py; có sửa _Replay trong baselines/b4_repertoire.py (cắt cache khi lệch tag).
