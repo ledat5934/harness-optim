@@ -313,3 +313,70 @@ Bảng do `python scripts/b4_paired.py results/medium_luna5 browsecomp_plus b4v4
 - Báo cáo test theo cột có/không kích hoạt.
 - Khuyến khích proposer dùng `llm_check` cho `inject` (đang ít được chọn).
 - Chạy AppWorld (cần `aw-venv` Python 3.12 và dữ liệu appworld).
+
+## 13. B4 v7 (sửa thành phần bằng code + rẽ nhánh tại điểm phân kỳ + LLM tham gia duyệt), BCP, seed 0
+
+Run `b4v7d` (`results/medium_luna5/b4v7d_browsecomp_plus.jsonl`, log `results/medium_luna5/logs/b4v7d.log`).
+Khác v5/v6: ứng viên không còn là luật `precondition -> inject/reject` mà là **một variant code mới của một slot**
+(`tool_policy`, `context_mgmt`, `verifier`, `agent_loop`) kèm giả thuyết hành vi đo được. Precondition không do
+proposer khai mà được **đo**: phát lại run đã lưu dưới harness mới, bước đầu tiên request khác đi là điểm rẽ nhánh
+(`baselines/b4_diff.py`). Không có prompt/hook được chèn.
+
+**Quy trình mỗi vòng** (`baselines/b4_comp.py`): 5 giả thuyết → code cho 3 ứng viên → cổng (tĩnh, tổng quát hoá,
+phát lại khô phải chạm ≥ 1 run; 2 lần viết) → thăm dò hành vi (16 nhánh) → sàng lọc kết quả (64 nhánh) → 3 phiếu LLM
+duyệt (adopt/reject/revise, lợi ích = thành công hoặc hiệu quả) → xác nhận trên val (3 lần lặp) → gộp tối đa 1 ứng viên.
+
+**Kết quả test (100 task)**
+
+| Hệ | Test | So với H0 (từng task) |
+|---|---|---|
+| H0 | 24% | – |
+| B1 | 28% | +10 / −6, p = 0.45 |
+| B2 | 23% | – |
+| B3 | 21% | – |
+| **B4 v7, chạy lại toàn bộ** | **33%** | **+15 / −6**, sign test hai phía p ≈ 0.08 |
+| B4 v7, ước lượng rẽ nhánh (k = 2) | 36% | task +20 / −5 (p = 0.002); nhánh 29W / 5L trên 200 |
+
+- Hai cách đo cùng hướng; lần chạy lại toàn bộ là một mẫu độc lập (33%), ước lượng rẽ nhánh là trung bình 2 lần (35%, 37%).
+- Chi phí: 166k token và 15.7 bước mỗi task, so với 24k token và 5.6 bước của H0 (khoảng 7 lần token).
+- Mới 1 seed. Chưa đủ để khẳng định hơn B1 một cách có ý nghĩa thống kê.
+
+**Harness cuối: 4 sửa đổi do pipeline tự tìm**
+
+| Vòng | Ứng viên | Slot | Tác dụng đo được | Train (nhánh) | Val |
+|---|---|---|---|---|---|
+| 1 | c2 `delay_early_finish` | tool_policy | ẩn finish tới khi đã dùng 2 tool khác nhau; n_actions 4.4 → 13.7 | 4W / 0L của 64 | 4W / 2L của 90 |
+| 2 | c5 `compact_old_observations` | context_mgmt | token 289k → 131k (gộp vì hiệu quả) | 5W / 0L của 64 | 5W / 1L của 90 |
+| 3 | c9 `dedupe_old_results` | context_mgmt | token 209k → 83k trên run bị chạm (cover 0.1) | 0W / 0L của 30 | 1W / 0L |
+| 5 | c20 `cap_unexecuted_call_waste` | agent_loop | bước mất vào lời gọi không được thực thi 6.3 → 0 | 4W / 0L của 64 | đồng ý |
+
+Ước lượng train 19.3% → 30.7%; val in ra 30.0% (chỉ dùng nhánh k = 0, xem "Hạn chế").
+
+**20 ứng viên qua 5 vòng**
+- 4 được gộp (bảng trên).
+- 4 bị loại dù hành vi đổi đúng dự đoán: c3 (hội đồng từ chối: 2W/0L không đủ tin, chi phí tăng); c15 rút gọn kết
+  quả search (3W/5L); c18 và c19 cho finish sớm hơn (0W/7L và 1W/4L trên 40).
+- 12 hỏng ở code: không dựng được, không chạm run nào (dead code), hoặc không gây ra hành vi dự đoán.
+
+**Bài học**
+- **Rẽ nhánh loại được sửa đổi "hợp lý nhưng có hại".** c18/c19 làm đúng điều dự đoán nhưng thua rõ; nghĩa là việc c2
+  buộc tìm thêm trước khi trả lời có ích thật, dù nó để 78/150 run train kết thúc không có câu trả lời.
+- **Facts đưa cho proposer phải đúng.** Bản đầu của `_endings` nói các run không trả lời "dừng trước ngân sách bước";
+  thực ra cả 78 run dùng hết ngân sách, mất trung vị 6 bước vào lời gọi finish bị từ chối. Bốn ứng viên agent_loop
+  (c6, c10, c14, c16) nhắm sai và chết. Sau khi sửa facts (`loop_frac`, `unexecuted_calls`), vòng 5 đề xuất ngay c18–c20
+  và c20 được gộp.
+- **Implementer cần thấy hình dạng dữ liệu thật**, không phải nội dung: cấu trúc kết quả tool (`obs_shapes`), dạng
+  câu trả lời không kèm tool call (`reply_shapes`), code của các variant đã gộp ở slot khác. Thiếu chúng thì code đoán
+  tên field / thẻ markup và thành dead code (c8, c14).
+- **Các sửa đổi trong lúc chạy đều là sửa pipeline tổng quát** (prompt implementer, facts, cache), không có ID task,
+  tên tool hay nội dung benchmark. Tuy vậy chúng được thêm giữa run sau khi xem lỗi, và c14 được cho viết lại hai lần;
+  một seed mới chạy từ đầu bằng pipeline cuối mới là phép đo sạch.
+
+**Hạn chế đã biết**
+- Điểm val in sau khi gộp chỉ dùng nhánh k = 0 của mỗi run val (quyết định gộp thì dùng cả 3).
+- 60% ứng viên hỏng ở khâu viết code: nút thắt hiện tại là implementer, không phải proposer hay khâu đánh giá.
+- Chi phí token tăng khoảng 7 lần so với H0; chưa có ràng buộc chi phí trong tiêu chí gộp theo "thành công".
+
+**Hạ tầng thêm trong đợt này**
+- Resume: cache tuần tự các lời gọi `b4:` (đuôi lệch được cắt khỏi file), nhánh đã chạy đọc lại từ jsonl, kết quả phát
+  lại khô được lưu theo hash code của hai harness (resume từ ~80 phút còn vài phút).
