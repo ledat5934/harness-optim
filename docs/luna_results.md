@@ -380,3 +380,19 @@ duyệt (adopt/reject/revise, lợi ích = thành công hoặc hiệu quả) →
 **Hạ tầng thêm trong đợt này**
 - Resume: cache tuần tự các lời gọi `b4:` (đuôi lệch được cắt khỏi file), nhánh đã chạy đọc lại từ jsonl, kết quả phát
   lại khô được lưu theo hash code của hai harness (resume từ ~80 phút còn vài phút).
+
+## 14. B4 v7, seed 1 chạy sạch từ đầu (`b4v7e`), BCP
+
+Chạy bằng pipeline cuối cùng, không sửa gì giữa chừng (chỉ resume sau giới hạn 2 giờ của tác vụ nền). Cùng H0, cùng giao thức MEDIUM.
+
+| Run | Sửa đổi được gộp | Test (chạy lại toàn bộ) | So với H0 từng task | Ước lượng rẽ nhánh (k = 2) | Token / task | Bước / task |
+|---|---|---|---|---|---|---|
+| H0 | – | 24% | – | – | 24k | 5.6 |
+| v7 seed 0 (`b4v7d`) | 4 (c2, c5, c9, c20) | 33% | +15 / −6, p = 0.078 | 36%, task +20 / −5 | 166k | 15.7 |
+| v7 seed 1 (`b4v7e`) | 1 (c3 `verifier/verify_answer_evidence`) | 32% | +12 / −4, p = 0.077 | 31%, task +12 / −3 (p = 0.018) | 151k | 10.9 |
+
+- **Diễn biến seed 1:** vòng 1 gộp c3 (val 26.7%; trên đủ 3 nhánh 28.9%). Vòng 2 và 3 không nhận ứng viên nào (1 REFUTED, 3 DEAD CODE, 5 INEFFECTIVE; c2 SUPPORTED trên train nhưng không được chọn gộp), nên pipeline dừng sớm theo quy tắc "2 vòng không gộp". 10 ứng viên: 1 gộp.
+- **Hai seed cho kết quả test gần nhau (33% và 32%) dù harness cuối khác nhau.** Điểm chung của hai harness là buộc agent làm việc lâu hơn trước khi chấp nhận câu trả lời (seed 0: hoãn kết thúc sớm; seed 1: kiểm tra bằng chứng của câu trả lời). 8 task sai ở H0 đều đúng ở cả hai seed.
+- **Thống kê:** từng seed riêng chưa đạt p < 0.05 (≈ 0.08). Gộp hai seed theo task (trung bình 2 lần chạy so với 1 lần chạy H0): 19 task tốt hơn, 8 kém hơn, p = 0.052. So sánh này dùng chung một lần chạy H0 cho cả hai seed, và H0 từng dao động 18–27% giữa các lần chạy, nên kết luận hợp lý là "cải thiện khoảng 8 điểm, nhất quán qua 2 seed, chưa khẳng định chắc về thống kê".
+- **Chi phí:** cả hai seed tốn gấp 6–7 lần token của H0.
+- **Điểm yếu lộ rõ ở seed 1:** 9/10 ứng viên hỏng ở khâu code (không đổi hành vi hoặc đổi sai hướng), tức khâu viết code vẫn là chỗ nghẽn; và quy tắc dừng sớm cắt run sau 3 vòng.
