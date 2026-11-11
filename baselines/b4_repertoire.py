@@ -417,7 +417,9 @@ class _Replay:
         if self.i < len(self.cache) and self.cache[self.i]["tag"] == tag:
             self.i += 1
             return type("Resp", (), {"content": self.cache[self.i - 1]["content"]})()
-        self.cache = self.cache[:self.i]
+        if self.i < len(self.cache):  # the saved tail no longer matches this run: drop it from the file too
+            self.cache = self.cache[:self.i]
+            self.path.write_text("".join(json.dumps(e) + "\n" for e in self.cache), encoding="utf-8")
         r = self.c.chat(msgs, tag=tag, **kw)
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"tag": tag, "content": r.content or ""}) + "\n")
