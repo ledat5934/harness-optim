@@ -168,10 +168,29 @@ def run_diff(bench: str, split: str, srcs: list[dict], root, src_root, client, t
                   f"err={(err or '')[:60]}", flush=True)
         return rec
 
+    memo = _dry_memo(root, src_root, split, srcs, cache) if dry and V.B.RESUME else None
+    if memo is not None and memo.exists():
+        try:
+            return json.loads(memo.read_text(encoding="utf-8"))
+        except Exception:
+            pass
     if bench == "appworld" or workers <= 1:
-        return [one(s) for s in srcs]
-    with ThreadPoolExecutor(max_workers=min(4, workers)) as ex:
-        return list(ex.map(one, srcs))
+        recs = [one(s) for s in srcs]
+    else:
+        with ThreadPoolExecutor(max_workers=min(4, workers)) as ex:
+            recs = list(ex.map(one, srcs))
+    if memo is not None and not any(x.get("error") for x in recs):
+        memo.parent.mkdir(parents=True, exist_ok=True)
+        memo.write_text(json.dumps(recs, default=str), encoding="utf-8")
+    return recs
+
+
+def _dry_memo(root, src_root, split, srcs, cache: Path) -> Path:
+    """A dry replay calls no model and is a function of the two harnesses' code and the saved runs: on resume it is
+    read back instead of recomputed (keyed by content, so a rewritten candidate is replayed again)."""
+    key = hashlib.sha1(json.dumps([C.tree_hash(Path(root)), C.tree_hash(Path(src_root)), split,
+                                   [s["trajectory_path"] for s in srcs]]).encode("utf-8")).hexdigest()[:20]
+    return Path(cache).parent / "dry_memo" / f"{key}.json"
 
 
 def divergence_map(recs: list[dict]) -> dict:
