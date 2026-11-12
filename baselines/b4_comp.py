@@ -21,7 +21,7 @@ and the loop tests them in order of cost:
 The experiment ledger keeps one row per candidate (behaviour changed? outcome changed?) and is given to the proposer
 in later rounds: it accumulates which behaviours are worth causing for this agent model and which are not.
 
-Env: B4_N_HYP (5), B4_N_CAND (3), B4_N_PROBE (16), B4_N_SCREEN (64), B4_K_VAL (3), B4_K_TEST (2), plus B4_TAG,
+Env: B4_CGRAPH (1: causal map of the ledger, baselines/b4_graph.py, in the prompts), B4_N_HYP (5), B4_N_CAND (3), B4_N_PROBE (16), B4_N_SCREEN (64), B4_K_VAL (3), B4_K_TEST (2), plus B4_TAG,
 B4_SEED, B4_RESUME, B4_ALPHA of the earlier versions.
 """
 from __future__ import annotations
@@ -37,6 +37,7 @@ from pathlib import Path
 
 from baselines import b4_branch as V
 from baselines import b4_diff as D
+from baselines import b4_graph as GR
 from baselines import b4_modes as G
 from baselines import b4_repertoire as B
 from baselines import common as C
@@ -50,6 +51,7 @@ N_SCREEN = int(os.environ.get("B4_N_SCREEN", "64"))  # branches of the outcome s
 K_VAL = int(os.environ.get("B4_K_VAL", "3"))        # branches per touched val run
 K_TEST = int(os.environ.get("B4_K_TEST", "2"))      # branches per touched test run
 N_REVIEW = int(os.environ.get("B4_N_REVIEW", "3"))  # independent adoption reviews per tested candidate
+CGRAPH = os.environ.get("B4_CGRAPH", "1") == "1"    # causal map of the ledger in the prompts (0: ledger only)
 OBS_MARGIN = 2                                      # tasks (agree - disagree) for saved runs to move a hypothesis
 SHIFT_MARGIN, SHIFT_ALPHA = 3, 0.1                  # behaviour shift: net pairs in the stated direction, sign test
 MAX_LITERAL = 400                                   # longest string constant in a component (no prompt edits)
@@ -435,6 +437,7 @@ paired wins/losses of branches against the saved runs)
 {ledger}
 Read the ledger as experimental results. A behaviour marked REFUTED was caused successfully and did not raise
 success: do not target it again ("adoption" says whether the edit was kept anyway, e.g. for its lower cost). INEFFECTIVE means the code did not cause the behaviour: the idea is still open, by another route.
+{graph}
 
 ## Task
 Propose {n} DIFFERENT candidate edits, in at least two different slots. Each is a hypothesis in two parts:
@@ -501,7 +504,7 @@ class StepResult: observation (str), done (bool), info (dict)
 - Model calls from agent_loop other than the main one must use `tag=f"h:{{task.benchmark}}:check"`.
 - Keep per-run state on the instance keyed by task.task_id, or in `state.notes` (a fresh harness object is built
   for every run).
-{feedback}
+{history}{feedback}
 Output exactly one file as text in your answer, nothing else (you do not need any tool: the pipeline saves the
 block below itself):
 ### FILE: variants/{slot}/{vname}.py
@@ -659,6 +662,11 @@ def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path,
     prompt = HYP.format(edit_types=EDIT_TYPES, tree=ctx["tree"], n_runs=ctx["n_runs"], succ=ctx["succ"],
                         feat_table=ctx["feat_table"], facts=ctx["facts"], modes=ctx["modes"], reports=ctx["reports"],
                         digests="\n\n".join(ctx["digests"]), ledger=ledger_view(ledger), n=N_HYP,
+                        graph=("\n## Causal map derived from the ledger (edit -> behaviour change -> outcome)\n"
+                               + ctx["graph"] + "\nUse the map: prefer edits that cause a behaviour measured with more "
+                               "wins than losses by a NEW route, avoid behaviours measured with more losses, and say in "
+                               "`mechanism` how a re-proposed open idea avoids its recorded failure.\n")
+                        if ctx.get("graph") else "",
                         tools=sorted(ctx["tools"]),
                         features="\n".join(f"  {k}: {v}" for k, v in FEATURES.items()))
     if feedback:
@@ -709,7 +717,7 @@ def root_bundle_raw(root: Path) -> dict:
 
 
 def implement(client, bench: str, cand: dict, parent: Path, dest: Path, feedback: str = "",
-              shapes: str = "") -> tuple[bool, str]:
+              shapes: str = "", history: str = "") -> tuple[bool, str]:
     """One proposer call that writes the variant file into a fresh copy of `parent`, selects it in bundle.json, and
     runs the static gate. Returns (ok, reason)."""
     slot, vname = cand["slot"], cand["vname"]
@@ -734,6 +742,8 @@ def implement(client, bench: str, cand: dict, parent: Path, dest: Path, feedback
                          imports=", ".join(sorted(IMPORTS - {"__future__"})), max_literal=MAX_LITERAL,
                          shapes=("\n## What tool results look like on saved runs (structure only; read fields by these "
                                  "names, do not guess others)\n" + shapes + "\n") if shapes else "",
+                         history=("\n## Earlier edits that aimed at the same behaviour and failed (other code than "
+                                  "yours: do not repeat what made them fail)\n" + history + "\n") if history else "",
                          feedback=("\n## Your previous attempt was rejected\n" + feedback + "\n") if feedback else "")
     C.new_candidate(dest, parent, {"method": "b4", "cand": cand["id"], "slot": slot, "variant": vname})
     resp = client.chat([{"role": "user", "content": prompt}], tag=f"b4:{bench}:impl", max_tokens=12000,
@@ -801,14 +811,14 @@ class Reject(Exception):
 
 
 def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, linter, cfg, tries: int = 2,
-          feedback: str = "", suffix: str = "", facts: str = "") -> dict:
+          feedback: str = "", suffix: str = "", facts: str = "", history: str = "") -> dict:
     """Code + gates for one candidate: static gate, lint, dry replay on the saved train runs (the edit must change
     at least one, without raising). One repair per failed gate, `tries` attempts in total."""
     why = ""
     shapes = obs_shapes(cur)
     for attempt in range(tries):
         root = ws / "roots" / f"{cand['id']}{suffix}_a{attempt}"
-        ok, why = implement(client, bench, cand, inc_root, root, feedback, shapes)
+        ok, why = implement(client, bench, cand, inc_root, root, feedback, shapes, history)
         if ok:
             known = set().union(*(str_consts(f.read_text(encoding="utf-8"))
                                   for f in (Path(inc_root) / "variants").rglob("*.py")))
@@ -837,7 +847,7 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
 
 
 def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, out: Path, linter, cfg, rng, fin,
-          feats, r: int, facts: str = "", fb: str = "", suffix: str = "") -> dict:
+          feats, r: int, facts: str = "", fb: str = "", suffix: str = "", history: str = "") -> dict:
     """Stages 1-3 for one candidate. Returns its ledger row (and private fields `_root`, `_recs`, `_touched`)."""
     code = compile_metric(cand["behaviour"])
     row = {k: cand[k] for k in ("id", "name", "slot", "edit_type", "failure_mode", "hypothesis", "mechanism",
@@ -845,7 +855,8 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
     row.update(round=r, verdict="", status="rejected")
     for rev in range(2):
         try:
-            b = build(client, bench, split, cand, inc_root, cur, ws, linter, cfg, feedback=fb, suffix=suffix, facts=facts)
+            b = build(client, bench, split, cand, inc_root, cur, ws, linter, cfg, feedback=fb, suffix=suffix, facts=facts,
+                      history=history)
         except Reject as e:
             row.update(verdict=f"{e.verdict}: {e}"[:300] if rev == 0 else
                        "INEFFECTIVE: the code did not cause the behaviour and its revision was not built; "
@@ -991,7 +1002,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     registry: dict = {}
     log = {"version": "v7-components", "rounds": [],
            "params": {"n_hyp": N_HYP, "n_cand": N_CAND, "n_probe": N_PROBE, "n_screen": N_SCREEN, "k_val": K_VAL,
-                      "k_test": K_TEST, "alpha": V.ALPHA, "margin": V.MARGIN}}
+                      "k_test": K_TEST, "alpha": V.ALPHA, "margin": V.MARGIN, "cgraph": CGRAPH}}
     stall, n_c = 0, 0
     for r in range(1, cfg["rounds"] + 1):
         C.budget_check(f"b4[{bench}] round {r}")
@@ -1012,6 +1023,9 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                "reports": reports_view(reps), "tools": tools,
                "digests": [C.summarize_trajectory(x["trajectory_path"], max_events=24, max_chars=300, task_chars=400)
                            for x in dig[:5]]}
+        graph = GR.build(ledger)
+        (ws / "graph.json").write_text(json.dumps({"round": r, **graph}, indent=1, default=str))
+        ctx["graph"] = GR.view(graph) if CGRAPH else ""
         # stage 0: hypotheses against the saved runs (free); one re-ask when too few are usable
         hyps, why = [], ""
         for ask in range(2):
@@ -1051,7 +1065,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             print(f"  [b4 {bench}] round {r} {cand['id']} {cand['slot']}/{cand['name']}: `{cand['behaviour']}` "
                   f"{cand['direction']} obs={cand['observational']}", flush=True)
             row = trial(client, bench, tr_split, cand, inc_root, cur, ws, out, linter, cfg, rng, fin, feats, r,
-                        ctx["facts"])
+                        ctx["facts"],
+                        history=GR.attempts(graph, cand["behaviour"], cand["direction"]) if CGRAPH else "")
             rows.append(row)
             if row.get("effects") and row["outcome"]["L"] - row["outcome"]["W"] < V.MARGIN:  # not clearly harmful
                 apply_review(row, review_vote(client, bench, row, state, can_revise=not revised), feats)
