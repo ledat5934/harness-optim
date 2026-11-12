@@ -396,3 +396,25 @@ Chạy bằng pipeline cuối cùng, không sửa gì giữa chừng (chỉ resu
 - **Thống kê:** từng seed riêng chưa đạt p < 0.05 (≈ 0.08). Gộp hai seed theo task (trung bình 2 lần chạy so với 1 lần chạy H0): 19 task tốt hơn, 8 kém hơn, p = 0.052. So sánh này dùng chung một lần chạy H0 cho cả hai seed, và H0 từng dao động 18–27% giữa các lần chạy, nên kết luận hợp lý là "cải thiện khoảng 8 điểm, nhất quán qua 2 seed, chưa khẳng định chắc về thống kê".
 - **Chi phí:** cả hai seed tốn gấp 6–7 lần token của H0.
 - **Điểm yếu lộ rõ ở seed 1:** 9/10 ứng viên hỏng ở khâu code (không đổi hành vi hoặc đổi sai hướng), tức khâu viết code vẫn là chỗ nghẽn; và quy tắc dừng sớm cắt run sau 3 vòng.
+
+## 15. B4 v7 + bản đồ nhân quả của sổ kết quả (`baselines/b4_graph.py`, `B4_CGRAPH=1`), BCP, seed 1 (`b4v7g`)
+
+**Thêm gì.** Một view dẫn xuất từ `ledger.json` (không phải nguồn dữ liệu mới), dựng lại mỗi vòng, ghi ra `graph.json`, đưa vào prompt đề xuất giả thuyết:
+- **A. hành vi → kết quả:** mỗi đặc trưng mà một sửa đổi làm thay đổi rõ, kèm thắng/thua gộp của các sửa đổi đã gây ra nó. Các đặc trưng do đúng cùng một tập sửa đổi gây ra được gộp thành một nút (thí nghiệm không tách được chúng).
+- **B. ý tưởng còn mở:** giả thuyết mà hành vi dự đoán chưa từng được tạo ra (NOT BUILT, DEAD CODE, INEFFECTIVE), kèm lý do hỏng. Người viết code cũng nhận các lần hỏng trước của cùng hành vi.
+- **C. tác dụng phụ của sửa đổi đã gộp:** thay đổi ngoài mục tiêu, còn tồn tại hay đã được sửa đổi sau đưa về.
+- `B4_CGRAPH=0` cho lại pipeline cũ. Test: `tests/test_b4_graph.py` (4).
+
+**Kết quả** (mọi thiết lập khác như §14):
+
+| Run | Sửa đổi được gộp | Ứng viên vòng 2–3 tạo được hành vi dự đoán | Test (chạy lại toàn bộ) | So với H0 | Ước lượng rẽ nhánh | Token / task |
+|---|---|---|---|---|---|---|
+| H0 | – | – | 24% | – | – | 24k |
+| seed 1, không graph (`b4v7e`) | c3 `verifier/verify_answer_evidence` (vòng 1) | 1 / 7 | 32% | +12 / −4 | 31% | 151k |
+| seed 1, có graph (`b4v7g`) | c4 `agent_loop/inspect_before_finish` (vòng 1) | 1 / 10 | 22% | +7 / −9 | 26% (task +3 / −0) | 54k |
+
+**Đọc kết quả**
+- **Lượt chạy này không cho thấy graph có ích, và cũng không đo được graph có hại trên test.** Khác biệt test (32% so với 22%) đến từ vòng 1, khi sổ còn rỗng nên hai cấu hình giống hệt nhau: hai lượt chạy gộp hai sửa đổi khác nhau, và c4 yếu hơn hẳn (train 3 thắng / 0 thua). Đây là độ dao động giữa các lần chạy của chính pipeline, lớn hơn mọi hiệu ứng của graph.
+- **Ở vòng 2–3, nơi graph có nội dung, tỉ lệ ứng viên hỏng ở code không đổi** (9/10 so với 6/7). Proposer có dùng graph (phân tích vòng 2 nhắc đúng hai hướng có lợi và tránh cách đã thất bại), nhưng chỗ nghẽn là bước viết code: 5 DEAD CODE, 2 NOT BUILT (ghi cứng tên tool), 4 INEFFECTIVE trên 14 ứng viên.
+- **Tiêu chí gộp còn lỏng với lợi ích nhỏ:** c4 được gộp với 3 thắng / 0 thua trên train; chạy lại toàn bộ trên test cho 7 thắng / 9 thua. Ước lượng rẽ nhánh (26%) và chạy lại toàn bộ (22%) chênh nhau 4 điểm, đúng cỡ nhiễu ±5 đã biết.
+- **Hệ quả cho ba lượt v7:** test 33%, 32%, 22%. Kết luận "cải thiện khoảng 8 điểm, nhất quán" ở §14 phải hạ xuống: 2 trên 3 lượt hơn H0, 1 lượt không hơn; trung bình 29%.
