@@ -414,7 +414,7 @@ Chạy bằng pipeline cuối cùng, không sửa gì giữa chừng (chỉ resu
 | seed 1, có graph (`b4v7g`) | c4 `agent_loop/inspect_before_finish` (vòng 1) | 1 / 10 | 22% | +7 / −9 | 26% (task +3 / −0) | 54k |
 
 **Đọc kết quả**
-- **Lượt chạy này không cho thấy graph có ích, và cũng không đo được graph có hại trên test.** Khác biệt test (32% so với 22%) đến từ vòng 1, khi sổ còn rỗng nên hai cấu hình giống hệt nhau: hai lượt chạy gộp hai sửa đổi khác nhau, và c4 yếu hơn hẳn (train 3 thắng / 0 thua). Đây là độ dao động giữa các lần chạy của chính pipeline, lớn hơn mọi hiệu ứng của graph.
+- **Lượt chạy này không cho thấy graph có ích, và cũng không đo được graph có hại trên test.** Khác biệt test (32% so với 22%) đến từ vòng 1, khi sổ còn rỗng nên hai cấu hình giống hệt nhau: hai lượt chạy gộp hai sửa đổi khác nhau, và c4 yếu hơn hẳn (train 2 thắng / 0 thua trên 64 nhánh, val 1 / 0). Đây là độ dao động giữa các lần chạy của chính pipeline, lớn hơn mọi hiệu ứng của graph.
 - **Ở vòng 2–3, nơi graph có nội dung, tỉ lệ ứng viên hỏng ở code không đổi** (9/10 so với 6/7). Proposer có dùng graph (phân tích vòng 2 nhắc đúng hai hướng có lợi và tránh cách đã thất bại), nhưng chỗ nghẽn là bước viết code: 5 DEAD CODE, 2 NOT BUILT (ghi cứng tên tool), 4 INEFFECTIVE trên 14 ứng viên.
-- **Tiêu chí gộp còn lỏng với lợi ích nhỏ:** c4 được gộp với 3 thắng / 0 thua trên train; chạy lại toàn bộ trên test cho 7 thắng / 9 thua. Ước lượng rẽ nhánh (26%) và chạy lại toàn bộ (22%) chênh nhau 4 điểm, đúng cỡ nhiễu ±5 đã biết.
+- **Tiêu chí gộp còn lỏng với lợi ích nhỏ:** c4 được gộp với tổng 3 thắng / 0 thua trên 121 nhánh train + val (p = 0.125, vừa qua ngưỡng 0.15); chạy lại toàn bộ trên test cho 7 thắng / 9 thua. Ước lượng rẽ nhánh (26%) và chạy lại toàn bộ (22%) chênh nhau 4 điểm, đúng cỡ nhiễu ±5 đã biết.
 - **Hệ quả cho ba lượt v7:** test 33%, 32%, 22%. Kết luận "cải thiện khoảng 8 điểm, nhất quán" ở §14 phải hạ xuống: 2 trên 3 lượt hơn H0, 1 lượt không hơn; trung bình 29%.
