@@ -418,3 +418,35 @@ Chạy bằng pipeline cuối cùng, không sửa gì giữa chừng (chỉ resu
 - **Ở vòng 2–3, nơi graph có nội dung, tỉ lệ ứng viên hỏng ở code không đổi** (9/10 so với 6/7). Proposer có dùng graph (phân tích vòng 2 nhắc đúng hai hướng có lợi và tránh cách đã thất bại), nhưng chỗ nghẽn là bước viết code: 5 DEAD CODE, 2 NOT BUILT (ghi cứng tên tool), 4 INEFFECTIVE trên 14 ứng viên.
 - **Tiêu chí gộp còn lỏng với lợi ích nhỏ:** c4 được gộp với tổng 3 thắng / 0 thua trên 121 nhánh train + val (p = 0.125, vừa qua ngưỡng 0.15); chạy lại toàn bộ trên test cho 7 thắng / 9 thua. Ước lượng rẽ nhánh (26%) và chạy lại toàn bộ (22%) chênh nhau 4 điểm, đúng cỡ nhiễu ±5 đã biết.
 - **Hệ quả cho ba lượt v7:** test 33%, 32%, 22%. Kết luận "cải thiện khoảng 8 điểm, nhất quán" ở §14 phải hạ xuống: 2 trên 3 lượt hơn H0, 1 lượt không hơn; trung bình 29%.
+
+## 16. B4 v7: vòng sửa code có phản hồi, tiêu chí gộp chặt hơn, đủ 5 vòng — BCP, seed 1 (`b4v7h`)
+
+**Sửa gì** (`baselines/b4_comp.py`, test ở `tests/test_b4_build.py`)
+- **Khâu viết code:** 4 lần thử thay vì 2 (`B4_IMPL_TRIES`); mỗi lần sửa được xem file trước và lý do bị loại. Sửa đổi "không đổi gì" được chạy lại trên 12 run dài nhất dưới line trace, báo hàm không được gọi và câu lệnh không bao giờ chạy (chỉ nhánh do chính sửa đổi thêm vào). Sửa lại vì hành vi không xuất hiện: kèm các hiệu ứng đo được và code trước.
+- **Tiêu chí gộp vì tăng thành công:** val không thua ròng, và bằng chứng gộp train + val phải hơn ít nhất 3 thắng và qua sign test p ≤ 0.1 (`B4_MERGE_ALPHA`); bỏ ngoại lệ "fork cuối". Ngưỡng được chọn sau khi đã thấy c4 của `b4v7g` (3/0) không giúp gì trên test.
+- **Xác nhận theo độ mạnh bằng chứng train**; sau một lần gộp, ứng viên đã được nhận ở slot khác được ghép lên harness mới và xác nhận tiếp (`B4_MULTI_MERGE`).
+- **Bỏ dừng sớm** (`B4_EARLY_STOP=1` để bật lại).
+
+**Kết quả** (seed 1, cùng H0, cùng model)
+
+| Lượt | Gộp | Test chạy lại | So H0 từng bài | Ước lượng nhánh | Token/bài |
+|---|---|---|---|---|---|
+| H0 | – | 24% | – | – | 24k |
+| `b4v7e` (không graph, dừng vòng 3) | c3 verifier | 32% | +12/−4 | 31% | 151k |
+| `b4v7g` (graph, dừng vòng 3) | c4 agent_loop | 22% | +7/−9 | 26% | 54k |
+| `b4v7h` (bản này, 5 vòng) | c9 context_mgmt (vì hiệu quả) | 21% | +4/−7 | 26.5%, bài +7/−4 | 18k |
+
+**Khâu viết code** (ứng viên không qua được khâu code / tổng số)
+
+| | NOT BUILT + DEAD CODE | Chạy được nhưng không gây hành vi | Đo được giả thuyết |
+|---|---|---|---|
+| `b4v7e` | 3/10 | 4/10 | 3/10 |
+| `b4v7g` | 7/14 | 4/14 | 3/14 |
+| `b4v7h` | 4/18 (vòng 1–4: 1/13) | 6/18 | 8/18 |
+
+**Đọc kết quả**
+- **Khâu viết code tốt lên rõ:** 8 trên 18 giả thuyết được đo thật (trước: 3). 3 DEAD CODE còn lại đều ở vòng 5 và ít nhất một cái (sửa lệnh gọi sai định dạng) có điều kiện không hề xảy ra trong các run đã lưu: lỗi của ý tưởng, không phải của code.
+- **Nhưng không có sửa đổi nào làm tăng tỉ lệ đúng.** 5 giả thuyết bị bác (hành vi xuất hiện, thành công không tăng), 3 không kết luận được. Sửa đổi duy nhất được gộp (c9) là vì giảm token: test 21% so với 24% của H0 (+4/−7, trong vùng nhiễu), token/bài giảm 25%.
+- **Tiêu chí gộp mới làm đúng việc:** không sửa đổi nào có lợi ích nhỏ lọt qua với lý do "tăng thành công".
+- **Một lỗi cổng kiểm tra làm mất ứng viên đáng chú ý nhất.** c2 (verifier, hoãn chấp nhận câu trả lời còn do dự — cùng họ với c3 đã cho 32% ở `b4v7e`) bị loại 4 lần vì một regex dài 468 ký tự: người viết đã chia thành các đoạn ngắn nối liền nhau nhưng `ast` gộp lại thành một hằng. Đã sửa: mẫu truyền thẳng vào `re` không tính là văn bản hướng dẫn. Lượt `b4v7h` chạy với cổng còn lỗi.
+- **Điều còn thiếu là ý tưởng tốt, không phải code chạy được.** Bốn lượt v7 cho test 33%, 32%, 22%, 21%; hai lượt tốt đều nhờ một sửa đổi ở verifier/kiểm chứng câu trả lời tìm thấy ở vòng 1–2. Pipeline chưa tìm lại được hướng đó một cách ổn định.

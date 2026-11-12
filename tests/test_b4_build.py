@@ -79,3 +79,12 @@ def test_compose_places_an_edit_on_a_new_incumbent(tmp_path: Path):
     assert (got / "variants" / "tool_policy" / "m1.py").exists()
     # same slot as the merged edit: cannot be composed
     assert M.compose(cand, {**row, "slot": "tool_policy", "variant": "c9_x"}, inc, tmp_path / "out2") is None
+
+
+def test_long_regex_is_not_a_prompt_edit():
+    from baselines import b4_repertoire as B
+    lint = B.Linter([], [], set())
+    alt = "|".join(f"(?:word{chr(97 + i % 26)}+\\s+other)" for i in range(40))
+    assert len(alt) > M.MAX_LITERAL
+    assert M.lint_code(f"import re\nP = re.compile(r\"{alt}\")\n", lint, ["zzbench"]) is None
+    assert "limit" in M.lint_code(f"TEXT = \"{'advice ' * 80}\"\n", lint, ["zzbench"])

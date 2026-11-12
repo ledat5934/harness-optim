@@ -361,6 +361,12 @@ def lint_code(src: str, linter: B.Linter, bench_names, known: set = frozenset())
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body \
                 and isinstance(node.body[0], ast.Expr) and isinstance(getattr(node.body[0], "value", None), ast.Constant):
             docs.add(id(node.body[0].value))
+    patterns = set()  # a pattern handed to `re` is matched against text, never shown to the model
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.args \
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == "re" \
+                and isinstance(node.args[0], ast.Constant):
+            patterns.add(id(node.args[0]))
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for a in node.names:
@@ -378,7 +384,7 @@ def lint_code(src: str, linter: B.Linter, bench_names, known: set = frozenset())
             if s in linter.tools and s not in known:  # `known`: constants of the code it started from
                 return (f"hardcoded tool name {s!r}: a component must work for any tool set, find tools through "
                         "task.tools (their schemas) and task.finish_tool")
-            if len(s) > MAX_LITERAL:
+            if len(s) > MAX_LITERAL and id(node) not in patterns:
                 return (f"the string constant starting {s[:50]!r} has {len(s)} chars, over the limit of "
                         f"{MAX_LITERAL}: long instruction text is a prompt edit, not a component edit; a long "
                         "pattern or table must be shortened or built from shorter pieces")
