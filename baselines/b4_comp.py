@@ -853,19 +853,23 @@ def line_trace(bench, split, srcs: list[dict], root: Path, src_root, client, fil
         pass
     finally:
         sys.settrace(old)
-    text = trace_report(file.read_text(encoding="utf-8"), hit, len(srcs))
+    base = {ln.strip() for f in (Path(src_root) / "variants" / file.parent.name).glob("*.py")
+            for ln in f.read_text(encoding="utf-8").splitlines()}
+    text = trace_report(file.read_text(encoding="utf-8"), hit, len(srcs), base)
     memo.write_text(text, encoding="utf-8")
     return text
 
 
-def trace_report(src: str, hit: set, n_runs: int, max_rows: int = 10) -> str:
+def trace_report(src: str, hit: set, n_runs: int, base: set = frozenset(), max_rows: int = 10) -> str:
+    """`base`: the lines of the code the file started from. A branch copied from it that never runs is the old
+    harness's business: when the file has dead branches of its own, only those are reported."""
     try:
         tree = ast.parse(src)
     except SyntaxError:
         return ""
     lines = src.splitlines()
     show = lambda n: f"L{n}: {lines[n - 1].strip()[:110]}"  # noqa: E731
-    never, gaps, called = [], [], 0
+    never, gaps, own, called = [], [], [], 0
     for fn in ast.walk(tree):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) or fn.name in ("register", "__init__"):
             continue
@@ -890,9 +894,12 @@ def trace_report(src: str, hit: set, n_runs: int, max_rows: int = 10) -> str:
                 continue
             elif last is not None:
                 gaps.append(f"    {show(last)}   [ran]\n    {show(n)}   [NEVER ran]")
+                if lines[last - 1].strip() not in base or lines[n - 1].strip() not in base:
+                    own.append(gaps[-1])
                 last = None
     if not hit or not (never or gaps or called):
         return ""
+    gaps = own or gaps
     out = [f"Execution trace of your file over the {n_runs} longest saved runs replayed under it:"]
     if never:
         out.append("- functions never called: " + ", ".join(never[:12])

@@ -31,6 +31,13 @@ def test_trace_reports_dead_branch_and_uncalled_function():
     assert "functions never called: unused (" in t  # register() itself is not listed
 
 
+def test_trace_keeps_only_the_edit_own_dead_branches():
+    src = SRC.replace("        return x\n", "        if x < 0:\n            x = -x\n        return x\n")
+    base = {ln.strip() for ln in SRC.splitlines()}
+    t = M.trace_report(src, {2, 3, 5, 8, 10}, 4, base)
+    assert "if x < 0:" in t and "x = -x" in t and "y = x * 2" not in t
+
+
 def test_trace_all_lines_ran():
     t = M.trace_report(SRC, {2, 3, 4, 5, 6, 7, 8, 11}, 4)
     assert "every statement ran" in t
