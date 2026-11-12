@@ -379,8 +379,9 @@ def lint_code(src: str, linter: B.Linter, bench_names, known: set = frozenset())
                 return (f"hardcoded tool name {s!r}: a component must work for any tool set, find tools through "
                         "task.tools (their schemas) and task.finish_tool")
             if len(s) > MAX_LITERAL:
-                return (f"a string constant of {len(s)} chars: long instruction text is a prompt edit, not a "
-                        "component edit")
+                return (f"the string constant starting {s[:50]!r} has {len(s)} chars, over the limit of "
+                        f"{MAX_LITERAL}: long instruction text is a prompt edit, not a component edit; a long "
+                        "pattern or table must be shortened or built from shorter pieces")
             if re.search(r"\d{4,}", s):
                 return "a string constant contains a long number (task-specific literal)"
     low = src.lower()
