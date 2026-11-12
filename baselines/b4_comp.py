@@ -32,6 +32,7 @@ import os
 import random
 import re
 import shutil
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -51,6 +52,11 @@ N_SCREEN = int(os.environ.get("B4_N_SCREEN", "64"))  # branches of the outcome s
 K_VAL = int(os.environ.get("B4_K_VAL", "3"))        # branches per touched val run
 K_TEST = int(os.environ.get("B4_K_TEST", "2"))      # branches per touched test run
 N_REVIEW = int(os.environ.get("B4_N_REVIEW", "3"))  # independent adoption reviews per tested candidate
+IMPL_TRIES = int(os.environ.get("B4_IMPL_TRIES", "4"))  # code attempts per candidate (each: 1 call + a free dry replay)
+N_TRACE = 12                                        # saved runs replayed under a line trace when an edit changes nothing
+EARLY_STOP = os.environ.get("B4_EARLY_STOP", "0") == "1"  # stop after B.STALL_ROUNDS rounds without a merge
+MERGE_ALPHA = float(os.environ.get("B4_MERGE_ALPHA", "0.1"))  # sign test level of the pooled evidence at a merge
+MULTI_MERGE = os.environ.get("B4_MULTI_MERGE", "1") == "1"   # several edits of different slots may merge in a round
 CGRAPH = os.environ.get("B4_CGRAPH", "1") == "1"    # causal map of the ledger in the prompts (0: ledger only)
 OBS_MARGIN = 2                                      # tasks (agree - disagree) for saved runs to move a hypothesis
 SHIFT_MARGIN, SHIFT_ALPHA = 3, 0.1                  # behaviour shift: net pairs in the stated direction, sign test
@@ -810,13 +816,105 @@ class Reject(Exception):
         self.verdict = verdict
 
 
-def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, linter, cfg, tries: int = 2,
+def prev_code(root: Path, cand: dict, cap: int = 9000) -> str:
+    f = Path(root) / "variants" / cand["slot"] / f"{cand['vname']}.py"
+    if not f.exists():
+        return ""
+    return ("\nYour previous file (correct it; keep the parts that are right):\n```python\n"
+            + f.read_text(encoding="utf-8")[:cap] + "\n```")
+
+
+def line_trace(bench, split, srcs: list[dict], root: Path, src_root, client, file: Path) -> str:
+    """Why an edit changed nothing: replay a few saved runs under it with a line trace of the variant file and
+    report which of its functions were never called and which statements never ran. No model call. Line numbers
+    and the candidate's own source only."""
+    memo = root.parent / f"{root.name}_trace.txt"
+    if memo.exists():
+        return memo.read_text(encoding="utf-8")
+    hit: set = set()
+
+    def local(frame, event, arg):
+        if event == "line":
+            hit.add(frame.f_lineno)
+        return local
+
+    def tracer(frame, event, arg):
+        if not frame.f_code.co_filename.endswith(file.name):
+            return None
+        hit.add(frame.f_lineno)
+        return local
+    old = sys.gettrace()
+    sys.settrace(tracer)
+    try:
+        D.run_diff(bench, split, srcs, root, src_root, client, f"{B.TAG}_{bench}_{root.name}_trace", None,
+                   ref_cache(bench, src_root), dry=True, workers=1)
+    except Exception:
+        pass
+    finally:
+        sys.settrace(old)
+    text = trace_report(file.read_text(encoding="utf-8"), hit, len(srcs))
+    memo.write_text(text, encoding="utf-8")
+    return text
+
+
+def trace_report(src: str, hit: set, n_runs: int, max_rows: int = 10) -> str:
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return ""
+    lines = src.splitlines()
+    show = lambda n: f"L{n}: {lines[n - 1].strip()[:110]}"  # noqa: E731
+    never, gaps, called = [], [], 0
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) or fn.name in ("register", "__init__"):
+            continue
+        inner = {id(x) for sub in ast.walk(fn) if sub is not fn and isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+                 for x in ast.walk(sub)}
+        nodes = [x for x in ast.walk(fn) if isinstance(x, ast.stmt) and x is not fn and id(x) not in inner
+                 and not (isinstance(x, ast.Expr) and isinstance(x.value, ast.Constant))]
+        stm = sorted({x.lineno for x in nodes})
+        # an early exit that was not taken is not a dead action
+        exits = {x.lineno for x in nodes if isinstance(x, (ast.Return, ast.Continue, ast.Break, ast.Raise, ast.Pass))}
+        if not stm:
+            continue
+        if not any(n in hit for n in stm):
+            never.append(fn.name)
+            continue
+        called += 1
+        last = None
+        for n in stm:
+            if n in hit:
+                last = n
+            elif n in exits:
+                continue
+            elif last is not None:
+                gaps.append(f"    {show(last)}   [ran]\n    {show(n)}   [NEVER ran]")
+                last = None
+    if not hit or not (never or gaps or called):
+        return ""
+    out = [f"Execution trace of your file over the {n_runs} longest saved runs replayed under it:"]
+    if never:
+        out.append("- functions never called: " + ", ".join(never[:12])
+                   + " (the loop does not call them, or the object registered is not the one that defines them)")
+    if gaps:
+        out.append("- statements that never ran although the line before them did (the condition between them never "
+                   "held on these runs, or the function returned first):\n" + "\n".join(sorted(
+                       gaps, key=lambda g: int(g.split("L")[1].split(":")[0]))[:max_rows]))
+    if not never and not gaps:
+        out.append("- every statement ran, yet every request to the model and every executed action stayed identical: "
+                   "what the code computes never reaches the messages, the tool list or the executed action")
+    return "\n".join(out)
+
+
+def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, linter, cfg, tries: int = 0,
           feedback: str = "", suffix: str = "", facts: str = "", history: str = "") -> dict:
     """Code + gates for one candidate: static gate, lint, dry replay on the saved train runs (the edit must change
-    at least one, without raising). One repair per failed gate, `tries` attempts in total."""
+    at least one, without raising). A failed gate is repaired with the previous file and what the gate measured in
+    hand (for an edit that changed nothing: which of its lines never ran); `tries` attempts in total. Attempts cost
+    one proposer call each and no agent run."""
     why = ""
     shapes = obs_shapes(cur)
-    for attempt in range(tries):
+    for attempt in range(tries or IMPL_TRIES):
         root = ws / "roots" / f"{cand['id']}{suffix}_a{attempt}"
         ok, why = implement(client, bench, cand, inc_root, root, feedback, shapes, history)
         if ok:
@@ -835,14 +933,19 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
                 why = (f"the component raised on {len(errs)} of {len(dry)} saved runs replayed under it, e.g.: "
                        f"{Counter(str(e)[:300] for e in errs).most_common(1)[0][0]}")
             elif dmap["touched"] == 0:
+                longest = [s for s, x in sorted(zip(cur, dry), key=lambda p: -(p[1].get("n_saved") or 0))
+                           if not x.get("unfaithful")][:N_TRACE]
+                tr = line_trace(bench, split, longest, root, inc_root, client,
+                                root / "variants" / cand["slot"] / f"{cand['vname']}.py")
                 why = (f"the edit changed nothing in any of {dmap['n']} saved runs replayed under it: its condition "
                        "never held, or its action left every model request and every executed action unchanged. "
                        "Make the condition one that holds on ordinary runs of this harness."
+                       + ("\n" + tr if tr else "")
                        + (" The saved runs look like this:\n" + facts if facts else ""))
             else:
                 return {"root": root, "dry": dry, "map": dmap, "attempts": attempt + 1}
         print(f"    [{cand['id']}] attempt {attempt}: {why[:160]}", flush=True)
-        feedback = why
+        feedback = why + prev_code(root, cand)
     raise Reject("NOT BUILT" if "changed nothing" not in why else "DEAD CODE", why[:400])
 
 
@@ -872,14 +975,15 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
         recs = D.run_diff(bench, split, order[:N_PROBE], root, inc_root, client, tag, out, ref_cache(bench, inc_root),
                           k=0, workers=cfg["workers"], label=label)
         sh, t = behaviour_shift(code, cand["direction"], recs, feats), V.tally(recs)
-        row.update(shift=sh, outcome=t, _root=root, _recs=recs, _touched=touched)
+        row.update(shift=sh, outcome=t, _root=root, _recs=recs, _touched=touched, _parent=inc_root)
         if sh["shifted"] or t["W"] - t["L"] >= V.MARGIN:
             break
         if rev == 0:  # the code did not cause the behaviour: one revision, told what was measured
             fb = (f"The component ran and changed {dmap['touched']} of {dmap['n']} saved runs, but the behaviour it was "
                   f"meant to cause did not appear: `{cand['behaviour']}` went from {sh['before']} to {sh['after']} over "
                   f"{sh['n']} branched runs ({sh['as_predicted']} in the predicted direction, {sh['opposite']} against). "
-                  "Change the mechanism so that the agent actually behaves differently.")
+                  f"What did move clearly on those branches: {effects_view(effects(recs, feats))}. "
+                  "Change the mechanism so that the agent actually behaves differently." + prev_code(root, cand))
             suffix += "_rev"
             continue
         row.update(verdict="INEFFECTIVE: the code did not cause the behaviour (after one revision); "
@@ -936,6 +1040,32 @@ def advance(bench, split, recs, touched_paths: set, have: dict, root, src_root, 
         b = have.get(x["trajectory_path"]) or got.get(x["trajectory_path"])
         res.append(b if b and not b.get("error") and b.get("branched") and b.get("trajectory_path") else x)
     return res
+
+
+def merge_ok(train: dict, val: dict) -> bool:
+    """A merge for higher success. Held-out runs must not contradict the training runs, and the wins pooled over
+    both must pass the sign test on their own: a net of two or three wins is within what two branches of the same
+    harness differ by, whether or not the fork was terminal."""
+    both = pooled(train, val)
+    return val["W"] - val["L"] >= 0 and both["W"] - both["L"] >= V.MARGIN + 1 and both["p"] <= MERGE_ALPHA
+
+
+def compose(root: Path, row: dict, inc_root: Path, dest: Path) -> Path | None:
+    """The candidate at `root` (built on an older incumbent) placed on the current incumbent: its variant file and
+    its slot selection, everything else from `inc_root`. Only when the incumbent still runs, in that slot, the
+    variant the candidate was built on. None when it cannot be composed or does not pass the static gate."""
+    slot, vname = row["slot"], row["variant"]
+    src = Path(root) / "variants" / slot / f"{vname}.py"
+    if not src.exists() or root_bundle_raw(inc_root).get(slot) != root_bundle_raw(row["_parent"]).get(slot):
+        return None
+    if dest.exists():
+        shutil.rmtree(dest)
+    C.new_candidate(dest, inc_root, {"method": "b4", "cand": row["id"], "slot": slot, "variant": vname, "composed": True})
+    apply_files(dest, {f"variants/{slot}/{vname}.py": src.read_text(encoding="utf-8")})
+    bundle = root_bundle_raw(inc_root)
+    bundle[slot] = {"name": vname, "config": {}}
+    (dest / "bundle.json").write_text(json.dumps(bundle, indent=1), encoding="utf-8")
+    return dest if C.static_gate(dest)[0] else None
 
 
 def public(row: dict) -> dict:
@@ -1002,7 +1132,9 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     registry: dict = {}
     log = {"version": "v7-components", "rounds": [],
            "params": {"n_hyp": N_HYP, "n_cand": N_CAND, "n_probe": N_PROBE, "n_screen": N_SCREEN, "k_val": K_VAL,
-                      "k_test": K_TEST, "alpha": V.ALPHA, "margin": V.MARGIN, "cgraph": CGRAPH}}
+                      "k_test": K_TEST, "alpha": V.ALPHA, "margin": V.MARGIN, "cgraph": CGRAPH,
+                      "impl_tries": IMPL_TRIES, "merge_alpha": MERGE_ALPHA, "multi_merge": MULTI_MERGE,
+                      "early_stop": EARLY_STOP}}
     stall, n_c = 0, 0
     for r in range(1, cfg["rounds"] + 1):
         C.budget_check(f"b4[{bench}] round {r}")
@@ -1093,11 +1225,22 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                       f"{row2.get('review')} -> {row2['status']}", flush=True)
         rd["hypotheses"] = [{**{k: hyps[i][k] for k in ("name", "slot", "behaviour", "direction", "observational")},
                              "chosen": i in tried} for i in ranked]
-        # stage 4: confirmation on held-out tasks, most promising first; one merge per round
-        merged = False
+        # stage 4: confirmation on held-out tasks, strongest training evidence first. After a merge, an admitted
+        # edit of another slot is placed on the new harness and confirmed against it (its training evidence was
+        # measured on the harness before that merge; the held-out branches are measured on the new one).
+        merged, results = False, []
         for row in sorted([x for x in rows if x["status"] == "admitted"],
-                          key=lambda x: (x.get("basis") != "success", -x.get("gain", 0))):
-            root = row["_root"]
+                          key=lambda x: (x.get("basis") != "success", -(x["outcome"]["W"] - x["outcome"]["L"]),
+                                         x["outcome"]["p"], -x.get("gain", 0))):
+            root, composed = row["_root"], False
+            if merged:
+                root = compose(row["_root"], row, inc_root, ws / "roots" / f"{row['id']}_on_{merged_ids[-1]}") \
+                    if MULTI_MERGE else None
+                if root is None:
+                    row.update(decision="NOT VALIDATED: another edit was adopted in this round and this one was not "
+                                        "tested on top of it; its benefit on training runs stands and the idea is open")
+                    continue
+                composed = True
             vtag = f"{B.TAG}_{bench}_{root.name}_val"
             vdry = D.run_diff(bench, val_split, curv, root, inc_root, client, vtag, None, ref_cache(bench, inc_root),
                               dry=True, workers=cfg["workers"])
@@ -1114,16 +1257,20 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             # held-out runs must not contradict the training evidence. Adopted for success: the pooled evidence must
             # stay reliable. Adopted for another benefit: no net loss, and the claimed effect appears again.
             if row["basis"] == "success":
-                confirmed = tv["W"] - tv["L"] >= 0 and V.reliable(both)
+                confirmed = merge_ok(row["outcome"], tv)
             else:
                 c = row["review"]["claim"]
                 row["val_claim"] = behaviour_shift(compile_metric(c["behaviour"]), c["direction"], vrecs, feats)
-                confirmed = tv["L"] - tv["W"] < V.MARGIN and both["W"] - both["L"] >= 0 and row["val_claim"]["shifted"]
+                confirmed = tv["W"] - tv["L"] >= 0 and both["W"] - both["L"] >= 0 and row["val_claim"]["shifted"]
             if confirmed:
                 lab = {"method": "b4", "phase": "inc_train", "round": r, "cand": row["id"]}
-                cur = advance(bench, tr_split, cur, {s["trajectory_path"] for s in row["_touched"]},
-                              {x["fork_of"]: x for x in row["_recs"] if x["k"] == 0}, root, inc_root, client,
-                              f"{B.TAG}_{bench}_{root.name}", out, cfg, lab)
+                ttouched, have = row["_touched"], {x["fork_of"]: x for x in row["_recs"] if x["k"] == 0}
+                if composed:  # the training branches were run on the harness before this round's merge
+                    tdry = D.run_diff(bench, tr_split, cur, root, inc_root, client, f"{B.TAG}_{bench}_{root.name}", None,
+                                      ref_cache(bench, inc_root), dry=True, workers=cfg["workers"])
+                    ttouched, have = [s for s, x in zip(cur, tdry) if x.get("branched")], {}
+                cur = advance(bench, tr_split, cur, {s["trajectory_path"] for s in ttouched}, have, root, inc_root,
+                              client, f"{B.TAG}_{bench}_{root.name}", out, cfg, lab)
                 val_est = branch_mean(curv, vrecs)
                 curv = advance(bench, val_split, curv, {s["trajectory_path"] for s in vhit},
                                {x["fork_of"]: x for x in vrecs if x["k"] == 0}, root, inc_root, client, vtag, out, cfg,
@@ -1134,16 +1281,19 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                                                      f"{row['review']['reason']}",
                            verdict=row["verdict"].replace("SUPPORTED on training runs",
                                                           "SUPPORTED and MERGED (held-out runs agree)"))
-                rd["result"] = (f"merged {row['id']} ({row['slot']}/{row['name']}): train={C.score(cur):.3f} "
-                                f"val={C.score(curv):.3f} (val over all {K_VAL} branches per touched run: "
-                                f"{val_est:.3f})")
-                break
+                results.append(f"merged {row['id']} ({row['slot']}/{row['name']}): train={C.score(cur):.3f} "
+                               f"val={C.score(curv):.3f} (val over all {K_VAL} branches per touched run: "
+                               f"{val_est:.3f})")
+                continue
             row.update(status="not_confirmed", decision=f"NOT ADOPTED: the {row['basis']} benefit measured on training "
                        f"runs was not confirmed on held-out runs ({tv['W']} wins / {tv['L']} losses of {tv['n']}"
                        + (f"; claim {row['val_claim']['as_predicted']} as predicted / {row['val_claim']['opposite']} "
                           f"against" if row.get("val_claim") else "") + ")")
             if row["basis"] == "success":
-                row["verdict"] = "NOT CONFIRMED: gain on training runs, not on held-out runs"
+                row["verdict"] = ("NOT CONFIRMED: gain on training runs, not on held-out runs" if tv["W"] < tv["L"] else
+                                  "NOT CONFIRMED: the gain pooled over training and held-out runs is too small to "
+                                  "tell from noise")
+        rd["result"] = "; ".join(results)
         if not merged:
             rd["result"] = "no merge" if any(x["status"] == "not_confirmed" for x in rows) else "no candidate admitted"
         ledger += [public(x) for x in rows]
@@ -1154,7 +1304,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         (ws / "log.json").write_text(json.dumps(log, indent=1, default=str))
         print(f"  [b4 {bench}] round {r}: {[(x['id'], x['slot'], x['verdict'].split(':')[0]) for x in rows]} -> "
               f"{rd['result']}", flush=True)
-        if stall >= B.STALL_ROUNDS and B.MIN_ROUNDS <= r < cfg["rounds"]:
+        if EARLY_STOP and stall >= B.STALL_ROUNDS and B.MIN_ROUNDS <= r < cfg["rounds"]:
             log["early_stop"] = {"round": r, "reason": f"{stall} rounds without a merge"}
             break
     # ---- freeze and test
