@@ -167,7 +167,9 @@ STEP_FEATURES = {
     "new_tool": "1 if this tool is used for the first time in the run",
     "tools_so_far": "different tools used so far in the run",
     "history_chars": "characters of all results of the run so far, this one included",
-    "idle_replies": "model replies since the previous executed call that led to no executed call",
+    "no_call_replies": "model replies since the previous executed call that contained no tool call at all",
+    "refused_calls": "calls the model made since the previous executed call that the harness did not execute "
+                     "(a final answer it refused, a tool not offered at that step)",
     "reply_chars": "characters of text the model wrote together with this call",
     "is_finish": "1 if this call submits the final answer",
     "answer_len": "characters of that final answer (0 if not a final answer)",
@@ -181,10 +183,11 @@ def step_rows(path: str, fin: str | None) -> list[dict]:
     ev = V.load_events(path)
     budget = max(1, int(next((e for e in ev if e.get("type") == "task"), {}).get("max_steps") or 30))
     rows, calls, results, tools = [], set(), set(), []
-    hist = idle = reply = 0
+    hist = idle = bare = reply = 0
     for e in ev:
         if e.get("type") == "llm" and "check" not in e:
             idle += 1
+            bare += not e.get("tool_calls")
             reply = len(str(e.get("content") or ""))
         if e.get("type") != "step":
             continue
@@ -203,14 +206,15 @@ def step_rows(path: str, fin: str | None) -> list[dict]:
                      "is_error": int(_is_error(obs)), "is_repeat": int(key in calls),
                      "dup_result": int(bool(obs) and obs in results), "same_tool_run": run_len,
                      "new_tool": int(tool not in tools), "tools_so_far": len(set(tools) | {tool}),
-                     "history_chars": hist, "idle_replies": max(0, idle - 1), "reply_chars": reply,
+                     "history_chars": hist, "no_call_replies": bare,
+                     "refused_calls": max(0, idle - 1 - bare), "reply_chars": reply,
                      "is_finish": int(is_fin), "answer_len": len(ans) if is_fin else 0,
                      "answer_hedged": int(is_fin and (not ans.strip() or bool(R._HEDGE.search(ans[:400])))),
                      "is_last": 0})
         calls.add(key)
         results.add(obs)
         tools.append(tool)
-        idle = reply = 0
+        idle = bare = reply = 0
     if rows:
         rows[-1]["is_last"] = 1
     return rows
@@ -530,8 +534,9 @@ def lint_code(src: str, linter: B.Linter, bench_names, known: set = frozenset())
                 return (f"the string constant starting {s[:50]!r} has {len(s)} chars, over the limit of "
                         f"{MAX_LITERAL}: long instruction text is a prompt edit, not a component edit; a long "
                         "pattern or table must be shortened or built from shorter pieces")
-            if re.search(r"\d{4,}", s):
-                return "a string constant contains a long number (task-specific literal)"
+            if re.search(r"\d{4,}", s) and s not in known:
+                return (f"the string constant {s[:80]!r} contains a number of 4 or more digits, which is treated as "
+                        "a task-specific literal: keep numbers in numeric parameters, not inside strings")
     low = src.lower()
     for b in bench_names:
         if b.lower() in low:
@@ -1532,7 +1537,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     print(f"  [b4 {bench}] test_branch: {log['test_branch']}", flush=True)
     log["test"] = {"success": C.score(test), "n": len(test), "rerun": bool(merged_ids)}
     recs = [json.loads(l) for l in out.read_text(encoding="utf-8").splitlines() if l.strip()] if out.exists() else []
-    log["cost"] = {"episodes": len(recs), "tokens": sum(x.get("tokens") or 0 for x in recs),
-                   "evolution_tokens": sum(x.get("tokens") or 0 for x in recs if x.get("phase") not in ("test", "test_branch"))}
+    spent = lambda x: max(0, (x.get("tokens") or 0) - (x.get("tokens_replayed") or 0))  # noqa: E731 - replayed: not paid
+    log["cost"] = {"episodes": len(recs), "tokens": sum(spent(x) for x in recs),
+                   "evolution_tokens": sum(spent(x) for x in recs if x.get("phase") not in ("test", "test_branch"))}
     (ws / "log.json").write_text(json.dumps(log, indent=1, default=str))
     return {"log": log, "test": test}

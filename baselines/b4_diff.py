@@ -45,8 +45,11 @@ def req_hash(msgs, tools, kw: dict) -> str:
 
 
 def _saved(e: dict):
+    """A saved response served again. It carries the tokens it cost when it was made (and no new cost): a branch
+    is then a whole run, comparable with the saved run it forks on every feature."""
     return SimpleNamespace(content=e.get("content") or "", tool_calls=e.get("tool_calls") or [], message={},
-                           prompt_tokens=0, completion_tokens=0, cost=0.0, latency_s=0.0, raw={})
+                           prompt_tokens=int(e.get("pt") or 0), completion_tokens=int(e.get("ct") or 0), cost=0.0,
+                           latency_s=0.0, raw={})
 
 
 class DiffLLM:
@@ -156,6 +159,7 @@ def run_diff(bench: str, split: str, srcs: list[dict], root, src_root, client, t
         rec = {**dataclasses.asdict(res), **base, "error": err, "wall_s": round(time.time() - t0, 1),
                "model": getattr(client, "model", None), "branched": not same and not err, "fork_call": bl.fork_call,
                "replayed": bl.i, "n_saved": len(bl.saved),
+               "tokens_replayed": sum(int(e.get("pt") or 0) + int(e.get("ct") or 0) for e in bl.saved[:bl.i]),
                # terminal: the candidate continues after the saved run's last response, or ends differently with
                # every request identical: the saved run's outcome from the divergence state is certain
                "terminal": bool(not same and not err and (not bl.live or bl.fork_call >= len(bl.saved)))}

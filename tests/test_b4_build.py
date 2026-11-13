@@ -110,6 +110,7 @@ def test_precondition_is_measured_on_saved_steps(tmp_path):
     assert [f["is_repeat"] for f in ra] == [0, 1, 0] and ra[1]["dup_result"] == 1 and ra[1]["same_tool_run"] == 2
     assert ra[2]["is_finish"] and ra[2]["answer_hedged"] and ra[2]["is_last"] and not ra[1]["is_last"]
     assert rb[1]["is_error"] and rb[1]["new_tool"] and rb[1]["tools_so_far"] == 2 and rb[0]["history_chars"] == 900
+    assert all(f["no_call_replies"] == 0 and f["refused_calls"] == 0 for f in ra + rb)
     w = M.when(M.compile_when("is_repeat and result_chars < 100"), recs, rows.get)
     assert (w["runs"], w["steps"], w["n_steps"], w["in_failed"], w["in_success"], w["first_step"]) == (1, 1, 5, 1.0, 0.0, 2)
     assert M.when(M.compile_when("is_last and not is_finish"), recs, rows.get)["runs"] == 1
@@ -138,3 +139,30 @@ def test_hypothesis_without_a_real_situation_is_rejected_before_code(tmp_path):
     assert M.check_when(c, recs, rows)["runs"] == 40 and c["when_obs"]["in_failed"] == 1.0
     assert "precondition: `is_finish and answer_len < 5` holds at 40 of 80" in M.ledger_view(
         [{**c, "round": 1, "verdict": "INCONCLUSIVE"}])
+
+
+def test_refused_calls_are_not_replies_without_a_call(tmp_path):
+    ev = [{"type": "task", "instruction": "q", "max_steps": 10},
+          {"type": "llm", "content": "", "tool_calls": [1], "step": 0},
+          {"type": "step", "n": 1, "tool": "look", "args": {}, "observation": "r"},
+          {"type": "llm", "content": "", "tool_calls": [1], "step": 1},   # a final answer the harness refused
+          {"type": "llm", "content": "thinking", "tool_calls": [], "step": 2},
+          {"type": "llm", "content": "", "tool_calls": [1], "step": 3},
+          {"type": "step", "n": 2, "tool": "done", "args": {"answer": "v"}, "observation": "ok"}]
+    p = tmp_path / "t.json"
+    p.write_text(json.dumps({"events": ev}))
+    r = M.step_rows(str(p), "done")
+    assert (r[1]["refused_calls"], r[1]["no_call_replies"]) == (1, 1) and r[0]["refused_calls"] == 0
+
+
+def test_a_number_in_a_string_names_the_constant_and_spares_inherited_ones():
+    lin = M.B.Linter([], [], set())
+    src = 'X = "default 2048"\n\ndef register(reg):\n    pass\n'
+    assert "'default 2048'" in M.lint_code(src, lin, ["b"])
+    assert M.lint_code(src, lin, ["b"], known={"default 2048"}) is None
+
+
+def test_served_responses_keep_their_tokens():
+    from baselines import b4_diff as D
+    r = D._saved({"content": "c", "tool_calls": [], "pt": 120, "ct": 30})
+    assert (r.prompt_tokens, r.completion_tokens, r.cost) == (120, 30, 0.0)
