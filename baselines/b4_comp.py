@@ -179,7 +179,12 @@ STEP_FEATURES = {
     "reply_chars": "characters of text the model wrote together with this call",
     "is_finish": "1 if this call submits the final answer",
     "answer_len": "characters of that final answer (0 if not a final answer)",
-    "answer_hedged": "1 if it is a final answer saying unknown / could not be determined",
+    "answer_hedged": "1 if it is a final answer that is empty or admits it has no answer. Measured on the text of ALL "
+                     "argument values of the finishing call (first 400 characters), any letter case, straight or "
+                     "typographic apostrophe: can't / cannot / could not / couldn't / unable to / not able to / did "
+                     "not / didn't, then up to three words, then determine / find / identify / confirm / locate / "
+                     "verify / establish; or unknown, not known, insufficient, no (reliable / clear) information or "
+                     "evidence, unclear, I don't know, n/a, undetermined, not (be) determined",
     "is_last": "1 if this is the last executed call of the run (is_last and not is_finish: the run ended unanswered)",
 }
 
@@ -266,6 +271,11 @@ def when_disc(w: dict | None) -> float:
     if not w or None in (w.get("in_failed"), w.get("in_success")):
         return 0.0
     return round(w["in_failed"] - w["in_success"], 3)
+
+
+def when_defs(expr: str | None) -> str:
+    """How each step-level feature named in a precondition is measured (for whoever writes the code)."""
+    return "\n".join(f"  {k}: {v}" for k, v in STEP_FEATURES.items() if re.search(r"\b%s\b" % k, expr or ""))
 
 
 def when_view(expr: str, w: dict) -> str:
@@ -947,7 +957,8 @@ def implement(client, bench: str, cand: dict, parent: Path, dest: Path, feedback
                          direction=cand["direction"], mechanism=cand["mechanism"], protocols=proto, code=code,
                          when=("precondition, measured on saved runs of the current harness: "
                                + when_view(cand["when"], cand["when_obs"]) + ". The condition in your code must hold "
-                               "in that situation, tested on what the component itself receives.\n")
+                               "in that situation, tested on what the component itself receives. How the pipeline "
+                               "measures it:\n" + when_defs(cand["when"]) + "\n")
                          if cand.get("when_obs") else "",
                          vname=vname, base=cur["name"], base_cfg=json.dumps(cur.get("config") or {}),
                          imports=", ".join(sorted(IMPORTS - {"__future__"})), max_literal=MAX_LITERAL,
@@ -1124,12 +1135,11 @@ def reach_gap(cand: dict, dmap: dict) -> str:
     w = cand.get("when_obs")
     if not REACH_TRIES or not w or not w.get("runs") or dmap["touched"] >= REACH_MIN * w["runs"]:
         return ""
-    used = [k for k in STEP_FEATURES if re.search(r"\b%s\b" % k, cand.get("when") or "")]
     return (f"the edit works but is too narrow: it changed {dmap['touched']} of {dmap['n']} saved runs, while its "
             f"precondition {when_view(cand['when'], w)}. The hypothesis is about ALL of those runs. Make the condition "
             "in the code test the precondition as the pipeline measures it, and act at EVERY call where it holds (not "
             "only the first time, unless the mechanism says so). How the pipeline measures it:\n"
-            + "\n".join(f"  {k}: {STEP_FEATURES[k]}" for k in used))
+            + when_defs(cand.get("when")))
 
 
 def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, linter, cfg, tries: int = 0,

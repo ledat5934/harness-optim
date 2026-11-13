@@ -189,6 +189,7 @@ def test_an_edit_narrower_than_its_precondition_is_sent_back():
     w = {"runs": 106, "n_runs": 150, "steps": 106, "n_steps": 700, "in_failed": 0.88, "in_success": 0.0, "first_step": 5}
     cand = {"when": "is_finish == 1 and answer_hedged == 1", "when_obs": w}
     why = M.reach_gap(cand, {"touched": 18, "n": 150})
-    assert "18 of 150" in why and "answer_hedged: " in why and "is_finish: " in why and "is_last" not in why
+    assert "18 of 150" in why and "answer_hedged: " in why and "is_finish: " in why and "is_last:" not in why
+    assert "typographic apostrophe" in why  # the code is told how the situation is recognised
     assert M.reach_gap(cand, {"touched": 60, "n": 150}) == ""
     assert M.reach_gap({"when": "step >= 1"}, {"touched": 1, "n": 150}) == ""
