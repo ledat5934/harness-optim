@@ -475,3 +475,39 @@ Chạy bằng pipeline cuối cùng, không sửa gì giữa chừng (chỉ resu
 - **Cùng một ý tưởng, hai bản cài đặt, hai kết cục.** c2 ở `b4v7i` từ chối kiên trì (5 thắng/0 thua, tốn gấp 10 token); c2 ở `b4v7j` chỉ từ chối một lần và chỉ chạm 18 run trong khi tiền điều kiện đúng ở 106 run (1 thắng/0 thua trên 36 nhánh) → không kết luận được và bị bỏ. Pipeline đo được khoảng cách "tiền điều kiện đúng ở 106 run, code chạm 18" (`when_touched`) nhưng chưa dùng nó để yêu cầu viết lại.
 - **Kết quả phụ thuộc may rủi của khâu viết code**, không ổn định qua các lượt: năm lượt v7 đủ vòng cho test 33%, 32%, 22%, 21%, 24%.
 - **Việc nên làm tiếp (chưa làm):** (a) khi code chạm ít run hơn hẳn số run có tiền điều kiện, trả lại cho người viết sửa; (b) xếp hạng/ưu tiên giả thuyết theo độ phân biệt (tỉ lệ ở run sai trừ tỉ lệ ở run đúng), không chỉ ngưỡng tối thiểu; (c) không áp luật "số dài" lên chuỗi mô tả trong `reg.register` (model không bao giờ thấy chuỗi này; c11 mất vì nó).
+
+## 18. B4 v7 + ba cải tiến sau §17 (viết lại khi sửa đổi chạm ít run, ưu tiên theo độ phân biệt, nới luật số dài) — BCP, seed 1 (`b4v7k`)
+
+**Sửa gì** (`baselines/b4_comp.py`, test ở `tests/test_b4_build.py`, 15 test)
+- **(a) Viết lại khi sửa đổi chạm quá ít run** (`B4_REACH_MIN`=0.5, `B4_REACH_TRIES`=2): sau khi code qua các cổng, số run đã lưu mà nó thật sự thay đổi được so với số run có tiền điều kiện. Nếu dưới một nửa, người viết nhận phản hồi "sửa đổi đúng nhưng hẹp: chạm X trên N run" và viết lại; bản chạm rộng nhất được giữ.
+- **(b) Ưu tiên giả thuyết theo độ phân biệt** (`B4_WHEN_DISC`=0.2): độ phân biệt = tỉ lệ run sai có tình huống − tỉ lệ run đúng có tình huống. Giả thuyết có độ phân biệt ≥ 0.2 được viết code trước, ≤ −0.2 xếp cuối. Bảng tần suất nền cho người đề xuất nay ghi rõ hai tỉ lệ này.
+- **(c) Luật "số dài"** bỏ qua chuỗi mô tả trong `reg.register(...)` (model không bao giờ thấy chuỗi này).
+- **(d) Phát hiện trong lúc chạy thử:** bản viết lại của (a) vẫn chỉ chạm 11/150 run, vì người viết phải tự đoán pipeline đo "câu trả lời còn do dự" thế nào (regex của họ khớp 3 trên 37 câu mà pipeline đánh dấu). Đã thêm **định nghĩa cách đo của từng đặc trưng** vào prompt viết code và vào phản hồi "chạm ít". Lượt `b4v7k` chạy lại từ đầu với bản này.
+
+**Kết quả theo vòng** (thắng/thua = số nhánh train đổi từ sai→đúng / đúng→sai, trên 64 nhánh)
+
+| Vòng | Ứng viên | Kết cục |
+|---|---|---|
+| 1 | c1 tool_policy | INEFFECTIVE |
+| 1 | **c2 verifier/reject_hedged_finish** — chạm 43% run, 6 thắng/0 thua (p=0.016), hành vi đúng dự đoán | **GỘP** (val xác nhận; train 23.3%, val 30.0%) |
+| 1 | c3 agent_loop | DEAD CODE |
+| 1 | **c4 context_mgmt/trim_long_history** — chạm 88% run, 5 thắng/0 thua (p=0.031), hành vi **ngược** dự đoán (token/run 23.8k→72.7k) | **GỘP** (val xác nhận; train 25.3%, val 33.3%) |
+| 2 | c5 tool_policy (3/0), c6 context_mgmt, c7 agent_loop (2/0) | c5 không được val xác nhận; INEFFECTIVE; INCONCLUSIVE |
+| 3 | c8 agent_loop (3/0), c9 context_mgmt (4/2), c10 tool_policy (0/0) | NOT CONFIRMED; INCONCLUSIVE; REFUTED |
+| 4 | c11 tool_policy (0/0), c12 tool_policy (3/8), c13 agent_loop (0/4) | cả ba REFUTED |
+| 5 | c14 agent_loop (2/0), c15 agent_loop (0/0) | INCONCLUSIVE; REFUTED |
+
+**Test (100 bài)**
+
+| | Test chạy lại | Thắng/thua theo bài so với H0 | Ước lượng nhánh | Token/bài | Bước/bài |
+|---|---|---|---|---|---|
+| H0 | 24% | – | – | 24k | 5.6 |
+| `b4v7k` = H0 + c2 + c4 | **36%** | **+16/−4** (dấu, hai phía p=0.012) | 33.5%, bài +14/−2 (p=0.002) | **72k** | 14.5 |
+
+**Đọc kết quả**
+- **Đây là kết quả test cao nhất của v7** (các lượt đủ vòng trước: 33%, 32%, 22%, 21%, 24%), và là lượt đầu tiên mà ước lượng nhánh lẫn chạy lại đầy đủ đều khác H0 có ý nghĩa thống kê. H0 chạy lại dao động 18–27%, nên 36% nằm ngoài vùng nhiễu, nhưng vẫn chỉ là một seed.
+- **Cải tiến (a)+(d) là thứ tạo khác biệt.** Cùng ý tưởng "từ chối câu trả lời còn do dự": `b4v7j` chạm 18 run và bị bỏ (1 thắng/0 thua); bản chạy thử `b4v7k` đầu chạm 11 run; sau khi người viết được cho biết cách đo, chạm 65 run, 6 thắng/0 thua, được gộp ngay vòng 1.
+- **Cái giá: token gấp 3, số bước gấp 2.6.** Cả hai sửa đổi đều làm agent tìm kiếm lâu hơn thay vì bỏ cuộc sớm. c4 được đề xuất để *giảm* ngữ cảnh nhưng hành vi đo được là ngược lại (nhánh dài hơn); pipeline ghi nhận "hành vi KHÔNG như dự đoán" và vẫn gộp vì kết quả tăng ở cả train lẫn val. Tức là lợi ích của c4 không đến từ cơ chế mà giả thuyết nêu; phần đóng góp riêng của c4 so với "cho agent chạy lâu hơn" chưa được tách.
+- **Chưa so với một H0 được ép chạy lâu tương đương.** H0 tự dừng ở ~5.6 bước trên ngân sách 25 bước, nên phần tăng không phải do nới ngân sách; nhưng một phép so cùng chi phí (ví dụ H0 với lời nhắc "tiếp tục tìm") là đối chứng còn thiếu.
+- **(b) đưa ra tình huống mới nhưng chưa tình huống nào thắng:** sau khi c2+c4 được gộp, các đặc trưng mới xuất hiện (kết quả trùng lặp, chuỗi dài cùng một tool, run hết bước chưa trả lời: 21% run sai, 0% run đúng). Các ứng viên vòng 2–5 nhắm vào đó đều gây đúng hành vi nhưng không tăng thành công (4 REFUTED, 3 INCONCLUSIVE, 2 không được val xác nhận).
+- **Vận hành:** lượt này bị gián đoạn hai lần bởi giới hạn 2 giờ của tiến trình nền và một lần ~2.5 giờ do tài khoản model hết hạn mức; mỗi lần đều chạy tiếp từ điểm lưu (kết quả các vòng đã xong được phát lại, không chạy lại).
