@@ -88,3 +88,53 @@ def test_long_regex_is_not_a_prompt_edit():
     assert len(alt) > M.MAX_LITERAL
     assert M.lint_code(f"import re\nP = re.compile(r\"{alt}\")\n", lint, ["zzbench"]) is None
     assert "limit" in M.lint_code(f"TEXT = \"{'advice ' * 80}\"\n", lint, ["zzbench"])
+
+
+def _traj(tmp, name, steps, max_steps=10):
+    ev = [{"type": "task", "instruction": "q", "max_steps": max_steps}]
+    for i, (tool, args, obs) in enumerate(steps):
+        ev += [{"type": "llm", "content": "t", "tool_calls": [1], "step": i},
+               {"type": "step", "n": i + 1, "tool": tool, "args": args, "observation": obs}]
+    p = tmp / f"{name}.json"
+    p.write_text(json.dumps({"events": ev}))
+    return str(p)
+
+
+def test_precondition_is_measured_on_saved_steps(tmp_path):
+    a = _traj(tmp_path, "a", [("look", {"q": "x"}, "r" * 50), ("look", {"q": "x"}, "r" * 50),
+                              ("done", {"answer": "I could not determine the answer"}, "ok")])
+    b = _traj(tmp_path, "b", [("look", {"q": "y"}, "s" * 900), ("read", {"id": 1}, "Error: not found")])
+    recs = [{"trajectory_path": a, "success": False, "task_id": "1"}, {"trajectory_path": b, "success": True, "task_id": "2"}]
+    rows = {x["trajectory_path"]: M.step_rows(x["trajectory_path"], "done") for x in recs}
+    ra, rb = rows[a], rows[b]
+    assert [f["is_repeat"] for f in ra] == [0, 1, 0] and ra[1]["dup_result"] == 1 and ra[1]["same_tool_run"] == 2
+    assert ra[2]["is_finish"] and ra[2]["answer_hedged"] and ra[2]["is_last"] and not ra[1]["is_last"]
+    assert rb[1]["is_error"] and rb[1]["new_tool"] and rb[1]["tools_so_far"] == 2 and rb[0]["history_chars"] == 900
+    w = M.when(M.compile_when("is_repeat and result_chars < 100"), recs, rows.get)
+    assert (w["runs"], w["steps"], w["n_steps"], w["in_failed"], w["in_success"], w["first_step"]) == (1, 1, 5, 1.0, 0.0, 2)
+    assert M.when(M.compile_when("is_last and not is_finish"), recs, rows.get)["runs"] == 1
+    assert "is_repeat: true at 1 of 5 calls, in 1 of 2 runs" in M.step_facts(recs, rows.get)
+
+
+def test_hypothesis_without_a_real_situation_is_rejected_before_code(tmp_path):
+    a = _traj(tmp_path, "a", [("look", {"q": "x"}, "r" * 50), ("done", {"answer": "v"}, "ok")])
+    recs = [{"trajectory_path": a, "success": i % 2 == 0, "task_id": str(i)} for i in range(40)]
+    rows = lambda p: M.step_rows(p, "done")  # noqa: E731
+    h = {"name": "n", "slot": "verifier", "behaviour": "steps", "direction": "up", "hypothesis": "If the agent " * 3,
+         "mechanism": "precondition -> action " * 2}
+    for bad, msg in (({}, "`when` is missing"), ({"when": "is_error and step > 1"}, "holds at 0 of 80 executed calls")):
+        try:
+            M.check_when(M.validate_hyp({**h, **bad}, []), recs, rows)
+            raise AssertionError("accepted")
+        except ValueError as e:
+            assert msg in str(e), str(e)
+    for bad in ("n('look') > 1", "steps > 3", "open('x')"):  # run-level names and calls are not step-level
+        try:
+            M.validate_hyp({**h, "when": bad}, [])
+            raise AssertionError("accepted " + bad)
+        except ValueError:
+            pass
+    c = M.validate_hyp({**h, "when": "is_finish and answer_len < 5"}, [])
+    assert M.check_when(c, recs, rows)["runs"] == 40 and c["when_obs"]["in_failed"] == 1.0
+    assert "precondition: `is_finish and answer_len < 5` holds at 40 of 80" in M.ledger_view(
+        [{**c, "round": 1, "verdict": "INCONCLUSIVE"}])

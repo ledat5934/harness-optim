@@ -58,6 +58,8 @@ EARLY_STOP = os.environ.get("B4_EARLY_STOP", "0") == "1"  # stop after B.STALL_R
 MERGE_ALPHA = float(os.environ.get("B4_MERGE_ALPHA", "0.1"))  # sign test level of the pooled evidence at a merge
 MULTI_MERGE = os.environ.get("B4_MULTI_MERGE", "1") == "1"   # several edits of different slots may merge in a round
 CGRAPH = os.environ.get("B4_CGRAPH", "1") == "1"    # causal map of the ledger in the prompts (0: ledger only)
+WHEN = os.environ.get("B4_WHEN", "1") == "1"         # hypotheses state a step-level precondition, measured before code
+WHEN_MIN_SHARE = float(os.environ.get("B4_WHEN_MIN", "0.05"))  # least share of saved runs where it must hold
 OBS_MARGIN = 2                                      # tasks (agree - disagree) for saved runs to move a hypothesis
 SHIFT_MARGIN, SHIFT_ALPHA = 3, 0.1                  # behaviour shift: net pairs in the stated direction, sign test
 MAX_LITERAL = 400                                   # longest string constant in a component (no prompt edits)
@@ -87,18 +89,23 @@ _OK = (ast.Expression, ast.BinOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Unary
        ast.Load, ast.Constant, ast.Call)
 
 
-def compile_metric(expr: str):
-    """Whitelisted numeric expression over FEATURES and n('<tool>') -> code object. Raises ValueError."""
+def compile_metric(expr: str, names=None, calls=("n", "min", "max", "abs"), what: str = "behaviour"):
+    """Whitelisted numeric expression over `names` (default FEATURES) and the functions `calls` -> code object.
+    Raises ValueError."""
+    names = FEATURES if names is None else names
     if not isinstance(expr, str) or not expr.strip() or len(expr) > 200:
-        raise ValueError("behaviour must be a non-empty expression of <= 200 chars")
-    tree = ast.parse(expr.strip(), mode="eval")
+        raise ValueError(f"{what} must be a non-empty expression of <= 200 chars")
+    try:
+        tree = ast.parse(expr.strip(), mode="eval")
+    except SyntaxError as e:
+        raise ValueError(f"{what} is not an expression: {e.msg}") from None
     for node in ast.walk(tree):
         if not isinstance(node, _OK):
-            raise ValueError(f"disallowed syntax: {type(node).__name__}")
-        if isinstance(node, ast.Name) and node.id not in FEATURES and node.id not in ("n", "min", "max", "abs"):
-            raise ValueError(f"unknown feature {node.id!r}")
-        if isinstance(node, ast.Call) and not (isinstance(node.func, ast.Name) and node.func.id in ("n", "min", "max", "abs")):
-            raise ValueError("only n(), min(), max(), abs() may be called")
+            raise ValueError(f"disallowed syntax in {what}: {type(node).__name__}")
+        if isinstance(node, ast.Name) and node.id not in names and node.id not in calls:
+            raise ValueError(f"unknown feature {node.id!r} in {what} (known: {', '.join(names)})")
+        if isinstance(node, ast.Call) and not (isinstance(node.func, ast.Name) and node.func.id in calls):
+            raise ValueError(f"only {', '.join(c + '()' for c in calls)} may be called in {what}")
     return compile(tree, "<metric>", "eval")
 
 
@@ -145,6 +152,141 @@ def metric(code, f: dict) -> float | None:
         return float(eval(code, {"__builtins__": {}}, env))  # noqa: S307 - whitelisted AST, no builtins
     except Exception:
         return None
+
+
+# ---------------------------------------------------------------- precondition of an edit, measured on saved runs
+STEP_FEATURES = {
+    "step": "number of this executed tool call in its run (1 = first)",
+    "step_frac": "step / step budget (0..1)",
+    "steps_left": "step budget - step",
+    "result_chars": "characters of the result this call returned",
+    "is_error": "1 if that result is a short error-like message",
+    "is_repeat": "1 if the same tool was already called with the same arguments in this run",
+    "dup_result": "1 if an earlier call of this run returned exactly the same result",
+    "same_tool_run": "consecutive calls of the same tool ending at this one",
+    "new_tool": "1 if this tool is used for the first time in the run",
+    "tools_so_far": "different tools used so far in the run",
+    "history_chars": "characters of all results of the run so far, this one included",
+    "idle_replies": "model replies since the previous executed call that led to no executed call",
+    "reply_chars": "characters of text the model wrote together with this call",
+    "is_finish": "1 if this call submits the final answer",
+    "answer_len": "characters of that final answer (0 if not a final answer)",
+    "answer_hedged": "1 if it is a final answer saying unknown / could not be determined",
+    "is_last": "1 if this is the last executed call of the run (is_last and not is_finish: the run ended unanswered)",
+}
+
+
+def step_rows(path: str, fin: str | None) -> list[dict]:
+    """STEP_FEATURES at every executed call of a saved run: the state a component could test at that point."""
+    ev = V.load_events(path)
+    budget = max(1, int(next((e for e in ev if e.get("type") == "task"), {}).get("max_steps") or 30))
+    rows, calls, results, tools = [], set(), set(), []
+    hist = idle = reply = 0
+    for e in ev:
+        if e.get("type") == "llm" and "check" not in e:
+            idle += 1
+            reply = len(str(e.get("content") or ""))
+        if e.get("type") != "step":
+            continue
+        tool, obs = e.get("tool"), str(e.get("observation") or "")
+        key = (tool, json.dumps(e.get("args"), sort_keys=True, default=str))
+        is_fin = bool(fin and tool == fin)
+        ans = " ".join(str(v) for v in (e.get("args") or {}).values()) if is_fin and isinstance(e.get("args"), dict) else ""
+        run_len = 1
+        for t in reversed(tools):
+            if t != tool:
+                break
+            run_len += 1
+        hist += len(obs)
+        n = len(rows) + 1
+        rows.append({"step": n, "step_frac": n / budget, "steps_left": max(0, budget - n), "result_chars": len(obs),
+                     "is_error": int(_is_error(obs)), "is_repeat": int(key in calls),
+                     "dup_result": int(bool(obs) and obs in results), "same_tool_run": run_len,
+                     "new_tool": int(tool not in tools), "tools_so_far": len(set(tools) | {tool}),
+                     "history_chars": hist, "idle_replies": max(0, idle - 1), "reply_chars": reply,
+                     "is_finish": int(is_fin), "answer_len": len(ans) if is_fin else 0,
+                     "answer_hedged": int(is_fin and (not ans.strip() or bool(R._HEDGE.search(ans[:400])))),
+                     "is_last": 0})
+        calls.add(key)
+        results.add(obs)
+        tools.append(tool)
+        idle = reply = 0
+    if rows:
+        rows[-1]["is_last"] = 1
+    return rows
+
+
+def compile_when(expr: str):
+    return compile_metric(expr, STEP_FEATURES, ("min", "max", "abs"), what="when")
+
+
+def when(code, recs: list[dict], srows) -> dict:
+    """Where the precondition of an edit holds on saved runs (free): the runs and steps it could act on, and whether
+    those are rather the failed runs. `srows(path)` -> step_rows of that run."""
+    runs = steps = total = 0
+    hit = {True: 0, False: 0}
+    n = {True: 0, False: 0}
+    first = []
+    for x in recs:
+        rows = srows(x["trajectory_path"])
+        total += len(rows)
+        at = []
+        for f in rows:
+            try:
+                if eval(code, {"__builtins__": {}}, {**f, "min": min, "max": max, "abs": abs}):  # noqa: S307 - whitelisted AST
+                    at.append(f["step"])
+            except Exception:
+                pass
+        ok = bool(x.get("success"))
+        n[ok] += 1
+        if at:
+            runs += 1
+            steps += len(at)
+            hit[ok] += 1
+            first.append(at[0])
+    first.sort()
+    return {"runs": runs, "n_runs": len(recs), "steps": steps, "n_steps": total,
+            "in_failed": round(hit[False] / n[False], 3) if n[False] else None,
+            "in_success": round(hit[True] / n[True], 3) if n[True] else None,
+            "first_step": first[len(first) // 2] if first else None}
+
+
+def when_view(expr: str, w: dict) -> str:
+    return (f"`{expr}` holds at {w['steps']} of {w['n_steps']} executed calls, in {w['runs']} of {w['n_runs']} saved "
+            f"runs" + (f" (first at step {w['first_step']} in the median run; in {w['in_failed']:.0%} of failed and "
+                       f"{w['in_success']:.0%} of successful runs)" if w["runs"] and None not in (w["in_failed"], w["in_success"]) else ""))
+
+
+def check_when(c: dict, recs: list[dict], srows) -> dict:
+    """Stage 0 gate: a hypothesis must state where it acts, and that situation must exist on saved runs. Sets
+    c['when_obs']. Raises ValueError with what was measured (the proposer answers again with it in hand)."""
+    if not c.get("when"):
+        raise ValueError("`when` is missing: the step-level precondition of the edit")
+    w = when(compile_when(c["when"]), recs, srows)
+    need = max(2, int(WHEN_MIN_SHARE * w["n_runs"] + 0.999))
+    if w["runs"] < need:
+        raise ValueError(f"the precondition {when_view(c['when'], w)}; an edit needs a situation found in at least "
+                         f"{need} runs. Pick the situation from the step-level table")
+    c["when_obs"] = w
+    return w
+
+
+def step_facts(recs: list[dict], srows) -> str:
+    """Base rates of every step-level feature: what situations exist on runs of this harness."""
+    per = [srows(x["trajectory_path"]) for x in recs]
+    allr = [f for rows in per for f in rows]
+    out = []
+    for k in STEP_FEATURES if allr else ():
+        vals = sorted(f[k] for f in allr)
+        if vals[-1] <= 1 and k not in ("step_frac",):
+            out.append(f"  {k}: true at {sum(1 for v in vals if v)} of {len(vals)} calls, in "
+                       f"{sum(1 for rows in per if any(f[k] for f in rows))} of {len(per)} runs")
+        else:
+            fmt = (lambda v: f"{v:.2f}") if k == "step_frac" else (lambda v: f"{v:.0f}")
+            out.append(f"  {k}: median {fmt(vals[len(vals) // 2])}, 90% <= {fmt(vals[(9 * len(vals)) // 10])}, max "
+                       f"{fmt(vals[-1])}; above 0 in {sum(1 for rows in per if any(f[k] > 0 for f in rows))} of "
+                       f"{len(per)} runs")
+    return "\n".join(out) or "  (no saved steps)"
 
 
 def observe(code, direction: str, recs: list[dict], feats: dict) -> dict:
@@ -461,7 +603,7 @@ calls of that tool; tool names seen: {tools}); `direction` says which way the ed
 numbers, + - * / ( ), min, max, abs: for example `n_actions - distinct_actions` or `obs_chars / max(1, n_actions)`.
 No mean(...), no second metric, no words.
 {features}
-Rules:
+{when_block}Rules:
 - General principle only, of the form "precondition observable during a run -> action of the harness". Nothing
   specific to a task: no entities, answers, task text; no tool names inside the component (tools are found through
   their schemas at run time).
@@ -473,7 +615,7 @@ Answer ONLY with JSON:
  "candidates": [{{"name": "<snake_case, <= 24 chars>", "slot": "tool_policy|context_mgmt|verifier|agent_loop",
    "edit_type": "<one of the kinds above>", "failure_mode": "<the failure mode it targets>",
    "hypothesis": "<If the agent ... then it succeeds more often, because ...>",
-   "behaviour": "<expression>", "direction": "up|down",
+   "behaviour": "<expression>", "direction": "up|down",{when_field}
    "mechanism": "<precondition -> action, 2-4 sentences: exactly what the component does>"}}, ...]}}"""
 
 IMPL = """You implement ONE edit of a harness component as a new variant file. The agent model is fixed.
@@ -483,7 +625,7 @@ slot: {slot}
 hypothesis: {hypothesis}
 expected behaviour change: `{behaviour}` goes {direction}
 mechanism: {mechanism}
-
+{when}
 ## Interfaces (h0/protocols.py and benchmarks/common.py)
 {protocols}
 
@@ -524,6 +666,19 @@ block below itself):
 ```python
 <complete file>
 ```"""
+
+
+WHEN_BLOCK = """`when` is the situation in which the edit acts: ONE expression that is true or false at ONE executed tool call
+of a run, from these step-level features (same syntax as `behaviour`, plus and / or / not and comparisons; no n()):
+{step_features}
+How often each holds on the saved runs of the current harness:
+{step_facts}
+The pipeline evaluates `when` on every executed call of the saved runs BEFORE any code is written. A situation that
+does not occur there is rejected, however plausible; prefer one found more often in failed runs than in successful
+ones. An edit that acts on every call uses `step >= 1`. If the situation you mean has no exact feature, state the
+closest observable one and make the mechanism test exactly that.
+"""
+WHEN_FIELD = '\n   "when": "<step-level expression>",'
 
 
 def feat_table(recs: list[dict], feats: dict) -> str:
@@ -663,7 +818,8 @@ def ledger_view(ledger: list[dict]) -> str:
             f"    mechanism: {e['mechanism'][:260]}\n"
             f"    metric `{e['behaviour']}` ({e['direction']}); saved runs: {o.get('agree', 0)} tasks agree / "
             f"{o.get('disagree', 0)} disagree; runs touched: {e.get('coverage', '?')}\n"
-            f"    behaviour: {sh.get('before')} -> {sh.get('after')} ({sh.get('as_predicted', 0)} as predicted / "
+            + (f"    precondition: {when_view(e['when'], e['when_obs'])}\n" if e.get("when_obs") else "")
+            + f"    behaviour: {sh.get('before')} -> {sh.get('after')} ({sh.get('as_predicted', 0)} as predicted / "
             f"{sh.get('opposite', 0)} opposite of {sh.get('n', 0)}); outcome: {t.get('W', 0)} wins / {t.get('L', 0)} "
             f"losses of {t.get('n', 0)} branches\n    verdict on the hypothesis: {e['verdict']}"
             + (f"\n    other clear effects: {effects_view(e['effects'])}" if e.get("effects") else "")
@@ -681,6 +837,10 @@ def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path,
                                "`mechanism` how a re-proposed open idea avoids its recorded failure.\n")
                         if ctx.get("graph") else "",
                         tools=sorted(ctx["tools"]),
+                        when_block=WHEN_BLOCK.format(
+                            step_features="\n".join(f"  {k}: {v}" for k, v in STEP_FEATURES.items()),
+                            step_facts=ctx["step_facts"]) if ctx.get("step_facts") else "",
+                        when_field=WHEN_FIELD if ctx.get("step_facts") else "",
                         features="\n".join(f"  {k}: {v}" for k, v in FEATURES.items()))
     if feedback:
         prompt += "\n\nYour previous answer could not be used:\n" + feedback + "\nAnswer again, complete."
@@ -715,7 +875,10 @@ def validate_hyp(h: dict, ledger: list[dict]) -> dict:
     for e in ledger:
         if e["verdict"].startswith("REFUTED") and re.sub(r"\s+", "", e["behaviour"]) == norm and e["direction"] == direction:
             raise ValueError(f"behaviour `{beh}` {direction} was refuted in round {e['round']}")
-    return {"name": name, "slot": slot, "direction": direction, "behaviour": beh,
+    wh = str(h.get("when") or "").strip()
+    if wh:
+        compile_when(wh)
+    return {"name": name, "slot": slot, "direction": direction, "behaviour": beh, "when": wh,
             "hypothesis": str(h["hypothesis"]).strip()[:600], "mechanism": str(h["mechanism"]).strip()[:900],
             "edit_type": str(h.get("edit_type") or "")[:60], "failure_mode": str(h.get("failure_mode") or "")[:80]}
 
@@ -751,6 +914,10 @@ def implement(client, bench: str, cand: dict, parent: Path, dest: Path, feedback
     proto = proto[proto.find("@dataclass"):proto.find("SLOTS =")]
     prompt = IMPL.format(slot=slot, hypothesis=cand["hypothesis"], behaviour=cand["behaviour"],
                          direction=cand["direction"], mechanism=cand["mechanism"], protocols=proto, code=code,
+                         when=("precondition, measured on saved runs of the current harness: "
+                               + when_view(cand["when"], cand["when_obs"]) + ". The condition in your code must hold "
+                               "in that situation, tested on what the component itself receives.\n")
+                         if cand.get("when_obs") else "",
                          vname=vname, base=cur["name"], base_cfg=json.dumps(cur.get("config") or {}),
                          imports=", ".join(sorted(IMPORTS - {"__future__"})), max_literal=MAX_LITERAL,
                          shapes=("\n## What tool results look like on saved runs (structure only; read fields by these "
@@ -955,6 +1122,8 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
                        "never held, or its action left every model request and every executed action unchanged. "
                        "Make the condition one that holds on ordinary runs of this harness."
                        + ("\n" + tr if tr else "")
+                       + (f"\nThe situation the edit is for exists: {when_view(cand['when'], cand['when_obs'])}. Your "
+                          "code must act there." if cand.get("when_obs") else "")
                        + (" The saved runs look like this:\n" + facts if facts else ""))
             else:
                 return {"root": root, "dry": dry, "map": dmap, "attempts": attempt + 1}
@@ -969,6 +1138,7 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
     code = compile_metric(cand["behaviour"])
     row = {k: cand[k] for k in ("id", "name", "slot", "edit_type", "failure_mode", "hypothesis", "mechanism",
                                 "behaviour", "direction", "observational")}
+    row.update({k: cand[k] for k in ("when", "when_obs") if cand.get(k)})
     row.update(round=r, verdict="", status="rejected")
     for rev in range(2):
         try:
@@ -982,6 +1152,8 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
         root, dmap = b["root"], b["map"]
         touched = [s for s, x in zip(cur, b["dry"]) if x.get("branched")]
         row.update(coverage=dmap["coverage"], map=dmap, variant=cand["vname"])
+        if cand.get("when_obs"):  # runs the code changed against runs where its stated situation holds
+            row["when_touched"] = f"{dmap['touched']} runs changed / {cand['when_obs']['runs']} where the precondition holds"
         order = list(touched)
         rng.shuffle(order)
         tag = f"{B.TAG}_{bench}_{root.name}"
@@ -1130,6 +1302,12 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         if path not in fcache:
             fcache[path] = features(path, fin)
         return fcache[path]
+    scache: dict[str, list] = {}
+
+    def srows(path):
+        if path not in scache:
+            scache[path] = step_rows(path, fin)
+        return scache[path]
     instructions, tools = [], set()
     for rec in cur + curv:
         for e in V.load_events(rec["trajectory_path"]):
@@ -1148,7 +1326,7 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
            "params": {"n_hyp": N_HYP, "n_cand": N_CAND, "n_probe": N_PROBE, "n_screen": N_SCREEN, "k_val": K_VAL,
                       "k_test": K_TEST, "alpha": V.ALPHA, "margin": V.MARGIN, "cgraph": CGRAPH,
                       "impl_tries": IMPL_TRIES, "merge_alpha": MERGE_ALPHA, "multi_merge": MULTI_MERGE,
-                      "early_stop": EARLY_STOP}}
+                      "early_stop": EARLY_STOP, "when": WHEN, "when_min_share": WHEN_MIN_SHARE}}
     stall, n_c = 0, 0
     for r in range(1, cfg["rounds"] + 1):
         C.budget_check(f"b4[{bench}] round {r}")
@@ -1169,6 +1347,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                "reports": reports_view(reps), "tools": tools,
                "digests": [C.summarize_trajectory(x["trajectory_path"], max_events=24, max_chars=300, task_chars=400)
                            for x in dig[:5]]}
+        if WHEN:
+            ctx["step_facts"] = step_facts(cur, srows)
         graph = GR.build(ledger)
         (ws / "graph.json").write_text(json.dumps({"round": r, **graph}, indent=1, default=str))
         ctx["graph"] = GR.view(graph) if CGRAPH else ""
@@ -1180,17 +1360,20 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             for h in (d.get("candidates") or [])[:N_HYP + 2]:
                 try:
                     c = validate_hyp(h, ledger)
+                    if WHEN:
+                        check_when(c, cur, srows)
                     c["observational"] = observe(compile_metric(c["behaviour"]), c["direction"], cur, fmap)
                     hyps.append(c)
                 except Exception as e:
                     bad.append({"name": str((h or {}).get("name"))[:40] if isinstance(h, dict) else "?",
                                 "behaviour": str((h or {}).get("behaviour"))[:120] if isinstance(h, dict) else "",
-                                "reason": str(e)[:200]})
+                                "when": str((h or {}).get("when"))[:120] if isinstance(h, dict) else "",
+                                "reason": str(e)[:400]})
             if bad:
                 rd.setdefault("invalid", []).extend(bad)
             if len(hyps) >= N_CAND:
                 break
-            why = "\n".join(f"- {b['name']}: behaviour `{b['behaviour']}` rejected ({b['reason']})" for b in bad) \
+            why = "\n".join(f"- {b['name']}: rejected ({b['reason']})" for b in bad) \
                 or "- no usable candidates"
         rd["analysis"] = str(d.get("analysis", ""))[:600]
         ranked = select(hyps)
@@ -1209,7 +1392,9 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             cand = {**hyps[i], "id": f"c{n_c}"}
             cand["vname"] = f"{cand['id']}_{cand['name']}"
             print(f"  [b4 {bench}] round {r} {cand['id']} {cand['slot']}/{cand['name']}: `{cand['behaviour']}` "
-                  f"{cand['direction']} obs={cand['observational']}", flush=True)
+                  f"{cand['direction']} obs={cand['observational']} when=`{cand.get('when')}` "
+                  f"{ {k: (cand.get('when_obs') or {}).get(k) for k in ('runs', 'n_runs', 'in_failed', 'in_success')} }",
+                  flush=True)
             row = trial(client, bench, tr_split, cand, inc_root, cur, ws, out, linter, cfg, rng, fin, feats, r,
                         ctx["facts"],
                         history=GR.attempts(graph, cand["behaviour"], cand["direction"]) if CGRAPH else "")
@@ -1237,7 +1422,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                 print(f"  [b4 {bench}] round {r} {c2['id']}: shift={row2.get('shift')} outcome={row2.get('outcome')} "
                       f"-> {row2['verdict']} | effects: {effects_view(row2.get('effects'))} | review: "
                       f"{row2.get('review')} -> {row2['status']}", flush=True)
-        rd["hypotheses"] = [{**{k: hyps[i][k] for k in ("name", "slot", "behaviour", "direction", "observational")},
+        rd["hypotheses"] = [{**{k: hyps[i].get(k) for k in ("name", "slot", "behaviour", "direction", "observational",
+                                                            "when", "when_obs")},
                              "chosen": i in tried} for i in ranked]
         # stage 4: confirmation on held-out tasks, strongest training evidence first. After a merge, an admitted
         # edit of another slot is placed on the new harness and confirmed against it (its training evidence was
