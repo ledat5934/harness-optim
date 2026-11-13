@@ -450,3 +450,28 @@ Chạy bằng pipeline cuối cùng, không sửa gì giữa chừng (chỉ resu
 - **Tiêu chí gộp mới làm đúng việc:** không sửa đổi nào có lợi ích nhỏ lọt qua với lý do "tăng thành công".
 - **Một lỗi cổng kiểm tra làm mất ứng viên đáng chú ý nhất.** c2 (verifier, hoãn chấp nhận câu trả lời còn do dự — cùng họ với c3 đã cho 32% ở `b4v7e`) bị loại 4 lần vì một regex dài 468 ký tự: người viết đã chia thành các đoạn ngắn nối liền nhau nhưng `ast` gộp lại thành một hằng. Đã sửa: mẫu truyền thẳng vào `re` không tính là văn bản hướng dẫn. Lượt `b4v7h` chạy với cổng còn lỗi.
 - **Điều còn thiếu là ý tưởng tốt, không phải code chạy được.** Bốn lượt v7 cho test 33%, 32%, 22%, 21%; hai lượt tốt đều nhờ một sửa đổi ở verifier/kiểm chứng câu trả lời tìm thấy ở vòng 1–2. Pipeline chưa tìm lại được hướng đó một cách ổn định.
+
+## 17. B4 v7 + kiểm tra tiền điều kiện trên run đã lưu — BCP, seed 1 (`b4v7i` dở dang, `b4v7j` đủ 5 vòng)
+
+**Sửa gì** (`baselines/b4_comp.py`, `baselines/b4_diff.py`, `baselines/common.py`, test ở `tests/test_b4_build.py`)
+- **Tiền điều kiện (`when`) cho mỗi giả thuyết** (`B4_WHEN`, `B4_WHEN_MIN`): người đề xuất phải viết một biểu thức trên các đặc trưng từng bước của trajectory (`STEP_FEATURES`: bước, kích thước kết quả, lỗi, gọi lặp, câu trả lời còn do dự, …) mô tả tình huống mà sửa đổi nhắm tới. Trước khi viết code, biểu thức được đo trên 150 run H0 train đã lưu; giả thuyết bị loại nếu tình huống xuất hiện ở dưới 5% số run. Người đề xuất được xem bảng tần suất nền của các đặc trưng (chia theo run đúng/sai).
+- **Bốn bản sửa sau `b4v7i`** (commit 2fb393c): (1) luật "số dài" của cổng khái quát hoá nêu rõ hằng nào vi phạm và bỏ qua số đã có trong harness; (2) run thử offline có đủ câu trả lời giả cho sửa đổi kéo dài vòng lặp; (3) tách `no_call_replies` (model trả lời không gọi tool) khỏi `refused_calls` (finish bị từ chối); (4) **token của nhánh giờ tính cả phần phát lại** — trước đó nhánh chỉ tính token sau điểm rẽ, nên mọi so sánh token nhánh/gốc ở §13–§16 đều thiên về phía "tiết kiệm" (ví dụ c9 của `b4v7h`: val báo 27k→15.7k, test chạy lại thật là 24k→18k).
+
+**Tần suất nền trên 150 run H0 train:** câu trả lời cuối còn do dự ở 88% run sai và 0% run đúng; không có lỗi tool, không có lệnh gọi lặp, không có run bỏ trả lời; run dùng 3–5 trên 25 bước.
+
+**Kết quả**
+
+| Lượt | Ứng viên | Gộp | Test chạy lại |
+|---|---|---|---|
+| H0 | – | – | 24% |
+| `b4v7i` (tiền điều kiện, cổng cũ; bị dừng ở vòng 4 do giới hạn 2 giờ, chưa chấm test) | 12 | vòng 1: c2 verifier/từ chối finish còn do dự (train 5 thắng/0 thua trên 64 nhánh, val xác nhận; token/run trên nhánh bị chạm ~24k→250k) | – |
+| `b4v7j` (tiền điều kiện + bốn bản sửa, chạy lại từ đầu) | 17 | **không gộp gì** | **24% (= H0)** |
+
+`b4v7j` theo ứng viên: 8 INEFFECTIVE (code chạy nhưng không gây hành vi dự đoán), 3 INCONCLUSIVE, 1 REFUTED, 2 NOT CONFIRMED trên val (c8 giảm token; c13 3 thắng/0 thua train), 2 DEAD CODE, 1 NOT BUILT.
+
+**Đọc kết quả**
+- **Kiểm tra tiền điều kiện làm đúng một việc:** nó đưa đặc trưng phân biệt mạnh nhất (câu trả lời còn do dự: 88% run sai, 0% run đúng) ra trước mắt người đề xuất, và ở cả hai lượt ý tưởng verifier được đề xuất ngay vòng 1.
+- **Nhưng nó không chọn giả thuyết theo độ phân biệt.** Ở `b4v7j`, 9/17 giả thuyết dùng tiền điều kiện luôn đúng (`result_chars > 8000` 7 lần, `step >= 1`, …): qua ngưỡng 5% nhưng không nói gì về run sai. Ngưỡng tối thiểu loại được ý tưởng "không bao giờ xảy ra", không loại được ý tưởng "lúc nào cũng xảy ra".
+- **Cùng một ý tưởng, hai bản cài đặt, hai kết cục.** c2 ở `b4v7i` từ chối kiên trì (5 thắng/0 thua, tốn gấp 10 token); c2 ở `b4v7j` chỉ từ chối một lần và chỉ chạm 18 run trong khi tiền điều kiện đúng ở 106 run (1 thắng/0 thua trên 36 nhánh) → không kết luận được và bị bỏ. Pipeline đo được khoảng cách "tiền điều kiện đúng ở 106 run, code chạm 18" (`when_touched`) nhưng chưa dùng nó để yêu cầu viết lại.
+- **Kết quả phụ thuộc may rủi của khâu viết code**, không ổn định qua các lượt: năm lượt v7 đủ vòng cho test 33%, 32%, 22%, 21%, 24%.
+- **Việc nên làm tiếp (chưa làm):** (a) khi code chạm ít run hơn hẳn số run có tiền điều kiện, trả lại cho người viết sửa; (b) xếp hạng/ưu tiên giả thuyết theo độ phân biệt (tỉ lệ ở run sai trừ tỉ lệ ở run đúng), không chỉ ngưỡng tối thiểu; (c) không áp luật "số dài" lên chuỗi mô tả trong `reg.register` (model không bao giờ thấy chuỗi này; c11 mất vì nó).
