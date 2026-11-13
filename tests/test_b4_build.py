@@ -166,3 +166,29 @@ def test_served_responses_keep_their_tokens():
     from baselines import b4_diff as D
     r = D._saved({"content": "c", "tool_calls": [], "pt": 120, "ct": 30})
     assert (r.prompt_tokens, r.completion_tokens, r.cost) == (120, 30, 0.0)
+
+
+def test_a_number_in_the_registration_description_is_not_a_literal():
+    lin = M.B.Linter([], [], set())
+    src = 'def register(reg):\n    reg.register("verifier", "v", lambda c: 1, "keeps results under 8000 chars")\n'
+    assert M.lint_code(src, lin, ["zzbench"]) is None
+    assert M.lint_code('X = "under 8000 chars"\n' + src, lin, ["zzbench"]) is not None
+
+
+def test_hypotheses_about_failed_runs_get_code_first():
+    obs = {"agree": 0, "disagree": 0}
+    hyps = [{"observational": obs, "when_obs": {"in_failed": 1.0, "in_success": 1.0}},
+            {"observational": obs, "when_obs": {"in_failed": 0.03, "in_success": 0.45}},
+            {"observational": obs, "when_obs": {"in_failed": 0.88, "in_success": 0.0}},
+            {"observational": obs}]
+    assert M.select(hyps) == [2, 0, 3, 1]
+    assert M.when_disc({"in_failed": None, "in_success": 0.5}) == 0.0
+
+
+def test_an_edit_narrower_than_its_precondition_is_sent_back():
+    w = {"runs": 106, "n_runs": 150, "steps": 106, "n_steps": 700, "in_failed": 0.88, "in_success": 0.0, "first_step": 5}
+    cand = {"when": "is_finish == 1 and answer_hedged == 1", "when_obs": w}
+    why = M.reach_gap(cand, {"touched": 18, "n": 150})
+    assert "18 of 150" in why and "answer_hedged: " in why and "is_finish: " in why and "is_last" not in why
+    assert M.reach_gap(cand, {"touched": 60, "n": 150}) == ""
+    assert M.reach_gap({"when": "step >= 1"}, {"touched": 1, "n": 150}) == ""

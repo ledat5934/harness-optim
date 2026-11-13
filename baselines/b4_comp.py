@@ -23,6 +23,9 @@ in later rounds: it accumulates which behaviours are worth causing for this agen
 
 Env: B4_CGRAPH (1: causal map of the ledger, baselines/b4_graph.py, in the prompts), B4_N_HYP (5), B4_N_CAND (3), B4_N_PROBE (16), B4_N_SCREEN (64), B4_K_VAL (3), B4_K_TEST (2), plus B4_TAG,
 B4_SEED, B4_RESUME, B4_ALPHA of the earlier versions.
+Preconditions: B4_WHEN (1), B4_WHEN_MIN (0.05: least share of saved runs where `when` holds), B4_WHEN_DISC (0.2: gap
+between failed and successful runs that orders hypotheses), B4_REACH_MIN (0.5) and B4_REACH_TRIES (2): an edit that
+changes fewer than that share of the runs where its precondition holds is sent back for a rewrite.
 """
 from __future__ import annotations
 
@@ -60,6 +63,9 @@ MULTI_MERGE = os.environ.get("B4_MULTI_MERGE", "1") == "1"   # several edits of 
 CGRAPH = os.environ.get("B4_CGRAPH", "1") == "1"    # causal map of the ledger in the prompts (0: ledger only)
 WHEN = os.environ.get("B4_WHEN", "1") == "1"         # hypotheses state a step-level precondition, measured before code
 WHEN_MIN_SHARE = float(os.environ.get("B4_WHEN_MIN", "0.05"))  # least share of saved runs where it must hold
+WHEN_DISC = float(os.environ.get("B4_WHEN_DISC", "0.2"))  # in_failed - in_success that moves a hypothesis up (or, negated, down)
+REACH_MIN = float(os.environ.get("B4_REACH_MIN", "0.5"))  # share of the runs where `when` holds that the code must change
+REACH_TRIES = int(os.environ.get("B4_REACH_TRIES", "2"))  # rewrites asked for an edit that reaches fewer (0: off)
 OBS_MARGIN = 2                                      # tasks (agree - disagree) for saved runs to move a hypothesis
 SHIFT_MARGIN, SHIFT_ALPHA = 3, 0.1                  # behaviour shift: net pairs in the stated direction, sign test
 MAX_LITERAL = 400                                   # longest string constant in a component (no prompt edits)
@@ -255,6 +261,13 @@ def when(code, recs: list[dict], srows) -> dict:
             "first_step": first[len(first) // 2] if first else None}
 
 
+def when_disc(w: dict | None) -> float:
+    """How much more often a precondition holds in failed than in successful saved runs (-1..1; 0 when unknown)."""
+    if not w or None in (w.get("in_failed"), w.get("in_success")):
+        return 0.0
+    return round(w["in_failed"] - w["in_success"], 3)
+
+
 def when_view(expr: str, w: dict) -> str:
     return (f"`{expr}` holds at {w['steps']} of {w['n_steps']} executed calls, in {w['runs']} of {w['n_runs']} saved "
             f"runs" + (f" (first at step {w['first_step']} in the median run; in {w['in_failed']:.0%} of failed and "
@@ -279,17 +292,25 @@ def step_facts(recs: list[dict], srows) -> str:
     """Base rates of every step-level feature: what situations exist on runs of this harness."""
     per = [srows(x["trajectory_path"]) for x in recs]
     allr = [f for rows in per for f in rows]
+    oks = [bool(x.get("success")) for x in recs]
+
+    def split(k):  # share of failed / of successful runs where the feature is above 0 at some call
+        sh = {o: [any(f[k] > 0 for f in rows) for rows, ok in zip(per, oks) if ok is o] for o in (False, True)}
+        if not sh[False] or not sh[True]:
+            return ""
+        return (f" ({sum(sh[False]) / len(sh[False]):.0%} of failed, {sum(sh[True]) / len(sh[True]):.0%} of "
+                "successful runs)")
     out = []
     for k in STEP_FEATURES if allr else ():
         vals = sorted(f[k] for f in allr)
         if vals[-1] <= 1 and k not in ("step_frac",):
             out.append(f"  {k}: true at {sum(1 for v in vals if v)} of {len(vals)} calls, in "
-                       f"{sum(1 for rows in per if any(f[k] for f in rows))} of {len(per)} runs")
+                       f"{sum(1 for rows in per if any(f[k] for f in rows))} of {len(per)} runs" + split(k))
         else:
             fmt = (lambda v: f"{v:.2f}") if k == "step_frac" else (lambda v: f"{v:.0f}")
             out.append(f"  {k}: median {fmt(vals[len(vals) // 2])}, 90% <= {fmt(vals[(9 * len(vals)) // 10])}, max "
                        f"{fmt(vals[-1])}; above 0 in {sum(1 for rows in per if any(f[k] > 0 for f in rows))} of "
-                       f"{len(per)} runs")
+                       f"{len(per)} runs" + split(k))
     return "\n".join(out) or "  (no saved steps)"
 
 
@@ -513,6 +534,10 @@ def lint_code(src: str, linter: B.Linter, bench_names, known: set = frozenset())
                 and isinstance(node.func.value, ast.Name) and node.func.value.id == "re" \
                 and isinstance(node.args[0], ast.Constant):
             patterns.add(id(node.args[0]))
+    labels = set()  # the description given to reg.register is read by people and the proposer, never by the agent
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "register":
+            labels.update(id(a) for a in [*node.args, *(k.value for k in node.keywords)] if isinstance(a, ast.Constant))
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for a in node.names:
@@ -534,7 +559,7 @@ def lint_code(src: str, linter: B.Linter, bench_names, known: set = frozenset())
                 return (f"the string constant starting {s[:50]!r} has {len(s)} chars, over the limit of "
                         f"{MAX_LITERAL}: long instruction text is a prompt edit, not a component edit; a long "
                         "pattern or table must be shortened or built from shorter pieces")
-            if re.search(r"\d{4,}", s) and s not in known:
+            if re.search(r"\d{4,}", s) and s not in known and id(node) not in labels:
                 return (f"the string constant {s[:80]!r} contains a number of 4 or more digits, which is treated as "
                         "a task-specific literal: keep numbers in numeric parameters, not inside strings")
     low = src.lower()
@@ -679,8 +704,9 @@ of a run, from these step-level features (same syntax as `behaviour`, plus and /
 How often each holds on the saved runs of the current harness:
 {step_facts}
 The pipeline evaluates `when` on every executed call of the saved runs BEFORE any code is written. A situation that
-does not occur there is rejected, however plausible; prefer one found more often in failed runs than in successful
-ones. An edit that acts on every call uses `step >= 1`. If the situation you mean has no exact feature, state the
+does not occur there is rejected, however plausible. Hypotheses whose situation is found clearly more often in failed
+runs than in successful ones get code FIRST; a situation found in every run says nothing about why runs fail and goes
+behind them, one found mostly in successful runs goes last. An edit that acts on every call uses `step >= 1`. If the situation you mean has no exact feature, state the
 closest observable one and make the mechanism test exactly that.
 """
 WHEN_FIELD = '\n   "when": "<step-level expression>",'
@@ -1092,6 +1118,20 @@ def trace_report(src: str, hit: set, n_runs: int, base: set = frozenset(), max_r
     return "\n".join(out)
 
 
+def reach_gap(cand: dict, dmap: dict) -> str:
+    """An edit that changes far fewer saved runs than its own precondition holds in tests a narrower idea than the
+    hypothesis. Returns what to tell the implementer ('' when the reach is fine or there is no measured precondition)."""
+    w = cand.get("when_obs")
+    if not REACH_TRIES or not w or not w.get("runs") or dmap["touched"] >= REACH_MIN * w["runs"]:
+        return ""
+    used = [k for k in STEP_FEATURES if re.search(r"\b%s\b" % k, cand.get("when") or "")]
+    return (f"the edit works but is too narrow: it changed {dmap['touched']} of {dmap['n']} saved runs, while its "
+            f"precondition {when_view(cand['when'], w)}. The hypothesis is about ALL of those runs. Make the condition "
+            "in the code test the precondition as the pipeline measures it, and act at EVERY call where it holds (not "
+            "only the first time, unless the mechanism says so). How the pipeline measures it:\n"
+            + "\n".join(f"  {k}: {STEP_FEATURES[k]}" for k in used))
+
+
 def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, linter, cfg, tries: int = 0,
           feedback: str = "", suffix: str = "", facts: str = "", history: str = "") -> dict:
     """Code + gates for one candidate: static gate, lint, dry replay on the saved train runs (the edit must change
@@ -1100,6 +1140,7 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
     one proposer call each and no agent run."""
     why = ""
     shapes = obs_shapes(cur)
+    best, asked = None, 0  # widest-reaching build that passed every gate; rewrites asked for reach
     for attempt in range(tries or IMPL_TRIES):
         root = ws / "roots" / f"{cand['id']}{suffix}_a{attempt}"
         ok, why = implement(client, bench, cand, inc_root, root, feedback, shapes, history)
@@ -1131,9 +1172,17 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
                           "code must act there." if cand.get("when_obs") else "")
                        + (" The saved runs look like this:\n" + facts if facts else ""))
             else:
-                return {"root": root, "dry": dry, "map": dmap, "attempts": attempt + 1}
+                got = {"root": root, "dry": dry, "map": dmap, "attempts": attempt + 1}
+                if best is None or dmap["touched"] > best["map"]["touched"]:
+                    best = got
+                short = reach_gap(cand, dmap)
+                if not short or asked >= REACH_TRIES:
+                    return best
+                asked, why = asked + 1, short
         print(f"    [{cand['id']}] attempt {attempt}: {why[:160]}", flush=True)
         feedback = why + prev_code(root, cand)
+    if best:  # a narrow edit that works is still measured
+        return best
     raise Reject("NOT BUILT" if "changed nothing" not in why else "DEAD CODE", why[:400])
 
 
@@ -1265,11 +1314,16 @@ def public(row: dict) -> dict:
 
 def select(hyps: list[dict]) -> list[int]:
     """Order in which hypotheses get code. The saved runs rarely contain enough tasks with both outcomes to rank by
-    them: the proposer's own order is kept, moved only by clear observational evidence (for: first, against: last)."""
+    them: the proposer's own order is kept, moved only by clear observational evidence (for: first, against: last)
+    and then by where the precondition holds (clearly more in failed runs: first; more in successful runs: last)."""
     def cls(h):
         d = h["observational"]["agree"] - h["observational"]["disagree"]
         return 0 if d >= OBS_MARGIN else 2 if d <= -OBS_MARGIN else 1
-    return sorted(range(len(hyps)), key=lambda i: (cls(hyps[i]), i))
+
+    def tier(h):  # a situation of the failed runs first, one of the successful runs last
+        d = when_disc(h.get("when_obs"))
+        return 0 if d >= WHEN_DISC else 2 if d <= -WHEN_DISC else 1
+    return sorted(range(len(hyps)), key=lambda i: (cls(hyps[i]), tier(hyps[i]), i))
 
 
 def harness_state(recs: list[dict], fmap: dict, merged: list[dict]) -> str:
@@ -1331,7 +1385,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
            "params": {"n_hyp": N_HYP, "n_cand": N_CAND, "n_probe": N_PROBE, "n_screen": N_SCREEN, "k_val": K_VAL,
                       "k_test": K_TEST, "alpha": V.ALPHA, "margin": V.MARGIN, "cgraph": CGRAPH,
                       "impl_tries": IMPL_TRIES, "merge_alpha": MERGE_ALPHA, "multi_merge": MULTI_MERGE,
-                      "early_stop": EARLY_STOP, "when": WHEN, "when_min_share": WHEN_MIN_SHARE}}
+                      "early_stop": EARLY_STOP, "when": WHEN, "when_min_share": WHEN_MIN_SHARE,
+                      "when_disc": WHEN_DISC, "reach_min": REACH_MIN, "reach_tries": REACH_TRIES}}
     stall, n_c = 0, 0
     for r in range(1, cfg["rounds"] + 1):
         C.budget_check(f"b4[{bench}] round {r}")
