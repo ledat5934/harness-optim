@@ -178,7 +178,7 @@ sys.path.insert(0, {str(ROOT / 'tests')!r})
 import test_h0_offline as t
 from benchmarks.common import run_with_env
 from h0.compose import LazyHarness
-llm = t.FakeLLM([t.FakeResp('', [t.tc(1,'inc',{{}})]), t.FakeResp('', [t.tc(2,'inc',{{}})])] + [t.FakeResp('', [t.tc(9,'inc',{{}})])]*20)
+llm = t.FakeLLM([t.FakeResp('', [t.tc(1,'inc',{{}})]), t.FakeResp('', [t.tc(2,'inc',{{}})])] + [t.FakeResp('', [t.tc(9,'inc',{{}})])]*200)
 r = run_with_env('toy','t1', lambda: t.ToyEnv(), LazyHarness({str(root)!r}), llm, run_tag='gate')
 assert r.error is None, r.error
 print('GATE_OK')

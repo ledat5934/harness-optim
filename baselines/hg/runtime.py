@@ -11,6 +11,11 @@ kinds and their hook (the slot taxonomy of docs/idea_v2.md, section 2):
     annotate_obs   S4     a note appended to the observation just returned by a tool
     reject_finish  S7/S8  the finish call is refused with `text` as feedback (before the verifier)
 
+v5 (two-tier preconditions, docs/idea_v3.md P3): a mechanism may add `llm_check`, a short yes/no question about the
+current state of the run. It is asked only when the signal precondition already holds and the mechanism still has
+fires left, at most MAX_CHECKS times per mechanism per episode; the mechanism fires only on YES. The check's tokens
+count toward the episode, and every check is recorded as a `mech_check` event.
+
 Preconditions are expressions over generic, benchmark-independent signals (SIGNALS). They are parsed with a
 whitelist (no attribute access, no subscripts, no calls except n/min/max/abs), so a candidate cannot run code.
 Every firing is recorded in the trajectory as a `mech` event (activation telemetry: a mechanism that never
@@ -163,6 +168,16 @@ def eval_pre_sig(code, sig: dict) -> bool:
 
 
 KINDS = ("guidance", "inject", "annotate_obs", "reject_finish")
+MAX_CHECKS = 3          # v5: llm_check calls per mechanism per episode
+CHECK_PROMPT = """You monitor a run of an AI agent. Answer a question about the CURRENT state of the run.
+Task given to the agent:
+{task}
+
+Most recent part of the run:
+{recent}
+{answer}
+Question: {question}
+Answer with exactly one word: YES or NO."""
 
 
 def validate_mechanism(m: dict) -> dict:
@@ -181,11 +196,14 @@ def validate_mechanism(m: dict) -> dict:
         max_fires = int(m.get("max_fires", 1 if kind == "reject_finish" else 2))
     except (TypeError, ValueError):
         raise ValueError("max_fires must be an int")
+    chk = str(m.get("llm_check") or "").strip()
+    if chk and (kind == "guidance" or not 10 <= len(chk) <= 200):
+        raise ValueError("llm_check must be a 10..200 character yes/no question, and not on guidance")
     if kind == "reject_finish" and "is_finish" not in pre and "answer_" not in pre and "finish_attempts" not in pre:
         pre = f"({pre}) and is_finish"
     return {"id": str(m.get("id") or ""), "slot": str(m.get("slot") or ""), "kind": kind,
             "mechanism": str(m.get("mechanism") or "")[:80], "target_behavior": str(m.get("target_behavior") or "")[:160],
-            "precondition": pre, "text": text, "max_fires": max(1, min(5, max_fires))}
+            "precondition": pre, "text": text, "max_fires": max(1, min(5, max_fires)), "llm_check": chk}
 
 
 class _Fmt(dict):
@@ -211,6 +229,7 @@ class HookedLoop:
         self.code = {i: compile_pre(m["precondition"]) for i, m in enumerate(self.mechs)}
         self.max_no_action, self.temperature, self.max_tokens = max_no_action, temperature, max_tokens
         self.budget_nudge_steps = budget_nudge_steps
+        self._checks, self._llm, self._task, self._state = {}, None, None, None
 
     def _fire(self, kind, tr, fired, rec, sig=None):
         sig = sig or tr.signals()
@@ -219,19 +238,58 @@ class HookedLoop:
             if m["kind"] != kind or fired.get(i, 0) >= m["max_fires"]:
                 continue
             if eval_pre(self.code[i], tr, sig):
+                if m.get("llm_check") and not self._check(i, m, tr, rec):
+                    continue
                 fired[i] = fired.get(i, 0) + 1
                 rec.note("mech", id=m["id"], mkind=kind, step=tr.step)
+                cb = getattr(self._llm, "on_fire", None)  # v6 branch evaluation: a replayed run goes live here
+                if cb:
+                    cb(m["id"])
                 out.append(render(m["text"], sig))
         return out
+
+    def _check(self, i, m, tr, rec) -> bool:
+        """Tier 2 of a precondition: one short yes/no LLM call on the recent run (v5)."""
+        if self._checks.get(i, 0) >= MAX_CHECKS or self._llm is None:
+            return False
+        self._checks[i] = self._checks.get(i, 0) + 1
+        sc = getattr(self._llm, "saved_check", None)  # v6: a replayed prefix reuses the recorded verdicts
+        saved = sc(m["id"]) if sc else None
+        if saved is not None:
+            rec.note("mech_check", id=m["id"], step=tr.step, yes=bool(saved), replayed=True)
+            return bool(saved)
+        recent = []
+        for msg in self._state.history[-6:]:
+            c = str(msg.get("content") or "")
+            if msg.get("tool_calls"):
+                c += " " + " ".join(f"[call {t['function']['name']} {str(t['function'].get('arguments'))[:200]}]"
+                                    for t in msg["tool_calls"])
+            recent.append(f"{msg['role']}: {c[:700]}")
+        ans = f"\nThe agent is now submitting this final answer: {tr.cur_answer[:400]!r}\n" if tr.cur_answer is not None else ""
+        prompt = CHECK_PROMPT.format(task=str(self._task.instruction)[:800], recent="\n".join(recent), answer=ans,
+                                     question=m["llm_check"])
+        try:
+            resp = self._llm.chat([{"role": "user", "content": prompt}], tag=f"h:{self._task.benchmark}:check",
+                                  max_tokens=600, fallback_no_reasoning=True)
+            rec.llm(resp, step=tr.step, check=m["id"])
+            word = re.search(r"\b(yes|no)\b", (resp.content or "").lower())
+            yes = bool(word and word.group(1) == "yes")
+        except Exception as e:  # a failed check never fires the mechanism
+            rec.note("mech_check", id=m["id"], step=tr.step, error=f"{type(e).__name__}"[:80])
+            return False
+        rec.note("mech_check", id=m["id"], step=tr.step, yes=yes)
+        return yes
 
     def run(self, task, env, h, llm, rec) -> LoopOutcome:
         tr = Tracker(task.max_steps, bool(task.finish_tool))
         fired: dict[int, int] = {}
+        self._checks, self._llm, self._task = {}, llm, task
         system = h.system_prompt
         guide = self._fire("guidance", tr, fired, rec)
         if guide:
             system = system + "\n\nOperating guidance:\n" + "\n".join(f"- {g}" for g in guide)
         state = LoopState(step=0, history=[{"role": "user", "content": _first_user(task)}])
+        self._state = state
         notes = h.memory.recall(task)
         no_action, llm_calls, nudged = 0, 0, False
         while state.step < task.max_steps:
@@ -371,3 +429,35 @@ def trajectory_signals(path: str, finish_tool: str | None = None) -> dict:
              tokens=d.get("tokens") or 0, mech_fired=sorted({e.get("id") for e in ev if e["type"] == "mech"}),
              answered=last_answer is not None, tool_counts={t: tr.n(t) for t in set(tr.tools) if t})
     return s
+
+
+# ---------------------------------------------------------------- offline: would a precondition have fired? (v5)
+def replay_fires(code, path: str, kind: str, finish_tool: str | None = None) -> bool:
+    """Replay a saved trajectory step by step through the Tracker and evaluate the (tier-1) precondition at the hook
+    points of `kind`, as HookedLoop would. True if it would have fired at least once. An approximation: the run is the
+    one of the harness that produced it, and an llm_check (tier 2) is not replayed (so this is an upper bound)."""
+    if kind == "guidance":
+        return True
+    try:
+        d = json.loads(open(path, encoding="utf-8").read())
+    except Exception:
+        return False
+    ev = d.get("events", [])
+    task = next((e for e in ev if e["type"] == "task"), {})
+    tr = Tracker(int(task.get("max_steps") or 30), bool(finish_tool))
+    steps = [e for e in ev if e["type"] == "step"]
+    for i, e in enumerate(steps):
+        tr.step, tr.cur_answer = i, None
+        if kind == "inject" and eval_pre(code, tr):
+            return True
+        a = e.get("args") if isinstance(e.get("args"), dict) else {}
+        if finish_tool and e.get("tool") == finish_tool:
+            tr.finish_attempts += 1
+            tr.cur_answer = str(a.get("answer", a.get("status", "")))
+            return kind == "reject_finish" and eval_pre(code, tr)
+        tr.on_action(e.get("tool"), e.get("args"))
+        tr.on_obs(str(e.get("observation") or ""))
+        tr.step = i + 1
+        if kind == "annotate_obs" and eval_pre(code, tr):
+            return True
+    return False
