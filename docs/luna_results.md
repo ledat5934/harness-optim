@@ -511,3 +511,40 @@ Chạy bằng pipeline cuối cùng, không sửa gì giữa chừng (chỉ resu
 - **Chưa so với một H0 được ép chạy lâu tương đương.** H0 tự dừng ở ~5.6 bước trên ngân sách 25 bước, nên phần tăng không phải do nới ngân sách; nhưng một phép so cùng chi phí (ví dụ H0 với lời nhắc "tiếp tục tìm") là đối chứng còn thiếu.
 - **(b) đưa ra tình huống mới nhưng chưa tình huống nào thắng:** sau khi c2+c4 được gộp, các đặc trưng mới xuất hiện (kết quả trùng lặp, chuỗi dài cùng một tool, run hết bước chưa trả lời: 21% run sai, 0% run đúng). Các ứng viên vòng 2–5 nhắm vào đó đều gây đúng hành vi nhưng không tăng thành công (5 REFUTED, 3 INCONCLUSIVE, 2 không được val xác nhận; 1 INEFFECTIVE).
 - **Vận hành:** lượt này bị gián đoạn hai lần bởi giới hạn 2 giờ của tiến trình nền và một lần ~2.5 giờ do tài khoản model hết hạn mức; mỗi lần đều chạy tiếp từ điểm lưu (kết quả các vòng đã xong được phát lại, không chạy lại).
+
+## 19. B4 v7 chạy một lượt trên nhiều benchmark — seed 0 (`b4v7l`)
+
+Cùng code với §18 (không đổi pipeline), seed 0, giao thức MEDIUM. ALFWorld được bỏ khỏi lượt chạy giữa chừng theo yêu cầu.
+
+**Tổng hợp**
+
+| Benchmark | H0 (test) | B4 v7 (test) | Sửa đổi được gộp | Ghi chú |
+|---|---|---|---|---|
+| BrowseComp-Plus (100 bài) | 24% | **39%** | c1 verifier/reject_hedged_finish (vòng 1), c6 agent_loop/bound_no_call_retries (vòng 2) | đủ 5 vòng; token/bài 24k → 233k |
+| AppWorld (99 bài) | 55.6% (55/99) | 55.6% (= H0) | không có | đủ 5 vòng, 21 ứng viên đều bị loại |
+| ALFWorld (100 bài) | 91% | chưa có | không có (tới lúc dừng) | dừng ở vòng 3/5; 7 ứng viên đã chấm đều bị loại |
+
+**BrowseComp-Plus — so từng bài trên test** (thắng/thua = số bài B4 đúng mà bên kia sai / ngược lại; kiểm định dấu hai phía)
+
+| So với | Test | Token/bài | Thắng/thua | p |
+|---|---|---|---|---|
+| `b4v7l` | 39% | 233k | – | – |
+| H0 (lượt này) | 24% | 24k | 17/2 | 0.0007 |
+| B1 seed 0 | 28% | 49k | 14/3 | 0.013 |
+| B1 seed 1 | 19% | 21k | 21/1 | <0.001 |
+| B2 | 23% | 23k | 19/3 | 0.0009 |
+| B3 | 21% | 39k | 20/2 | 0.0001 |
+
+Ước lượng nhánh trên test: 35.5% (bài +16/−0), sửa đổi chạm 69/100 bài, toàn bộ ở cuối run (lúc agent định kết thúc).
+
+Theo vòng: vòng 1 gộp c1 (chạm 71% run, 6 thắng/0 thua, p=0.016; val 30.0%); vòng 2 gộp c6 vì **tiết kiệm** chứ không vì đúng hơn (token nhánh 542k → 339k, 0 thắng/0 thua; val giữ 30.0%); vòng 3–5 không gộp gì (3 INEFFECTIVE; 1 REFUTED + 2 INEFFECTIVE; 2 DEAD CODE + 1 INEFFECTIVE).
+
+**AppWorld** — vòng 1: 2 REFUTED, 1 DEAD CODE, 1 INEFFECTIVE; vòng 2: 3 INEFFECTIVE, 1 DEAD CODE, 1 NOT BUILT; vòng 3: 3 INEFFECTIVE, 1 DEAD CODE; vòng 4: 2 INEFFECTIVE, 1 REFUTED, 1 DEAD CODE; vòng 5: 2 INEFFECTIVE, 1 DEAD CODE, 1 HARMFUL. Tổng 21 ứng viên: 11 INEFFECTIVE, 5 DEAD CODE, 3 REFUTED, 1 HARMFUL, 1 NOT BUILT. Harness cuối = H0 nên test không chạy lại.
+
+**Đọc kết quả**
+- **BCP: cao nhất từ trước tới nay (39%), lần thứ hai liên tiếp thắng rõ H0 và cả B1–B3** (lượt trước 36%, seed 1). Cùng một ý tưởng thắng ở cả hai seed: không cho kết thúc bằng câu trả lời còn lấp lửng.
+- **Nhưng đắt gấp ~10 lần token** (233k so với 24k; lượt trước 72k vì có gộp thêm sửa đổi cắt lịch sử). Số bước 5.6 → 14.0. Vẫn chưa có đối chứng "H0 bị ép tìm lâu tương đương", nên chưa tách được phần lợi do ý tưởng với phần lợi do tìm lâu hơn.
+- **Lỗi đo ở bước chấm, cần sửa:** với c6, 12 nhánh thực ra là 6 nhánh lặp lại hai lần với số token giống hệt nhau (các lượt lặp k không độc lập khi model trả lời y hệt). p=0.0002 của "token giảm" vì thế bị thổi phồng; c6 được gộp trên bằng chứng yếu hơn con số báo ra. Cần gộp các nhánh trùng trước khi kiểm định.
+- **AppWorld và ALFWorld: pipeline không tìm ra sửa đổi nào.** Ở AppWorld hơn nửa số ứng viên (11/21) chạy được nhưng không làm hành vi đổi theo hướng dự đoán, 5/21 là code không bao giờ được chạy tới. Tức là khâu "đề xuất + viết code" chưa khái quát sang benchmark có công cụ là API: các giả thuyết rút ra được trên BCP (kết thúc sớm, câu trả lời lấp lửng) không có tương ứng rõ ở đây. ALFWorld thì H0 đã 91% nên gần như không còn chỗ.
+- **H0 AppWorld của lượt này thấp hơn hẳn lượt cũ: 55/99 so với 74/99** (`results/medium_luna/h0_appworld.jsonl`; theo bài: 24 bài chỉ lượt cũ đúng, 5 bài chỉ lượt mới đúng; train 91/150 so với 108/150). Cùng harness, cùng tên model; khác nhau ở môi trường AppWorld cài mới trong phiên này và thời điểm gọi model. Chưa rõ nguyên nhân. Vì vậy **không so được B4 lượt này với B1–B3 cũ trên AppWorld** (B1 77/99, B2 74/99, B3 75/99 đều đo trong môi trường cũ).
+- **Vận hành:** một lần model hết hạn mức ~3 giờ khi chạy ba việc song song; nhiều lần chạm giới hạn 2 giờ của tiến trình nền, mỗi lần nối lại từ kết quả đã lưu.
