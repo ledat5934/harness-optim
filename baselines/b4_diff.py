@@ -157,7 +157,7 @@ def run_diff(bench: str, split: str, srcs: list[dict], root, src_root, client, t
             res = ad.run_episode(src["task_id"], C.LazyHarness(root), bl, split=split, run_tag=run_tag)
             err = res.error
         rec = {**dataclasses.asdict(res), **base, "error": err, "wall_s": round(time.time() - t0, 1),
-               "model": getattr(client, "model", None), "branched": not same and not err, "fork_call": bl.fork_call,
+               "model": getattr(client, "model", None), "branched": not same and not err, "fork_call": bl.fork_call, "live": bool(bl.live),
                "replayed": bl.i, "n_saved": len(bl.saved),
                "tokens_replayed": sum(int(e.get("pt") or 0) + int(e.get("ct") or 0) for e in bl.saved[:bl.i]),
                # terminal: the candidate continues after the saved run's last response, or ends differently with

@@ -116,6 +116,24 @@ def test_tally_and_sign_test():
     assert abs(V.sign_p(4, 1) - 6 / 32) < 1e-9 and V.sign_p(3, 0) == 0.125 and V.sign_p(0, 0) == 1.0
 
 
+def test_repeats_without_a_model_call_are_one_sample():
+    """Two branches of the same fork that made no new model request are identical by construction: one sample."""
+    fixed = {"branched": True, "success": True, "src_success": False, "root": "r", "live": False}
+    live = {"branched": True, "success": True, "src_success": False, "root": "r", "live": True}
+    recs = [{**fixed, "fork_of": f"s{i}", "k": k} for i in range(6) for k in (0, 1)]
+    t = V.tally(recs)
+    assert (t["W"], t["n"], t["ran"], t["repeats_dropped"]) == (6, 6, 12, 6) and t["p"] == round(V.sign_p(6, 0), 4)
+    # repeats that did call the model are fresh continuations and stay separate samples
+    assert V.tally([{**live, "fork_of": "s0", "k": k} for k in (0, 1)])["W"] == 2
+    # records written before the flag existed: no tokens beyond the replayed ones means no model call
+    old = [{"branched": True, "success": False, "src_success": True, "root": "r", "fork_of": "s0", "k": k,
+            "tokens": 900, "tokens_replayed": 900} for k in (0, 1, 2)]
+    assert V.tally(old)["L"] == 1 and len(V.distinct(old + [{**old[0], "tokens": 1200}])) == 2
+    # the same fork under another harness is another sample; skipped and failed branches never count
+    assert len(V.distinct([{**fixed, "fork_of": "s0"}, {**fixed, "fork_of": "s0", "root": "q"},
+                           {**fixed, "fork_of": "s0", "branched": False}, {**fixed, "fork_of": "s0", "error": "x"}])) == 2
+
+
 def test_terminal_wins_need_no_sign_test():
     base = {"W": 2, "L": 0, "n": 48, "p": V.sign_p(2, 0)}
     assert not V.reliable({**base, "Wt": 0, "Lt": 0})      # two noisy-arm wins: p = 0.25

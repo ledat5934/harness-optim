@@ -157,14 +157,40 @@ def sign_p(w: int, l: int) -> float:
     return 1.0 if n == 0 else sum(math.comb(n, i) for i in range(w, n + 1)) / 2 ** n
 
 
+def no_live_call(x: dict) -> bool:
+    """A branch that diverged without a new model request (the edit only ends or trims the saved run). Its content
+    is fixed by the saved run, so a repeat of it is the same sample again, not a new one."""
+    if "live" in x:
+        return not x["live"]
+    return x.get("tokens_replayed") is not None and x.get("tokens") == x.get("tokens_replayed")
+
+
+def distinct(recs: list[dict]) -> list[dict]:
+    """Usable branches (diverged, no error) that are separate samples: of the repeats of a fork that made no new
+    model request, only the first is kept. Counting each repeat inflated every paired test built on them."""
+    seen, out = set(), []
+    for x in recs:
+        if not x.get("branched") or x.get("error"):
+            continue
+        key = (x.get("fork_of"), x.get("root"))
+        if key[0] is not None and no_live_call(x):
+            if key in seen:
+                continue
+            seen.add(key)
+        out.append(x)
+    return out
+
+
 def tally(recs: list[dict]) -> dict:
-    """Paired outcome of branches against the saved runs they fork. Only branched runs carry information."""
-    b = [x for x in recs if x.get("branched") and not x.get("error")]
+    """Paired outcome of branches against the saved runs they fork. Only branched runs carry information, and a
+    repeat of a branch that made no new model request is not counted again (`distinct`)."""
+    b = distinct(recs)
     w = sum(1 for x in b if x["success"] and not x["src_success"])
     l = sum(1 for x in b if x["src_success"] and not x["success"])
     wt = sum(1 for x in b if x.get("terminal") and x["success"] and not x["src_success"])
     lt = sum(1 for x in b if x.get("terminal") and x["src_success"] and not x["success"])
     return {"W": w, "L": l, "n": len(b), "ran": len(recs), "p": round(sign_p(w, l), 4), "Wt": wt, "Lt": lt,
+            "repeats_dropped": sum(1 for x in recs if x.get("branched") and not x.get("error")) - len(b),
             "errors": sum(1 for x in recs if x.get("error")),
             "tokens": sum(x.get("tokens") or 0 for x in recs)}
 

@@ -355,8 +355,8 @@ def behaviour_shift(code, direction: str, recs: list[dict], feats) -> dict:
     sgn = 1 if direction == "up" else -1
     up = down = 0
     old, new = [], []
-    for x in recs:
-        if not x.get("branched") or x.get("error") or not x.get("trajectory_path"):
+    for x in V.distinct(recs):  # a repeat of a branch with no new model request is the same pair again
+        if not x.get("trajectory_path"):
             continue
         a, b = metric(code, feats(x["fork_of"])), metric(code, feats(x["trajectory_path"]))
         if a is None or b is None:
@@ -374,8 +374,7 @@ def behaviour_shift(code, direction: str, recs: list[dict], feats) -> dict:
 def effects(recs: list[dict], feats) -> dict:
     """Every feature (not only the predicted one) on each branch against the saved run it forks: what else the edit
     changed (cost, length of runs, kind of answers). Two-sided sign test per feature."""
-    pairs = [(feats(x["fork_of"]), feats(x["trajectory_path"])) for x in recs
-             if x.get("branched") and not x.get("error") and x.get("trajectory_path")]
+    pairs = [(feats(x["fork_of"]), feats(x["trajectory_path"])) for x in V.distinct(recs) if x.get("trajectory_path")]
     out = {}
     for k in FEATURES if pairs else ():
         up = sum(1 for a, b in pairs if b[k] - a[k] > 1e-9)
