@@ -548,3 +548,46 @@ Theo vòng: vòng 1 gộp c1 (chạm 71% run, 6 thắng/0 thua, p=0.016; val 30.
 - **AppWorld và ALFWorld: pipeline không tìm ra sửa đổi nào.** Ở AppWorld hơn nửa số ứng viên (11/21) chạy được nhưng không làm hành vi đổi theo hướng dự đoán, 5/21 là code không bao giờ được chạy tới. Tức là khâu "đề xuất + viết code" chưa khái quát sang benchmark có công cụ là API: các giả thuyết rút ra được trên BCP (kết thúc sớm, câu trả lời lấp lửng) không có tương ứng rõ ở đây. ALFWorld thì H0 đã 91% nên gần như không còn chỗ.
 - **H0 AppWorld của lượt này thấp hơn hẳn lượt cũ: 55/99 so với 74/99** (`results/medium_luna/h0_appworld.jsonl`; theo bài: 24 bài chỉ lượt cũ đúng, 5 bài chỉ lượt mới đúng; train 91/150 so với 108/150). Cùng harness, cùng tên model; khác nhau ở môi trường AppWorld cài mới trong phiên này và thời điểm gọi model. Chưa rõ nguyên nhân. Vì vậy **không so được B4 lượt này với B1–B3 cũ trên AppWorld** (B1 77/99, B2 74/99, B3 75/99 đều đo trong môi trường cũ).
 - **Vận hành:** một lần model hết hạn mức ~3 giờ khi chạy ba việc song song; nhiều lần chạm giới hạn 2 giờ của tiến trình nền, mỗi lần nối lại từ kết quả đã lưu.
+
+## 20. Ba việc kiểm tra sau §19: H0 AppWorld tụt điểm, lỗi đếm trùng, đối chứng cùng chi phí
+
+### 20.1 Vì sao H0 AppWorld tụt từ 74/99 xuống 55/99
+
+**Kết luận: nguyên nhân nằm ở phía model đang được phục vụ (mức "suy nghĩ" trước khi trả lời), không phải môi trường AppWorld hay harness.**
+
+| Giả thuyết | Cách kiểm tra | Kết quả |
+|---|---|---|
+| Môi trường AppWorld cài mới bị hỏng (lệch phiên bản thư viện) | `appworld verify tests`; `appworld verify tasks` (chạy lời giải mẫu) | 1553 + 138 bài tự kiểm tra đều qua; 147/147 lời giải mẫu đúng → **loại** |
+| Chạy song song làm hỏng trạng thái | đọc mã | AppWorld luôn chạy tuần tự → **loại** |
+| Harness khác | `h0_hash` | giống hệt → **loại** |
+| Lỗi hạ tầng | đếm lỗi | 0 lỗi; các bài sai đều là "làm xong nhưng sai" → **loại** |
+| Model trả lời khác trước | H0 trên 50 task train, ghim mức suy nghĩ `high` (`LLM_REASONING_EFFORT=high`, kết quả ở `results/medium_luna5_high/`) | **40/50**; mặc định hiện nay 30.3/50 (trung bình 3 lượt); lượt cũ 36.0/50 |
+
+Harness không gửi mức suy nghĩ nào nên dùng mặc định của gateway. Cùng 50 task, chỉ đổi mức suy nghĩ đã chênh ~10 bài, lớn hơn cả khoảng tụt cần giải thích (~6 bài). Token mỗi lần gọi: cũ 6455, nay 6046, ghim `high` 7092 — lượt cũ nằm giữa hai mức hiện nay, đúng như điểm số. Tôi **không chứng minh được** chính xác mặc định đã đổi lúc nào (không còn trajectory cũ trong máy này); đây là giải thích khớp nhất với số liệu.
+
+Hệ quả: (a) không so AppWorld chéo giữa `results/medium_luna/` và `results/medium_luna5/`; (b) so sánh trong cùng `medium_luna5` (B4 = H0 = 55/99) vẫn hợp lệ; (c) muốn kết quả lặp lại được thì nên ghim mức suy nghĩ khi chạy, thay vì để mặc định.
+
+### 20.2 Sửa lỗi đếm trùng nhánh
+
+Khi một sửa đổi chỉ làm run **kết thúc sớm hoặc cắt bớt** (không phát sinh lần gọi model mới), nhánh hoàn toàn do run đã lưu quyết định; chạy lặp nhánh đó (k = 0, 1, 2) cho ra đúng một kết quả, nhưng trước đây mỗi lần lặp được tính là một mẫu độc lập trong kiểm định dấu.
+
+Sửa: `b4_branch.distinct()` chỉ giữ lần đầu của các nhánh lặp không gọi model; dùng trong `tally` (thắng/thua), `behaviour_shift` và `effects`. `b4_diff` ghi thêm cờ `live`; bản ghi cũ suy ra từ `tokens == tokens_replayed`. Nhánh lặp **có** gọi model vẫn tính riêng. Test mới: `tests/test_b4_branch.py::test_repeats_without_a_model_call_are_one_sample` (93 test qua).
+
+Tính lại trên `b4v7l` (BCP): chỉ c6 bị ảnh hưởng — train 12 nhánh → 6 mẫu (p của "token giảm" 0.0002 → 0.016), val 6 nhánh → **2 mẫu**, không đủ ngưỡng xác nhận (cần chênh ≥ 3). **Với cách đếm đúng, c6 không được gộp.** c1 (sửa đổi tạo ra phần tăng điểm) không đổi: 6 thắng/0 thua trên 64 mẫu. Kết quả test 39% không đổi về bản chất vì c6 không thắng/thua bài nào, chỉ giảm token.
+
+### 20.3 Đối chứng cùng chi phí trên BrowseComp-Plus
+
+Đối chứng (`baselines/controls/min_steps_finish.py`, `scripts/run_control.py`): H0 + một verifier **từ chối mọi lần kết thúc trước bước N**, bất kể câu trả lời nói gì, với đúng câu nhắc trung tính mà c1 dùng. Nó không có "ý tưởng" nào về lúc nào cần tìm thêm; chỉ ép tìm lâu.
+
+| Harness | Test | Bước/bài | Token/bài | So từng bài với B4 (B4 thắng/thua) |
+|---|---|---|---|---|
+| H0 | 24% | 5.5 | 24k | 18/3 (p=0.001) |
+| Đối chứng N=11 | 36% | 15.3 | 215k | 10/7 (p=0.63) |
+| **B4 `b4v7l`** | **39%** | 14.0 | 233k | – |
+| Đối chứng N=14 | 40% | 17.8 | 289k | 7/8 (p=1.0) |
+
+Đối chứng N=11 so với H0: 15/3 (p=0.008); N=14 so với H0: 19/3 (p=0.001).
+
+**Đọc kết quả:** phần tăng 24% → 39% của B4 trên BCP **gần như hoàn toàn do tìm lâu hơn**. Một luật mù "chưa đến bước N thì chưa được kết thúc" đạt 36–40% ở mức chi phí 215–289k token, kẹp hai bên điểm của B4 (39% ở 233k); không có khác biệt nào giữa B4 và hai đối chứng vượt nhiễu. Ý "chỉ ép tìm tiếp khi câu trả lời còn lấp lửng" của c1 không cho thấy lợi thế đo được so với ép mù ở cùng chi phí.
+
+Điều này không phủ nhận việc pipeline tự tìm ra được một sửa đổi làm tăng điểm thật so với H0 và B1–B3; nhưng "tính mới" của sửa đổi đó yếu: nó tương đương một nút vặn ngân sách. Muốn chứng minh pipeline tìm ra ý tưởng thật sự thì từ nay mọi kết quả cần so với **đường đối chứng cùng chi phí** này, không chỉ với H0.
