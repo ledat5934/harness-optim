@@ -603,3 +603,24 @@ Hệ quả:
 - Từ đây ghim **`LLM_MODEL=cx/gpt-6-luna-low`** trong `.env` (theo yêu cầu). Trường `model` của mỗi bản ghi sẽ mang hậu tố, nên phân biệt được với các lượt cũ.
 - Harness và pipeline không gửi `reasoning_effort`; ngoại lệ duy nhất là lần thử lại khi câu trả lời rỗng (`fallback_no_reasoning`, gửi `none` → gateway đổi thành `low`), khớp với mức ghim. Không đặt `LLM_REASONING_EFFORT` (chỉ để chẩn đoán) vì nó sẽ thắng hậu tố.
 - Kết quả ở `low` **không so được** với H0/B1–B3/B4 đã có (đều ở `medium`): cần chạy lại H0 ở `low` trước khi so bất cứ thứ gì.
+
+## 21. Chạy lại một lượt ở mức suy nghĩ `low` (`cx/gpt-6-luna-low`), seed 0 (`b4v7m`)
+
+Cùng code với §20 (gồm sửa lỗi đếm trùng §20.2), giao thức MEDIUM, kết quả ở `results/medium_luna5low/`. Chạy lại H0, B4 v7 và (trên BCP) hai đối chứng cùng chi phí của §20.3. ALFWorld đã bỏ khỏi benchmark; B1–B3 không chạy lại ở mức này. Mọi so sánh dưới đây là **trong cùng mức `low`**; không so chéo với các mục trước (mức `medium`).
+
+### 21.1 BrowseComp-Plus
+
+H0 ở `low`: train 8/50, 7/50, 8/50 (3 lượt), val 7/30, test 20/100 (ở `medium`: test 24/100).
+
+| Harness | Test | Bước/bài | Token/bài | So từng bài với B4 (B4 thắng/thua) |
+|---|---|---|---|---|
+| H0 | 20% | 5.7 | 26k | 15/2 (p=0.002) |
+| Đối chứng N=11 | 32% | 16.1 | 237k | 8/7 (p=1.0) |
+| **B4 `b4v7m`** | **33%** | 14.3 | 238k | – |
+| Đối chứng N=14 | 35% | 17.9 | 287k | 9/11 (p=0.82) |
+
+Đối chứng so với H0: N=11 14/2 (p=0.004), N=14 16/1 (p<0.001). Ước lượng nhánh trên test của B4: 29.5% (bài +15/−0), chạm 70/100 bài.
+
+Theo vòng: vòng 1 gộp **c2** `agent_loop/defer_hedged_finish` và **c3** `verifier/hedge_verification` (mỗi cái 7 thắng/0 thua trên 64 nhánh, p=0.008; val 23.3% → 43.3%). Hai cái là **cùng một ý** đặt ở hai chỗ khác nhau: khi câu trả lời cuối còn lấp lửng ("không xác định được") mà còn bước thì không nhận, bắt tìm tiếp. Vòng 2–5 không gộp gì. Trong 16 ứng viên còn lại có 4 bị chặn ở cổng khái quát vì ghi cứng tên công cụ `search`, 4 là code không bao giờ chạy tới, 5 không làm hành vi đổi như dự đoán, 2 làm hành vi đổi nhưng điểm giảm, và 1 thắng 7/thua 2 nhưng không qua bước xác nhận.
+
+**Đọc kết quả:** lặp lại đúng §20.3 ở mức suy nghĩ khác. B4 tìm lại đúng ý tưởng cũ (từ chối câu trả lời lấp lửng), thắng H0 rõ ràng, nhưng **không hơn một luật mù "chưa đến bước N thì chưa được nộp" ở cùng chi phí** (237k so với 238k token, 32% so với 33%). Cổng khái quát đã chặn đúng các sửa đổi ghi cứng tên công cụ.
