@@ -591,3 +591,15 @@ Tính lại trên `b4v7l` (BCP): chỉ c6 bị ảnh hưởng — train 12 nhán
 **Đọc kết quả:** phần tăng 24% → 39% của B4 trên BCP **gần như hoàn toàn do tìm lâu hơn**. Một luật mù "chưa đến bước N thì chưa được kết thúc" đạt 36–40% ở mức chi phí 215–289k token, kẹp hai bên điểm của B4 (39% ở 233k); không có khác biệt nào giữa B4 và hai đối chứng vượt nhiễu. Ý "chỉ ép tìm tiếp khi câu trả lời còn lấp lửng" của c1 không cho thấy lợi thế đo được so với ép mù ở cùng chi phí.
 
 Điều này không phủ nhận việc pipeline tự tìm ra được một sửa đổi làm tăng điểm thật so với H0 và B1–B3; nhưng "tính mới" của sửa đổi đó yếu: nó tương đương một nút vặn ngân sách. Muốn chứng minh pipeline tìm ra ý tưởng thật sự thì từ nay mọi kết quả cần so với **đường đối chứng cùng chi phí** này, không chỉ với H0.
+
+### 20.4 Ghim mức suy nghĩ: `cx/gpt-6-luna-low`
+
+Đọc mã 9router (v0.5.111, phần Codex): mức suy nghĩ của luna được chọn theo thứ tự (1) `reasoning_effort` trong request, (2) **hậu tố tên model** `-none|-minimal|-low|-medium|-high|-xhigh` (gateway cắt hậu tố rồi gửi mức đó), (3) mặc định — với luna là **`medium`**. Với luna, `none`/`minimal` bị nâng thành `low`.
+
+Kiểm tra bằng một câu tính nhẩm: `cx/gpt-6-luna` và `-medium`, `-high` trả lời đúng với ~90–100 token; `-low` trả lời ngay 5 token và sai. Nếu request có `reasoning_effort` thì nó thắng hậu tố.
+
+Hệ quả:
+- **Mọi kết quả trong `results/medium_luna5/` cho tới §20.3 chạy ở mặc định = `medium`.**
+- Từ đây ghim **`LLM_MODEL=cx/gpt-6-luna-low`** trong `.env` (theo yêu cầu). Trường `model` của mỗi bản ghi sẽ mang hậu tố, nên phân biệt được với các lượt cũ.
+- Harness và pipeline không gửi `reasoning_effort`; ngoại lệ duy nhất là lần thử lại khi câu trả lời rỗng (`fallback_no_reasoning`, gửi `none` → gateway đổi thành `low`), khớp với mức ghim. Không đặt `LLM_REASONING_EFFORT` (chỉ để chẩn đoán) vì nó sẽ thắng hậu tố.
+- Kết quả ở `low` **không so được** với H0/B1–B3/B4 đã có (đều ở `medium`): cần chạy lại H0 ở `low` trước khi so bất cứ thứ gì.
