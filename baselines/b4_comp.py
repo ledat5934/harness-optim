@@ -1627,12 +1627,17 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         ranked = select(hyps)
         rows, tried, per_slot, revised = [], set(), Counter(), False
         state = harness_state(cur, fmap, [e for e in ledger if e.get("status") == "merged"])
-        for i in ranked:
+        queue, deferred = list(ranked), []
+        while queue or deferred:
+            i = queue.pop(0) if queue else deferred.pop(0)
             # a candidate whose code never ran on a real run cost no agent runs: the next hypothesis takes its place
             if sum(1 for x in rows if not x["id"].endswith("r")
                    and not x["verdict"].startswith(("DEAD CODE", "NOT BUILT"))) >= N_CAND:
                 break
-            if per_slot[hyps[i]["slot"]] >= max(1, N_CAND - 1):  # not all of a round in one slot
+            # not all of a round in one slot while another slot has a candidate; otherwise the deferred one runs
+            # (composite and harness tools, restarts and phases all live in agent_loop)
+            if queue and per_slot[hyps[i]["slot"]] >= max(1, N_CAND - 1):
+                deferred.append(i)
                 continue
             tried.add(i)
             per_slot[hyps[i]["slot"]] += 1
