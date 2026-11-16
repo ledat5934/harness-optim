@@ -46,6 +46,8 @@ def test_lint_rejects_task_specific_and_prompt_code():
     ok = "import re\nclass X:\n    def f(self, task):\n        return [t['function']['name'] for t in task.tools]\n"
     assert M.lint_code(ok, LINTER, ["toy"]) is None
     assert M.lint_code("NAME = 'look'\n", LINTER, ["toybench"]) is None  # tool names are the public interface
+    assert M.lint_code("PAT = r\"don(?:['\\u2019])?t\"\n", LINTER, ["toybench"]) is None  # escapes are not numbers
+    assert "4 or more digits" in M.lint_code("PAT = 'item 12345'\n", LINTER, ["toybench"])
     assert "import" in M.lint_code("import os\n", LINTER, ["toybench"])
     assert "prompt edit" in M.lint_code(f"ADVICE = '{'a ' * 300}'\n", LINTER, ["toybench"])
     assert "benchmark" in M.lint_code("# tuned for toybench\nx = 1\n", LINTER, ["toybench"])

@@ -602,7 +602,8 @@ def lint_code(src: str, linter: B.Linter, bench_names, known: set = frozenset())
                 return (f"the string constant starting {s[:50]!r} has {len(s)} chars, over the limit of "
                         f"{MAX_LITERAL}: long instruction text is a prompt edit, not a component edit; a long "
                         "pattern or table must be shortened or built from shorter pieces")
-            if re.search(r"\d{4,}", s) and s not in known and id(node) not in labels:
+            if re.search(r"\d{4,}", re.sub(r"\\(?:u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|x[0-9a-fA-F]{2}|N\{[^}]*\})", "", s)) \
+                    and s not in known and id(node) not in labels:
                 return (f"the string constant {s[:80]!r} contains a number of 4 or more digits, which is treated as "
                         "a task-specific literal: keep numbers in numeric parameters, not inside strings")
     low = src.lower()
