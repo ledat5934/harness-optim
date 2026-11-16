@@ -1,6 +1,7 @@
 """Run one B4 configuration on one benchmark, reusing an existing H0 (allow_stale), for the v3-vs-v4 comparison.
 Env: RESULTS_SUFFIX (H0 folder, e.g. luna), B4_TAG, B4_LLM_MODES, B4_GRAPH, B4_RESUME as usual; B4_BRANCH=1 runs v6,
-B4_COMP=1 runs v7 (component edits with behaviour hypotheses, baselines/b4_comp.py)."""
+B4_COMP=1 runs v7 (component edits with behaviour hypotheses, baselines/b4_comp.py). B4_ROUNDS overrides the number of
+rounds of the protocol (default: MEDIUM's 5)."""
 import sys
 
 from baselines import common as C
@@ -19,6 +20,9 @@ print(f"shared H0 {bench}: train={len(shared['h0_train'])} val={len(shared['h0_v
       f"test={len(shared.get('h0_test') or [])}", flush=True)
 import os
 
+if os.environ.get("B4_ROUNDS"):
+    C.MEDIUM = {**C.MEDIUM, "rounds": int(os.environ["B4_ROUNDS"])}
+    print(f"rounds: {C.MEDIUM['rounds']}", flush=True)
 if os.environ.get("B4_COMP") == "1":  # v7: component edits, behaviour hypothesis tested before the outcome
     from baselines import b4_comp as M
     res = M.run(bench, shared, llm_mod.LLM(), cfg=C.MEDIUM)
