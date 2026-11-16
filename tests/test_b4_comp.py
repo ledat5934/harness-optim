@@ -45,8 +45,7 @@ def test_observe_compares_runs_of_the_same_task():
 def test_lint_rejects_task_specific_and_prompt_code():
     ok = "import re\nclass X:\n    def f(self, task):\n        return [t['function']['name'] for t in task.tools]\n"
     assert M.lint_code(ok, LINTER, ["toy"]) is None
-    assert "tool name" in M.lint_code("NAME = 'look'\n", LINTER, ["toybench"])
-    assert M.lint_code("NAME = 'look'\n", LINTER, ["toybench"], known={"look"}) is None
+    assert M.lint_code("NAME = 'look'\n", LINTER, ["toybench"]) is None  # tool names are the public interface
     assert "import" in M.lint_code("import os\n", LINTER, ["toybench"])
     assert "prompt edit" in M.lint_code(f"ADVICE = '{'a ' * 300}'\n", LINTER, ["toybench"])
     assert "benchmark" in M.lint_code("# tuned for toybench\nx = 1\n", LINTER, ["toybench"])
@@ -156,9 +155,9 @@ def test_trial_lint_feedback_reaches_the_proposer():
             if str(tag).startswith("b4:"):
                 seen.append(msgs[0]["content"])
             return super().chat(msgs, tools=tools, tag=tag, **kw)
-    bad = good.replace("from h0.protocols import Verdict", "from h0.protocols import Verdict\nREAD = 'read'")
+    bad = good.replace("from h0.protocols import Verdict", "from h0.protocols import Verdict\nimport os")
     _trial(tmp, src, Spy(lambda v, i: (bad if i == 1 else good).replace('"unread_items"', f'"{v}"')))
-    assert "previous attempt was rejected" not in seen[0] and "hardcoded tool name" in seen[1]
+    assert "previous attempt was rejected" not in seen[0] and "import of 'os'" in seen[1]
 
 
 def test_review_answer_is_normalised():
@@ -191,6 +190,30 @@ def test_review_answer_is_normalised():
 def test_select_keeps_proposer_order_unless_runs_speak_clearly():
     o = lambda a, d: {"observational": {"agree": a, "disagree": d}}  # noqa: E731
     assert M.select([o(2, 1), o(0, 3), o(3, 0), o(0, 0)]) == [2, 0, 3, 1]
+
+
+def test_closed_targets_and_diversity():
+    led = [{"round": r, "behaviour": "distinct_tools", "direction": "up", "verdict": v, "status": "rejected"}
+           for r, v in ((1, "INEFFECTIVE: x"), (2, "NOT BUILT: y"))]
+    h = {"name": "again", "slot": "tool_policy", "direction": "up", "behaviour": "distinct_tools",
+         "hypothesis": "If the agent uses more tools it succeeds more often.", "mechanism": "streak -> offer other " * 3}
+    try:
+        M.validate_hyp(h, led)
+        raise AssertionError("closed target accepted")
+    except ValueError as e:
+        assert "closed" in str(e)
+    assert M.validate_hyp({**h, "direction": "down"}, led)["direction"] == "down"
+    assert "distinct_tools" in M.closed_view(led) and M.closed_view(led[:1]) == ""
+    o = lambda k, a=0, d=0: {"edit_type": k, "observational": {"agree": a, "disagree": d}}  # noqa: E731
+    hyps = [o("tool results"), o("tool results"), o("acceptance"), o("helper call"), o("phases", 0, 3)]
+    order = M.select(hyps)
+    assert order[:3] == [0, 2, 3] and order[-1] == 4  # one per kind, a structural one in the first three
+    assert M.select([o("tool results"), o("acceptance"), o("control"), o("restart")])[:3] == [0, 1, 3]
+
+
+def test_new_run_features():
+    assert M._streak(["a", "a", "b", "a", "a", "a"]) == 3 and M._streak([]) == 0
+    assert M._stale(["x", "y", "x", "y", "z", ""]) == 2 and M._stale(["x", "y"]) == 0 and M._stale([]) == 0
 
 
 def test_pooled_and_ledger_view():

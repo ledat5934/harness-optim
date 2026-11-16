@@ -26,6 +26,11 @@ B4_SEED, B4_RESUME, B4_ALPHA of the earlier versions.
 Preconditions: B4_WHEN (1), B4_WHEN_MIN (0.05: least share of saved runs where `when` holds), B4_WHEN_DISC (0.2: gap
 between failed and successful runs that orders hypotheses), B4_REACH_MIN (0.5) and B4_REACH_TRIES (2): an edit that
 changes fewer than that share of the runs where its precondition holds is sent back for a rewrite.
+Breadth: B4_CLOSE_AFTER (2): a behaviour target (metric, direction) that failed that many times and never merged is
+closed and listed in the prompt; B4_DIVERSE (1): the candidates that get code in a round are of different kinds of
+edit and include a structural one (composite tool, helper call, phases, restart, working notes) when proposed.
+The environment's tool names may appear in a component (they are its public interface); task ids, task text,
+answers, long literals and the benchmark's name may not.
 """
 from __future__ import annotations
 
@@ -70,6 +75,8 @@ OBS_MARGIN = 2                                      # tasks (agree - disagree) f
 SHIFT_MARGIN, SHIFT_ALPHA = 3, 0.1                  # behaviour shift: net pairs in the stated direction, sign test
 MAX_LITERAL = 400                                   # longest string constant in a component (no prompt edits)
 SLOTS = ("tool_policy", "context_mgmt", "verifier", "agent_loop")  # memory (cross-episode) cannot be forked
+CLOSE_AFTER = int(os.environ.get("B4_CLOSE_AFTER", "2"))  # failed attempts after which a behaviour target is closed
+DIVERSE = os.environ.get("B4_DIVERSE", "1") == "1"   # a round's code goes to different kinds of edit, one structural
 
 # ---------------------------------------------------------------- behaviour metrics
 FEATURES = {
@@ -89,6 +96,10 @@ FEATURES = {
     "answer_hedged": "1 if the final answer says it is unknown / could not be determined",
     "finish_rejects": "final answers refused by the harness before one was accepted",
     "tokens": "tokens used by the run",
+    "check_calls": "extra model calls the harness made for itself (recorded with check=...), not the agent's turns",
+    "distinct_results": "different non-empty tool results the run received (new information found)",
+    "max_tool_streak": "longest run of consecutive calls of the same tool",
+    "stale_streak": "longest run of consecutive tool calls whose result was already seen in the run (no new information)",
 }
 _OK = (ast.Expression, ast.BinOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.UnaryOp, ast.USub, ast.Not, ast.BoolOp,
        ast.And, ast.Or, ast.Compare, ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.IfExp, ast.Name,
@@ -132,6 +143,7 @@ def features(path: str, fin: str | None) -> dict:
     steps = [e for e in ev if e.get("type") == "step"]
     acts = [e for e in steps if not (fin and e.get("tool") == fin)]
     keys = [(e.get("tool"), json.dumps(e.get("args"), sort_keys=True, default=str)) for e in acts]
+    obs = [str(e.get("observation") or "") for e in acts]
     task = next((e for e in ev if e.get("type") == "task"), {})
     llm = [e for e in ev if e.get("type") == "llm" and "check" not in e]
     budget = max(1, int(task.get("max_steps") or 30))
@@ -147,7 +159,28 @@ def features(path: str, fin: str | None) -> dict:
             "answered": float(bool(s.get("answered"))), "answer_len": float(s.get("answer_len") or 0),
             "answer_hedged": float(bool(s.get("answer_hedged"))),
             "finish_rejects": sum(1 for e in ev if e.get("type") == "verifier_reject"),
-            "tokens": float(s.get("tokens") or 0), "_tools": dict(Counter(k[0] for k in keys))}
+            "tokens": float(s.get("tokens") or 0),
+            "check_calls": sum(1 for e in ev if e.get("type") == "llm" and "check" in e),
+            "distinct_results": len({o for o in obs if o}), "max_tool_streak": _streak([k[0] for k in keys]),
+            "stale_streak": _stale(obs), "_tools": dict(Counter(k[0] for k in keys))}
+
+
+def _streak(tools: list) -> int:
+    best = cur = 0
+    for i, t in enumerate(tools):
+        cur = cur + 1 if i and tools[i - 1] == t else 1
+        best = max(best, cur)
+    return best
+
+
+def _stale(obs: list[str]) -> int:
+    """Longest run of consecutive calls whose result (empty included) was already seen earlier in the run."""
+    seen, best, cur = set(), 0, 0
+    for o in obs:
+        cur = 0 if (o and o not in seen) else cur + 1
+        best = max(best, cur)
+        seen.add(o)
+    return best
 
 
 def metric(code, f: dict) -> float | None:
@@ -169,6 +202,7 @@ STEP_FEATURES = {
     "is_error": "1 if that result is a short error-like message",
     "is_repeat": "1 if the same tool was already called with the same arguments in this run",
     "dup_result": "1 if an earlier call of this run returned exactly the same result",
+    "calls_since_new": "executed calls since the last one whose result was new in the run (0: this one was new)",
     "same_tool_run": "consecutive calls of the same tool ending at this one",
     "new_tool": "1 if this tool is used for the first time in the run",
     "tools_so_far": "different tools used so far in the run",
@@ -194,7 +228,7 @@ def step_rows(path: str, fin: str | None) -> list[dict]:
     ev = V.load_events(path)
     budget = max(1, int(next((e for e in ev if e.get("type") == "task"), {}).get("max_steps") or 30))
     rows, calls, results, tools = [], set(), set(), []
-    hist = idle = bare = reply = 0
+    hist = idle = bare = reply = since = 0
     for e in ev:
         if e.get("type") == "llm" and "check" not in e:
             idle += 1
@@ -212,10 +246,12 @@ def step_rows(path: str, fin: str | None) -> list[dict]:
                 break
             run_len += 1
         hist += len(obs)
+        since = 0 if (obs and obs not in results) else since + 1
         n = len(rows) + 1
         rows.append({"step": n, "step_frac": n / budget, "steps_left": max(0, budget - n), "result_chars": len(obs),
                      "is_error": int(_is_error(obs)), "is_repeat": int(key in calls),
-                     "dup_result": int(bool(obs) and obs in results), "same_tool_run": run_len,
+                     "dup_result": int(bool(obs) and obs in results), "calls_since_new": since,
+                     "same_tool_run": run_len,
                      "new_tool": int(tool not in tools), "tools_so_far": len(set(tools) | {tool}),
                      "history_chars": hist, "no_call_replies": bare,
                      "refused_calls": max(0, idle - 1 - bare), "reply_chars": reply,
@@ -526,8 +562,9 @@ def str_consts(src: str) -> set:
 
 
 def lint_code(src: str, linter: B.Linter, bench_names, known: set = frozenset()) -> str | None:
-    """Tier 1 of the generalisation gate (CLAUDE.md, docs/idea_v2.md 3.1), for code: nothing of the tasks or of the
-    benchmark may be written into a component; tools are reached through the task's own schemas."""
+    """Tier 1 of the generalisation gate (CLAUDE.md, docs/idea_v2.md 3.1), for code: nothing of the tasks may be
+    written into a component (task ids, task text, answers, long literals, the benchmark's name). The names of the
+    environment's tools are its public interface, like the tool schemas themselves, and may be used."""
     try:
         tree = ast.parse(src)
     except SyntaxError as e:
@@ -561,9 +598,6 @@ def lint_code(src: str, linter: B.Linter, bench_names, known: set = frozenset())
             return f"access to .{node.attr} is not allowed"
         elif isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs:
             s = node.value
-            if s in linter.tools and s not in known:  # `known`: constants of the code it started from
-                return (f"hardcoded tool name {s!r}: a component must work for any tool set, find tools through "
-                        "task.tools (their schemas) and task.finish_tool")
             if len(s) > MAX_LITERAL and id(node) not in patterns:
                 return (f"the string constant starting {s[:50]!r} has {len(s)} chars, over the limit of "
                         f"{MAX_LITERAL}: long instruction text is a prompt edit, not a component edit; a long "
@@ -591,13 +625,22 @@ EDIT_TYPES = """- tool results: how an environment result becomes the text the m
 - tool calls: repairing or normalising the model's call before it is executed (malformed arguments, an exact repeat
   of an earlier call, a call that cannot succeed)
 - tool set: which tools are offered at a step and how their descriptions/parameters are worded
+- composite tool: a NEW tool the harness implements from the environment's tools and offers next to them (several
+  calls in one, a call followed by opening its best results, a batch over several arguments)
 - context: what of the history is sent at each step (compaction of old results, a running digest of what was
   found, keeping the task and key evidence visible)
 - working notes: structured state the harness keeps during one run and shows to the model (items seen, calls
   tried, candidate answers)
 - acceptance: what is checked before a final answer is accepted, and what the agent is told when it is not
-- control: the loop itself (step budget use, what happens after an error or a refused answer, when to stop,
-  an extra model call that checks or compares candidate answers before finishing)"""
+- control: the loop itself (step budget use, what happens after an error or a refused answer, when to stop)
+- helper call: an extra model call the harness makes for itself, whose output it uses (condense a long result to
+  what the task needs, list alternatives after a dead end, extract or compare candidate answers, check an answer
+  against the evidence gathered)
+- phases: the run in stages (e.g. explore / verify / answer) with a different tool set, context or acceptance rule
+  per stage, and a rule observable on the run for moving between them
+- restart: when a run is stuck, start the conversation afresh from a summary of what was learned so far (the
+  environment itself is not reset), or draft a second answer by another approach and keep the better one by a check"""
+STRUCTURAL = ("composite tool", "helper call", "phases", "restart", "working notes")
 
 HYP = """You improve the scaffolding ("harness") around an AI agent by editing its COMPONENTS (Python code). The
 agent model is fixed. You do not write advice for the model: adding instructions or reminders to prompts is not
@@ -630,11 +673,15 @@ Digests of failed runs:
 paired wins/losses of branches against the saved runs)
 {ledger}
 Read the ledger as experimental results. A behaviour marked REFUTED was caused successfully and did not raise
-success: do not target it again ("adoption" says whether the edit was kept anyway, e.g. for its lower cost). INEFFECTIVE means the code did not cause the behaviour: the idea is still open, by another route.
+success: do not target it again ("adoption" says whether the edit was kept anyway, e.g. for its lower cost). INEFFECTIVE means the code did not cause the behaviour: the idea is still open, by a clearly different route, but a
+behaviour target that failed {close_after} times is closed (listed below the task).
 {graph}
 
 ## Task
-Propose {n} DIFFERENT candidate edits, in at least two different slots. Each is a hypothesis in two parts:
+Propose {n} DIFFERENT candidate edits, in at least two different slots and of at least three different kinds. At
+least two must be STRUCTURAL (kind {structural}): they change how a run unfolds or give the agent a new capability,
+not only a threshold, a format or a message. Prefer an idea the ledger has not tried over a variant of a tried one.
+{closed}Each is a hypothesis in two parts:
 (a) the edit makes the agent behave differently in a measurable way, (b) that behaviour raises the success rate
 (or keeps it while making runs clearly cheaper: a reviewer weighs every measured effect before an edit is adopted).
 `behaviour` is ONE numeric expression computed on ONE run from these end-of-run features (and n('<tool name>') =
@@ -644,8 +691,7 @@ No mean(...), no second metric, no words.
 {features}
 {when_block}Rules:
 - General principle only, of the form "precondition observable during a run -> action of the harness". Nothing
-  specific to a task: no entities, answers, task text; no tool names inside the component (tools are found through
-  their schemas at run time).
+  specific to a task: no entities, answers, task text, task ids. The environment's tool names may be used.
 - The edit must act on real runs: say on which share of runs its precondition should hold.
 - One slot per candidate; the edit wraps or replaces the current variant of that slot.
 
@@ -689,13 +735,17 @@ class StepResult: observation (str), done (bool), info (dict)
   get it through `reg.instantiate` or copy it.
 - All parameters have defaults (the factory is called with an empty config).
 - Imports allowed: {imports}. No file, network or environment access.
-- General: no tool names, task text, entities or benchmark names in the file. Find tools through `task.tools`
-  (`t["function"]["name"]`, `["description"]`, `["parameters"]`) and `task.finish_tool`.
+- General: no task text, entities, answers, task ids or benchmark names in the file. The environment's tool names
+  may be used directly; `task.tools` (`t["function"]["name"]`, `["description"]`, `["parameters"]`) and
+  `task.finish_tool` give them and their parameters at run time.
 - No prompt edits: do not add standing advice to the system prompt or to every message. Text shown to the model
   must be produced by the mechanism from the state of the run (e.g. what was cut, what was refused and why), and
   no string constant may exceed {max_literal} characters.
 - The mechanism must act on real runs. A component whose condition never holds is rejected.
-- Model calls from agent_loop other than the main one must use `tag=f"h:{{task.benchmark}}:check"`.
+- Model calls from agent_loop other than the main one must use `tag=f"h:{{task.benchmark}}:check"` and be recorded
+  with `rec.llm(resp, step=state.step, check="<purpose>")` (they count as `check_calls`, not as agent turns).
+- A composite tool: add its schema in `tools(...)`, and in agent_loop execute it through `env.step` calls of the
+  real tools; record each real call with `rec.step(...)` as the current loop does.
 - Keep per-run state on the instance keyed by task.task_id, or in `state.notes` (a fresh harness object is built
   for every run).
 {history}{feedback}
@@ -881,7 +931,9 @@ def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path,
                             step_features="\n".join(f"  {k}: {v}" for k, v in STEP_FEATURES.items()),
                             step_facts=ctx["step_facts"]) if ctx.get("step_facts") else "",
                         when_field=WHEN_FIELD if ctx.get("step_facts") else "",
-                        features="\n".join(f"  {k}: {v}" for k, v in FEATURES.items()))
+                        features="\n".join(f"  {k}: {v}" for k, v in FEATURES.items()),
+                        structural=" / ".join(STRUCTURAL), close_after=CLOSE_AFTER,
+                        closed=closed_view(ledger))
     if feedback:
         prompt += "\n\nYour previous answer could not be used:\n" + feedback + "\nAnswer again, complete."
     (ws / f"r{r}_hyp_prompt{'_retry' if feedback else ''}.txt").write_text(prompt, encoding="utf-8")
@@ -894,6 +946,35 @@ def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path,
         if isinstance(d, dict) and isinstance(d.get("candidates"), list) and d["candidates"]:
             return d
     return d if isinstance(d, dict) else {}
+
+
+_FAILED = ("REFUTED", "INEFFECTIVE", "DEAD CODE", "NOT BUILT", "INCONCLUSIVE", "HARMFUL", "NOT CONFIRMED")
+
+
+def _norm(expr: str) -> str:
+    return re.sub(r"\s+", "", str(expr or ""))
+
+
+def closed_targets(ledger: list[dict]) -> dict:
+    """(behaviour, direction) -> attempts, for targets that failed CLOSE_AFTER times and were never merged. Trying the
+    same measured behaviour again and again is what kept earlier searches narrow; a closed target is rejected."""
+    tries, merged = Counter(), set()
+    for e in ledger:
+        key = (_norm(e.get("behaviour")), e.get("direction"))
+        if e.get("status") == "merged":
+            merged.add(key)
+        elif str(e.get("verdict") or "").startswith(_FAILED):
+            tries[key] += 1
+    return {k: n for k, n in tries.items() if n >= CLOSE_AFTER and k not in merged} if CLOSE_AFTER > 0 else {}
+
+
+def closed_view(ledger: list[dict]) -> str:
+    c = closed_targets(ledger)
+    if not c:
+        return ""
+    return ("Closed behaviour targets (failed " + str(CLOSE_AFTER) + " or more times; a candidate with the same "
+            "`behaviour` and `direction` is rejected): " + "; ".join(f"`{b}` {d} ({n} tries)" for (b, d), n in c.items())
+            + "\n")
 
 
 def validate_hyp(h: dict, ledger: list[dict]) -> dict:
@@ -911,7 +992,11 @@ def validate_hyp(h: dict, ledger: list[dict]) -> dict:
     for k in ("hypothesis", "mechanism"):
         if len(str(h.get(k) or "").strip()) < 20:
             raise ValueError(f"{k} is missing")
-    norm = re.sub(r"\s+", "", beh)
+    norm = _norm(beh)
+    n_closed = closed_targets(ledger).get((norm, direction))
+    if n_closed:
+        raise ValueError(f"behaviour `{beh}` {direction} is closed: it failed in {n_closed} earlier candidates; "
+                         "target a different behaviour")
     for e in ledger:
         if e["verdict"].startswith("REFUTED") and re.sub(r"\s+", "", e["behaviour"]) == norm and e["direction"] == direction:
             raise ValueError(f"behaviour `{beh}` {direction} was refuted in round {e['round']}")
@@ -1332,7 +1417,31 @@ def select(hyps: list[dict]) -> list[int]:
     def tier(h):  # a situation of the failed runs first, one of the successful runs last
         d = when_disc(h.get("when_obs"))
         return 0 if d >= WHEN_DISC else 2 if d <= -WHEN_DISC else 1
-    return sorted(range(len(hyps)), key=lambda i: (cls(hyps[i]), tier(hyps[i]), i))
+    order = sorted(range(len(hyps)), key=lambda i: (cls(hyps[i]), tier(hyps[i]), i))
+    return diversify(order, hyps) if DIVERSE else order
+
+
+def is_structural(h: dict) -> bool:
+    return any(k in str(h.get("edit_type") or "").lower() for k in STRUCTURAL)
+
+
+def diversify(order: list[int], hyps: list[dict], n: int = N_CAND) -> list[int]:
+    """Reorder so that the first `n` (the ones that get code this round) are of different kinds of edit and hold at
+    least one structural edit when there is one; evidence against a hypothesis still sends it last."""
+    against = [i for i in order if hyps[i]["observational"]["agree"] - hyps[i]["observational"]["disagree"] <= -OBS_MARGIN]
+    rest = [i for i in order if i not in against]
+    head, kinds = [], set()
+    for i in rest:  # first pass: one per kind of edit
+        k = str(hyps[i].get("edit_type") or "").lower()
+        if k not in kinds:
+            head.append(i)
+            kinds.add(k)
+    if rest and not any(is_structural(hyps[i]) for i in head[:n]):
+        s = next((i for i in rest if is_structural(hyps[i])), None)
+        if s is not None:
+            head = [x for x in head if x != s]
+            head.insert(min(n - 1, len(head)), s)
+    return head + [i for i in rest if i not in head] + against
 
 
 def harness_state(recs: list[dict], fmap: dict, merged: list[dict]) -> str:
