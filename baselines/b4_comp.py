@@ -28,7 +28,9 @@ between failed and successful runs that orders hypotheses), B4_REACH_MIN (0.5) a
 changes fewer than that share of the runs where its precondition holds is sent back for a rewrite.
 Breadth: B4_CLOSE_AFTER (2): a behaviour target (metric, direction) that failed that many times and never merged is
 closed and listed in the prompt; B4_DIVERSE (1): the candidates that get code in a round are of different kinds of
-edit and include a structural one (composite tool, helper call, phases, restart, working notes) when proposed.
+edit and include a structural one (composite tool, harness tool, helper call, phases, restart, working notes) when
+proposed; each round assigns the proposer the B4_N_HYP kinds of edit the ledger has tried least, B4_N_STRUCT (3) of
+them structural, one candidate per kind.
 The environment's tool names may appear in a component (they are its public interface); task ids, task text,
 answers, long literals and the benchmark's name may not.
 """
@@ -55,6 +57,7 @@ from baselines.proposer_io import apply_files, extract_json, gate_hint, reply_fi
 
 N_HYP = int(os.environ.get("B4_N_HYP", "5"))        # hypotheses asked per round (text only)
 N_CAND = int(os.environ.get("B4_N_CAND", "3"))      # hypotheses that get code per round
+N_STRUCT = int(os.environ.get("B4_N_STRUCT", "3"))  # of the kinds assigned per round, how many are structural
 N_PROBE = int(os.environ.get("B4_N_PROBE", "16"))   # branches of the behaviour probe
 N_SCREEN = int(os.environ.get("B4_N_SCREEN", "64"))  # branches of the outcome screen, probe included
 K_VAL = int(os.environ.get("B4_K_VAL", "3"))        # branches per touched val run
@@ -628,6 +631,9 @@ EDIT_TYPES = """- tool results: how an environment result becomes the text the m
 - tool set: which tools are offered at a step and how their descriptions/parameters are worded
 - composite tool: a NEW tool the harness implements from the environment's tools and offers next to them (several
   calls in one, a call followed by opening its best results, a batch over several arguments)
+- harness tool: a NEW tool the harness answers itself, in code, without calling the environment, over what this run
+  has gathered (a note pad the agent writes to and reads back, finding or filtering earlier results by a word or a
+  field, comparing candidate answers against the evidence seen, listing what was already tried and what was not)
 - context: what of the history is sent at each step (compaction of old results, a running digest of what was
   found, keeping the task and key evidence visible)
 - working notes: structured state the harness keeps during one run and shows to the model (items seen, calls
@@ -641,7 +647,8 @@ EDIT_TYPES = """- tool results: how an environment result becomes the text the m
   per stage, and a rule observable on the run for moving between them
 - restart: when a run is stuck, start the conversation afresh from a summary of what was learned so far (the
   environment itself is not reset), or draft a second answer by another approach and keep the better one by a check"""
-STRUCTURAL = ("composite tool", "helper call", "phases", "restart", "working notes")
+STRUCTURAL = ("composite tool", "harness tool", "helper call", "phases", "restart", "working notes")
+KINDS = tuple(re.findall(r"^- ([a-z ]+):", EDIT_TYPES, re.M))  # every kind of edit, in the order listed
 
 HYP = """You improve the scaffolding ("harness") around an AI agent by editing its COMPONENTS (Python code). The
 agent model is fixed. You do not write advice for the model: adding instructions or reminders to prompts is not
@@ -679,9 +686,13 @@ behaviour target that failed {close_after} times is closed (listed below the tas
 {graph}
 
 ## Task
-Propose {n} DIFFERENT candidate edits, in at least two different slots and of at least three different kinds. At
-least two must be STRUCTURAL (kind {structural}): they change how a run unfolds or give the agent a new capability,
-not only a threshold, a format or a message. Prefer an idea the ledger has not tried over a variant of a tried one.
+Propose {n} DIFFERENT candidate edits, in at least two different slots. This round the kinds are assigned (the kinds
+the ledger has tried least; structural kinds change how a run unfolds or give the agent a new capability, not only
+a threshold, a format or a message): give ONE candidate of each of these kinds, in this order: {quota}.
+Prefer an idea the ledger has not tried over a variant of a tried one. To find ideas, ask of the evidence: what does
+the agent need that it never sees; what does it repeat or waste; what does it forget between steps; what decision
+could the harness take for it, or take away from it; what could be checked before a result or an answer is trusted;
+what could be done in one call instead of many; when should a run change course or start over.
 {closed}Each is a hypothesis in two parts:
 (a) the edit makes the agent behave differently in a measurable way, (b) that behaviour raises the success rate
 (or keeps it while making runs clearly cheaper: a reviewer weighs every measured effect before an edit is adopted).
@@ -694,12 +705,14 @@ No mean(...), no second metric, no words.
 - General principle only, of the form "precondition observable during a run -> action of the harness". Nothing
   specific to a task: no entities, answers, task text, task ids. The environment's tool names may be used.
 - The edit must act on real runs: say on which share of runs its precondition should hold.
-- One slot per candidate; the edit wraps or replaces the current variant of that slot.
+- One slot per candidate; the edit wraps or replaces the current variant of that slot. A composite tool or a
+  harness tool is offered and answered by the loop: its slot is agent_loop.
 
 Answer ONLY with JSON:
 {{"analysis": "<3-5 sentences: what limits this agent, from the evidence and the ledger>",
  "candidates": [{{"name": "<snake_case, <= 24 chars>", "slot": "tool_policy|context_mgmt|verifier|agent_loop",
-   "edit_type": "<one of the kinds above>", "failure_mode": "<the failure mode it targets>",
+   "edit_type": "<the assigned kind, exactly as written above>", "failure_mode": "<the failure mode it targets>",
+   "novelty": "<the closest ledger candidate and how this one differs, or 'new'>",
    "hypothesis": "<If the agent ... then it succeeds more often, because ...>",
    "behaviour": "<expression>", "direction": "up|down",{when_field}
    "mechanism": "<precondition -> action, 2-4 sentences: exactly what the component does>"}}, ...]}}"""
@@ -745,8 +758,11 @@ class StepResult: observation (str), done (bool), info (dict)
 - The mechanism must act on real runs. A component whose condition never holds is rejected.
 - Model calls from agent_loop other than the main one must use `tag=f"h:{{task.benchmark}}:check"` and be recorded
   with `rec.llm(resp, step=state.step, check="<purpose>")` (they count as `check_calls`, not as agent turns).
-- A composite tool: add its schema in `tools(...)`, and in agent_loop execute it through `env.step` calls of the
-  real tools; record each real call with `rec.step(...)` as the current loop does.
+- A composite tool or a harness tool is an agent_loop edit: at each step add its schema to the list from
+  `h.tool_policy.tools(task)`, and handle its calls in the loop before the normal path. A composite tool runs
+  through `env.step` calls of the real tools, each recorded with `rec.step(...)` as the current loop does. A harness
+  tool is answered in code without `env.step`; it uses a step like any call and is recorded with
+  `rec.step(tool, args, observation, harness=True)`.
 - Keep per-run state on the instance keyed by task.task_id, or in `state.notes` (a fresh harness object is built
   for every run).
 {history}{feedback}
@@ -905,7 +921,8 @@ def ledger_view(ledger: list[dict]) -> str:
     for e in ledger:
         sh, t, o = e.get("shift") or {}, e.get("outcome") or {}, e.get("observational") or {}
         rows.append(
-            f"- [round {e['round']}] {e['slot']}/{e['name']}: {e['hypothesis'][:220]}\n"
+            f"- [round {e['round']}] {e['slot']}/{e['name']} ({e.get('edit_type') or 'kind not recorded'}): "
+            f"{e['hypothesis'][:220]}\n"
             f"    mechanism: {e['mechanism'][:260]}\n"
             f"    metric `{e['behaviour']}` ({e['direction']}); saved runs: {o.get('agree', 0)} tasks agree / "
             f"{o.get('disagree', 0)} disagree; runs touched: {e.get('coverage', '?')}\n"
@@ -933,7 +950,7 @@ def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path,
                             step_facts=ctx["step_facts"]) if ctx.get("step_facts") else "",
                         when_field=WHEN_FIELD if ctx.get("step_facts") else "",
                         features="\n".join(f"  {k}: {v}" for k, v in FEATURES.items()),
-                        structural=" / ".join(STRUCTURAL), close_after=CLOSE_AFTER,
+                        quota=", ".join(kind_quota(ledger, r)), close_after=CLOSE_AFTER,
                         closed=closed_view(ledger))
     if feedback:
         prompt += "\n\nYour previous answer could not be used:\n" + feedback + "\nAnswer again, complete."
@@ -978,6 +995,34 @@ def closed_view(ledger: list[dict]) -> str:
             + "\n")
 
 
+def norm_kind(k) -> str:
+    """The listed kind an `edit_type` names ('' when none): exact, then the one it contains or is contained in."""
+    k = re.sub(r"[^a-z ]", " ", str(k or "").lower()).strip()
+    k = re.sub(r"\s+", " ", k)
+    if not k:
+        return ""
+    if k in KINDS:
+        return k
+    hits = [x for x in KINDS if x in k]
+    if hits:
+        return max(hits, key=len)
+    hits = [x for x in KINDS if k in x]  # a shortened name: only when it names one kind
+    return hits[0] if len(hits) == 1 else ""
+
+
+def kind_quota(ledger: list[dict], r: int, n: int = 0, n_struct: int = 0) -> list[str]:
+    """The kinds asked for in round r: the least tried in the ledger (ties broken at random per seed and round),
+    N_STRUCT of them structural and listed first. Left to choose, the proposer returns to the same few kinds every
+    round; a kind that was assigned but got no code stays least tried and is assigned again."""
+    n, n_struct = n or N_HYP, min(n_struct or N_STRUCT, n or N_HYP)
+    tried = Counter(norm_kind(e.get("edit_type")) for e in ledger)
+    rng = random.Random(f"{B.SEED}:{r}")
+    key = {k: (tried[k], rng.random()) for k in KINDS}
+    st = sorted((k for k in KINDS if k in STRUCTURAL), key=key.get)[:n_struct]
+    other = sorted((k for k in KINDS if k not in st), key=key.get)[:n - len(st)]
+    return sorted(st, key=key.get) + sorted(other, key=key.get)  # structural first: they get code first
+
+
 def validate_hyp(h: dict, ledger: list[dict]) -> dict:
     if not isinstance(h, dict):
         raise ValueError("not an object")
@@ -1001,12 +1046,18 @@ def validate_hyp(h: dict, ledger: list[dict]) -> dict:
     for e in ledger:
         if e["verdict"].startswith("REFUTED") and re.sub(r"\s+", "", e["behaviour"]) == norm and e["direction"] == direction:
             raise ValueError(f"behaviour `{beh}` {direction} was refuted in round {e['round']}")
+    kind = norm_kind(h.get("edit_type"))
+    if not kind:
+        raise ValueError(f"edit_type {str(h.get('edit_type'))[:40]!r} is not one of the kinds: {', '.join(KINDS)}")
+    if kind in ("composite tool", "harness tool"):
+        slot = "agent_loop"  # the loop offers the new tool and answers its calls
     wh = str(h.get("when") or "").strip()
     if wh:
         compile_when(wh)
     return {"name": name, "slot": slot, "direction": direction, "behaviour": beh, "when": wh,
             "hypothesis": str(h["hypothesis"]).strip()[:600], "mechanism": str(h["mechanism"]).strip()[:900],
-            "edit_type": str(h.get("edit_type") or "")[:60], "failure_mode": str(h.get("failure_mode") or "")[:80]}
+            "edit_type": kind, "failure_mode": str(h.get("failure_mode") or "")[:80],
+            "novelty": str(h.get("novelty") or "")[:200]}
 
 
 def root_bundle_raw(root: Path) -> dict:
@@ -1423,7 +1474,7 @@ def select(hyps: list[dict]) -> list[int]:
 
 
 def is_structural(h: dict) -> bool:
-    return any(k in str(h.get("edit_type") or "").lower() for k in STRUCTURAL)
+    return norm_kind(h.get("edit_type")) in STRUCTURAL
 
 
 def diversify(order: list[int], hyps: list[dict], n: int = N_CAND) -> list[int]:

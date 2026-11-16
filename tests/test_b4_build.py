@@ -122,7 +122,7 @@ def test_hypothesis_without_a_real_situation_is_rejected_before_code(tmp_path):
     recs = [{"trajectory_path": a, "success": i % 2 == 0, "task_id": str(i)} for i in range(40)]
     rows = lambda p: M.step_rows(p, "done")  # noqa: E731
     h = {"name": "n", "slot": "verifier", "behaviour": "steps", "direction": "up", "hypothesis": "If the agent " * 3,
-         "mechanism": "precondition -> action " * 2}
+         "mechanism": "precondition -> action " * 2, "edit_type": "acceptance"}
     for bad, msg in (({}, "`when` is missing"), ({"when": "is_error and step > 1"}, "holds at 0 of 80 executed calls")):
         try:
             M.check_when(M.validate_hyp({**h, **bad}, []), recs, rows)

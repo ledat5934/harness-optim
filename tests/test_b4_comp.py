@@ -58,7 +58,8 @@ def test_lint_rejects_task_specific_and_prompt_code():
 
 def test_refuted_behaviour_is_not_proposed_again():
     h = {"name": "More Steps!", "slot": "verifier", "direction": "up", "behaviour": "steps",
-         "hypothesis": "If the agent takes more steps it succeeds more often.", "mechanism": "refuse -> continue " * 3}
+         "hypothesis": "If the agent takes more steps it succeeds more often.", "mechanism": "refuse -> continue " * 3,
+         "edit_type": "acceptance"}
     c = M.validate_hyp(h, [])
     assert c["name"] == "more_steps" and c["slot"] == "verifier"
     led = [{**c, "round": 1, "verdict": "REFUTED: behaviour changed as predicted, success did not"}]
@@ -198,7 +199,8 @@ def test_closed_targets_and_diversity():
     led = [{"round": r, "behaviour": "distinct_tools", "direction": "up", "verdict": v, "status": "rejected"}
            for r, v in ((1, "INEFFECTIVE: x"), (2, "NOT BUILT: y"))]
     h = {"name": "again", "slot": "tool_policy", "direction": "up", "behaviour": "distinct_tools",
-         "hypothesis": "If the agent uses more tools it succeeds more often.", "mechanism": "streak -> offer other " * 3}
+         "hypothesis": "If the agent uses more tools it succeeds more often.", "mechanism": "streak -> offer other " * 3,
+         "edit_type": "tool set"}
     try:
         M.validate_hyp(h, led)
         raise AssertionError("closed target accepted")
@@ -211,6 +213,25 @@ def test_closed_targets_and_diversity():
     order = M.select(hyps)
     assert order[:3] == [0, 2, 3] and order[-1] == 4  # one per kind, a structural one in the first three
     assert M.select([o("tool results"), o("acceptance"), o("control"), o("restart")])[:3] == [0, 1, 3]
+
+
+def test_edit_kinds_and_quota():
+    assert "harness tool" in M.KINDS and "harness tool" in M.STRUCTURAL and len(M.KINDS) == 12
+    assert M.norm_kind("Composite tool") == "composite tool" and M.norm_kind("a harness tool (notes)") == "harness tool"
+    assert M.norm_kind("tool") == "" and M.norm_kind("xyz") == "" and M.norm_kind("accept") == "acceptance"
+    q = M.kind_quota([], 1)
+    assert len(q) == M.N_HYP and len(set(q)) == len(q) and sum(k in M.STRUCTURAL for k in q) == M.N_STRUCT
+    led = [{"edit_type": k} for k in M.KINDS if k != "harness tool" for _ in range(2)]
+    assert "harness tool" in M.kind_quota(led, 2)  # the one kind never tried is always assigned
+    h = {"name": "notes", "slot": "context_mgmt", "direction": "down", "behaviour": "n_actions",
+         "hypothesis": "If the agent can read back its notes it repeats fewer calls.", "mechanism": "x -> y " * 5}
+    try:
+        M.validate_hyp({**h, "edit_type": "something else"}, [])
+        raise AssertionError("unknown kind accepted")
+    except ValueError as e:
+        assert "not one of the kinds" in str(e)
+    c = M.validate_hyp({**h, "edit_type": "harness tool"}, [])
+    assert c["slot"] == "agent_loop" and c["edit_type"] == "harness tool"
 
 
 def test_new_run_features():
