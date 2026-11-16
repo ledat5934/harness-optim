@@ -654,3 +654,41 @@ Tổng 16 ứng viên: 6 không đổi hành vi, 3 code không chạy tới, 3 h
 | AppWorld | 47/99 | 47/99 (= H0) | – | không có |
 
 Mức `low` hạ điểm H0 ở cả hai benchmark so với `medium` (BCP 24 → 20; AppWorld 55 → 47), nhưng **kết luận về B4 không đổi**: trên BCP lợi ích đến từ việc tìm lâu hơn, ngang luật mù cùng chi phí; trên AppWorld không tìm ra gì.
+
+## 22. B4 v7 + công cụ harness + giao loại sửa mỗi vòng, 3 vòng — BCP, seed 0 (`b4v7p`)
+
+Mức `low`, giao thức MEDIUM như §21. Code lúc bắt đầu: commit 998fe66. Thay đổi so với §21:
+- thêm loại sửa "harness tool" (công cụ mới do harness tự trả lời bằng code, không gọi môi trường);
+- mỗi vòng giao 5 loại sửa ít thử nhất trong 12 loại, 3 loại đầu là loại lớn;
+- prompt đề xuất có 7 câu hỏi gợi ý và thêm trường `novelty`.
+
+Ba bản sửa pipeline (quote_tools, gửi lại ý bị loại để sửa, hoãn thay vì bỏ khi một chỗ sửa đã đủ ý) được làm sau khi lượt chạy bắt đầu. Lượt chạy được tiếp tục bằng đúng code lúc bắt đầu, nên **không** có ba bản sửa này.
+
+| Harness | Test | Bước/bài | Token/bài | So từng bài với `b4v7p` (b4v7p thắng/thua) |
+|---|---|---|---|---|
+| H0 | 20% | 5.7 | 26k | 14/1 (p=0.001) |
+| Đối chứng N=11 | 32% | 16.1 | 237k | 7/6 (p=1.0) |
+| B4 `b4v7m` (§21) | 33% | 14.3 | 238k | 5/5 (p=1.0) |
+| **B4 `b4v7p`** | **33%** | 16.0 | 280k | – |
+| Đối chứng N=14 | 35% | 17.9 | 287k | 8/10 (p=0.82) |
+
+Ước lượng nhánh trên test: 30% (chạm 70/100 bài, 140 nhánh: 20 thắng, 0 thua; theo bài +14/−0).
+
+| Vòng | Ứng viên (loại) | Kết quả |
+|---|---|---|
+| 1 | c1 ghi chú bằng chứng (working notes) | số kết quả khác nhau được xem 4.8 → 11.6, thắng 6/thua 2, hội đồng bỏ vì tốn |
+| 1 | c2 giữ bằng chứng trực tiếp (context) | không đổi hành vi |
+| 1 | **c3 `verifier/reject_unsupported_hedge` (acceptance)** | **8/0, p=0.004, gộp** (train 0.233, val 0.367) |
+| 2 | c4 tìm rồi mở luôn (composite tool) | không đổi hành vi |
+| 2 | c5 gọi model kiểm tra câu trả lời (helper call) | bác bỏ, 4/5 |
+| 3 | c6 chuyển sang giai đoạn mở tài liệu (phases) | bác bỏ, 0/2 |
+| 3 | c7 sửa mô tả công cụ (tool set) | không đổi hành vi |
+| 3 | c8 khởi động lại sau khi bị từ chối (restart) | token 379k → 194k, 3/2, hội đồng nhận 2–1 vì tiết kiệm, không qua val |
+
+Ý bị loại trước khi viết code: vòng 1 "restart" (điều kiện chỉ đúng ở 4/150 run) và "phases" (viết `n(get_document)` thiếu dấu nháy). Vòng 2: hai ý có điều kiện quá hiếm, còn ý công cụ harness `evidence_lookup` bị bỏ vì agent_loop đã có 2 ý.
+
+**Đọc kết quả:**
+- Giao loại sửa làm các ý **đa dạng hơn hẳn**: 8 ý thuộc 8 loại, trong đó 4 loại lớn. Các lượt trước gần như chỉ có chỉnh ngưỡng hay sửa thông báo.
+- Nhưng **kết quả không đổi**: bản sửa duy nhất được gộp lại là ý "không nhận câu trả lời lấp lửng" như §21, test 33% = `b4v7m`, ngang đối chứng cùng chi phí.
+- Các loại lớn chưa thắng. Công cụ gộp không được agent dùng; gọi thêm model và chia giai đoạn đổi đúng hành vi nhưng không tăng độ đúng.
+- Công cụ harness chưa được thử lần nào, vì ba lỗi pipeline nói trên.
