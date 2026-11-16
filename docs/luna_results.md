@@ -624,3 +624,33 @@ H0 ở `low`: train 8/50, 7/50, 8/50 (3 lượt), val 7/30, test 20/100 (ở `me
 Theo vòng: vòng 1 gộp **c2** `agent_loop/defer_hedged_finish` và **c3** `verifier/hedge_verification` (mỗi cái 7 thắng/0 thua trên 64 nhánh, p=0.008; val 23.3% → 43.3%). Hai cái là **cùng một ý** đặt ở hai chỗ khác nhau: khi câu trả lời cuối còn lấp lửng ("không xác định được") mà còn bước thì không nhận, bắt tìm tiếp. Vòng 2–5 không gộp gì. Trong 16 ứng viên của vòng 2–5: 3 bị chặn ở cổng khái quát vì ghi cứng tên công cụ `search`, 1 không qua bước kiểm tra build; 3 là code không bao giờ chạy tới; 5 không làm hành vi đổi như dự đoán; 2 làm hành vi đổi nhưng điểm giảm; 1 làm hành vi đổi nhưng lợi quá nhỏ so với nhiễu (5 thắng/2 thua); 1 thắng 7/thua 2 trên train nhưng hành vi không đổi như dự đoán nên không được xác nhận.
 
 **Đọc kết quả:** lặp lại đúng §20.3 ở mức suy nghĩ khác. B4 tìm lại đúng ý tưởng cũ (từ chối câu trả lời lấp lửng), thắng H0 rõ ràng, nhưng **không hơn một luật mù "chưa đến bước N thì chưa được nộp" ở cùng chi phí** (237k so với 238k token, 32% so với 33%). Cổng khái quát đã chặn đúng các sửa đổi ghi cứng tên công cụ.
+
+### 21.2 AppWorld
+
+H0 ở `low`: train 35/50, 27/50, 33/50 (3 lượt), val 21/30, test **47/99** (14.3 bước, 83k token mỗi bài). Ở `medium` (§19) test là 55/99.
+
+B4 `b4v7m`: đủ 5 vòng, **không gộp sửa đổi nào**, harness cuối = H0, test 47/99 (= H0).
+
+| Vòng | Ứng viên | Kết quả |
+|---|---|---|
+| 1 | c1 phá vòng lặp hành động, c2 giữ kết quả lớn, c3 thử lại khi model trả lời mà không gọi công cụ | c1 hành vi đổi nhưng điểm giảm (2/5); c2 không đổi hành vi; c3 thắng 7/thua 2 trên train, LLM duyệt "nhận", nhưng val 0/2 → không xác nhận |
+| 2 | c4 giữ nguyên kết quả công cụ lớn, c5 bỏ kết quả trùng khỏi ngữ cảnh, c6 | c4 điểm giảm (3/11); c5 điểm giảm mạnh (0/25); c6 code không chạy tới |
+| 3 | c7, c8, c9 | c7, c9 không đổi hành vi; c8 10/9 (nhiễu) |
+| 4 | c10, c11 gắn nhãn lỗi gần nhất cạnh lời gọi gây lỗi, c12 | c11 hành vi đổi như dự đoán, 8/3 trên train, LLM duyệt "nhận", nhưng **trên val không có nhánh nào bị chạm** → không xác nhận; c12 12/8 (nhiễu), LLM duyệt "bỏ" vì tốn token hơn; c10 không đổi hành vi |
+| 5 | c13–c16 | 2 code không chạy tới; 2 không đổi hành vi (0/3, 1/5) |
+
+Tổng 16 ứng viên: 6 không đổi hành vi, 3 code không chạy tới, 3 hành vi đổi nhưng điểm giảm, 2 nhiễu, 2 có dấu hiệu tốt trên train nhưng không qua val.
+
+**Đọc kết quả:**
+- Giống §19 (mức `medium`): pipeline **không tìm được sửa đổi nào cho AppWorld**. Tín hiệu tốt nhất là c3 và c11, cả hai đều về **xử lý lỗi/phản hồi** (thử lại khi không có lời gọi công cụ; gắn lỗi vào đúng lời gọi gây ra nó), nhưng mẫu nhỏ và không lặp lại trên val.
+- c5 là ví dụ pipeline đề xuất **ngược với bằng chứng quan sát** của chính nó (số liệu cho thấy run thành công dùng nhiều token hơn, điểm −0.69, mà ứng viên vẫn đi theo hướng giảm token) và bị bác mạnh (0/25). Khâu đề xuất nên chặn sớm những giả thuyết có điểm quan sát âm.
+- Không có đối chứng cùng chi phí cho AppWorld, vì B4 = H0 nên không có gì để so.
+
+### 21.3 Tóm tắt lượt `low`
+
+| Benchmark | H0 test | B4 test | Đối chứng cùng chi phí | Sửa đổi được gộp |
+|---|---|---|---|---|
+| BrowseComp-Plus | 20% (26k tok) | 33% (238k tok) | N=11: 32% (237k); N=14: 35% (287k) | c2 + c3, cùng ý "không nhận câu trả lời lấp lửng" |
+| AppWorld | 47/99 | 47/99 (= H0) | – | không có |
+
+Mức `low` hạ điểm H0 ở cả hai benchmark so với `medium` (BCP 24 → 20; AppWorld 55 → 47), nhưng **kết luận về B4 không đổi**: trên BCP lợi ích đến từ việc tìm lâu hơn, ngang luật mù cùng chi phí; trên AppWorld không tìm ra gì.
