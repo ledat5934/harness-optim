@@ -329,3 +329,178 @@ Execution trace of your file over the 12 longest s
     [b4v7m_appworld_c8_rev_a0_k0_943911f5] 287e338_2                                ok=False was=True branched=True at=1/11 tok=60769 err=
     [b4v7m_appworld_c8_rev_a0_k0_0350f340] ce359b5_1                                ok=True was=True branched=True at=1/13 tok=99084 err=
     [b4v7m_appworld_c8_rev_a0_k0_c376a617] 27e1026_1                                ok=True was=True branched=True at=1/11 tok=95355 err=
+shared H0 appworld: train=150 val=30 test=99
+[budget] b4[appworld] round 1 spent=$15.921650 of MAX_USD=$26.00 remaining=$10.078350 (38.8%) calls=511276
+  [b4 appworld] round 1 c1 tool_policy/break_repeat_cycles: `n_actions - distinct_actions` down obs={'mean_success': 0.547, 'mean_fail': 1.127, 'mixed_tasks': 26, 'agree': 10, 'disagree': 7, 'score': 0.176} when=`is_repeat == 1` {'runs': 57, 'n_runs': 150, 'in_failed': 0.545, 'in_success': 0.284}
+    [c1] attempt 0: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c1] attempt 1: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+  [b4 appworld] round 1 c1: cover=0.366 shift={'n': 34, 'before': 1.971, 'after': 0.559, 'as_predicted': 28, 'opposite': 2, 'p': 0.0, 'shifted': True} outcome={'W': 2, 'L': 5, 'n': 34, 'p': 0.9375} -> REFUTED: behaviour changed as predicted and success went down
+  [b4 appworld] round 1 c2 context_mgmt/retain_large_results: `obs_chars` up obs={'mean_success': 45067.842, 'mean_fail': 32837.073, 'mixed_tasks': 26, 'agree': 16, 'disagree': 10, 'score': 0.231} when=`result_chars > 7537` {'runs': 133, 'n_runs': 150, 'in_failed': 0.745, 'in_success': 0.968}
+  [b4 appworld] round 1 c2: cover=0.917 shift={'n': 16, 'before': 32185.188, 'after': 34211.438, 'as_predicted': 10, 'opposite': 6, 'p': 0.2272, 'shifted': False} outcome={'W': 0, 'L': 2, 'n': 16, 'p': 1.0} -> INEFFECTIVE: the code did not cause the behaviour (after one revision); the hypothesis itself is untested
+  [b4 appworld] round 1 c3 agent_loop/recover_no_call: `answered` up obs={'mean_success': 0.0, 'mean_fail': 0.0, 'mixed_tasks': 26, 'agree': 0, 'disagree': 0, 'score': 0.0} when=`no_call_replies >= 1` {'runs': 13, 'n_runs': 150, 'in_failed': 0.127, 'in_success': 0.063}
+  [b4 appworld] round 1 c3: cover=0.069 shift={'n': 20, 'before': 0.0, 'after': 0.0, 'as_predicted': 0, 'opposite': 0, 'p': 1.0, 'shifted': False} outcome={'W': 7, 'L': 2, 'n': 20, 'p': 0.0898} -> SUPPORTED on training runs (behaviour did NOT change as predicted)
+    [c3] effects: steps: 18.4 -> 24.5 (higher in 14, lower in 5 of 20 branches); step_frac: 0.46 -> 0.613 (higher in 14, lower in 5 of 20 branches); loop_frac: 0.46 -> 0.613 (higher in 14, lower in 5 of 20 branches); llm_calls: 19.4 -> 25.55 (higher in 14, lower in 5 of 20 branches); n_actions: 18.4 -> 24.5 (higher in 14, lower in 5 of 20 branches); distinct_actions: 16.5 -> 21.7 (higher in 13, lower in 6 of 20 branches); obs_chars: 43805.3 -> 68554.9 (higher in 15, lower in 5 of 20 branches)
+    [c3] review: {'decision': 'adopt', 'benefit': 'success', 'reason': 'The edit produced a net gain of five successes across 20 branches, with only two regressions, and the one-sided sign test supports a real gain (p = 0.0898). The increased calls and tool-result volume are acceptable costs if they buy successes; the measured gain should be checked again on held-out tasks.', 'votes': {'adopt': 3}} -> admitted
+  [b4 appworld] round 1: [('c1', 'tool_policy', 'REFUTED'), ('c2', 'context_mgmt', 'INEFFECTIVE'), ('c3', 'agent_loop', 'NOT CONFIRMED')] -> no merge
+[budget] b4[appworld] round 2 spent=$15.921650 of MAX_USD=$26.00 remaining=$10.078350 (38.8%) calls=511276
+  [b4 appworld] round 2 c4 context_mgmt/preserve_large_tool_evid: `tokens` up obs={'mean_success': 103621.347, 'mean_fail': 80036.255, 'mixed_tasks': 26, 'agree': 22, 'disagree': 4, 'score': 0.692} when=`result_chars > 7537` {'runs': 133, 'n_runs': 150, 'in_failed': 0.745, 'in_success': 0.968}
+    [c4] attempt 0: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+  [b4 appworld] round 2 c4: cover=0.883 shift={'n': 40, 'before': 96716.15, 'after': 136117.125, 'as_predicted': 27, 'opposite': 13, 'p': 0.0192, 'shifted': True} outcome={'W': 3, 'L': 11, 'n': 40, 'p': 0.9935} -> REFUTED: behaviour changed as predicted and success went down
+  [b4 appworld] round 2 c5 context_mgmt/dedupe_context_results: `tokens` down obs={'mean_success': 103621.347, 'mean_fail': 80036.255, 'mixed_tasks': 26, 'agree': 4, 'disagree': 22, 'score': -0.692} when=`dup_result == 1` {'runs': 57, 'n_runs': 150, 'in_failed': 0.564, 'in_success': 0.274}
+  [b4 appworld] round 2 c5: cover=1.0 shift={'n': 40, 'before': 94011.3, 'after': 23802.4, 'as_predicted': 39, 'opposite': 1, 'p': 0.0, 'shifted': True} outcome={'W': 0, 'L': 25, 'n': 40, 'p': 1.0} -> REFUTED: behaviour changed as predicted and success went down
+  [b4 appworld] round 2 c6 tool_policy/error_feedback_compact: `tokens` down obs={'mean_success': 103621.347, 'mean_fail': 80036.255, 'mixed_tasks': 26, 'agree': 4, 'disagree': 22, 'score': -0.692} when=`is_error == 1 and dup_result == 1` {'runs': 12, 'n_runs': 150, 'in_failed': 0.182, 'in_success': 0.021}
+    [c6] attempt 0: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c6] attempt 1: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c6] attempt 2: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c6] attempt 3: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+  [b4 appworld] round 2 c6: cover=None shift=None outcome={'W': None, 'L': None, 'n': None, 'p': None} -> DEAD CODE: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action unchanged. Make the condition one that holds on ordinary runs of this harness.
+Execution trace of your file over the 12 longest s
+  [b4 appworld] round 2: [('c4', 'context_mgmt', 'REFUTED'), ('c5', 'context_mgmt', 'REFUTED'), ('c6', 'tool_policy', 'DEAD CODE')] -> no candidate admitted
+[budget] b4[appworld] round 3 spent=$15.921650 of MAX_USD=$26.00 remaining=$10.078350 (38.8%) calls=511276
+  [b4 appworld] round 3 c7 agent_loop/error_recovery_turn: `llm_calls` up obs={'mean_success': 15.947, 'mean_fail': 14.309, 'mixed_tasks': 26, 'agree': 22, 'disagree': 4, 'score': 0.692} when=`is_error == 1` {'runs': 113, 'n_runs': 150, 'in_failed': 0.636, 'in_success': 0.821}
+    [c7] attempt 0: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c7] attempt 1: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c7] attempt 2: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c7] attempt 3: the edit works but is too narrow: it changed 11 of 145 saved runs, while its precondition `is_error == 1` holds at 185 of 2289 executed calls, in 113 of 150 sav
+    [c7] attempt 0: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c7] attempt 1: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c7] attempt 2: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c7] attempt 3: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+  [b4 appworld] round 3 c7: cover=0.076 shift={'n': 11, 'before': 20.0, 'after': 18.364, 'as_predicted': 3, 'opposite': 4, 'p': 0.7734, 'shifted': False} outcome={'W': 1, 'L': 4, 'n': 11, 'p': 0.9688} -> INEFFECTIVE: the code did not cause the behaviour and its revision was not built; the hypothesis itself is untested
+  [b4 appworld] round 3 c8 tool_policy/show_truncation_tail: `obs_chars` up obs={'mean_success': 45067.842, 'mean_fail': 32837.073, 'mixed_tasks': 26, 'agree': 16, 'disagree': 10, 'score': 0.231} when=`result_chars > 6000` {'runs': 138, 'n_runs': 150, 'in_failed': 0.836, 'in_success': 0.968}
+    [b4v7m_appworld_c8_rev_a0_k0_02e855cd] 2a163ab_2                                ok=True was=True branched=True at=1/13 tok=59711 err=
+    [b4v7m_appworld_c8_rev_a0_k0_ad5c6be0] 27e1026_1                                ok=True was=True branched=True at=1/10 tok=118781 err=
+    [b4v7m_appworld_c8_rev_a0_k0_140b1ec3] 27e1026_3                                ok=True was=True branched=True at=1/10 tok=60379 err=
+    [b4v7m_appworld_c8_rev_a0_k0_938ad915] 229360a_2                                ok=False was=True branched=True at=1/15 tok=75810 err=
+    [b4v7m_appworld_c8_rev_a0_k0_3110b23d] 229360a_1                                ok=True was=True branched=True at=1/15 tok=85714 err=
+    [b4v7m_appworld_c8_rev_a0_k0_70983f82] afc0fce_1                                ok=True was=True branched=True at=1/33 tok=97932 err=
+    [b4v7m_appworld_c8_rev_a0_k0_75fc9135] 76f2c72_2                                ok=True was=True branched=True at=13/20 tok=83639 err=
+    [b4v7m_appworld_c8_rev_a0_k0_bd481a4d] 7d7fbf6_1                                ok=True was=False branched=True at=14/22 tok=168182 err=
+    [b4v7m_appworld_c8_rev_a0_k0_053ae072] 29caf6f_1                                ok=True was=False branched=True at=2/8 tok=117722 err=
+    [b4v7m_appworld_c8_rev_a0_k0_41261b3d] 82e2fac_3                                ok=True was=True branched=True at=1/11 tok=50151 err=
+    [b4v7m_appworld_c8_rev_a0_k0_b8659564] 692c77d_2                                ok=True was=True branched=True at=1/17 tok=85824 err=
+    [b4v7m_appworld_c8_rev_a0_k0_c1d2faef] 287e338_2                                ok=True was=False branched=True at=1/12 tok=77987 err=
+    [b4v7m_appworld_c8_rev_a0_k0_66d98f14] ce359b5_1                                ok=True was=False branched=True at=1/13 tok=84143 err=
+    [b4v7m_appworld_c8_rev_a0_k0_51776fe5] d0b1f43_3                                ok=False was=False branched=True at=11/14 tok=88756 err=
+    [b4v7m_appworld_c8_rev_a0_k0_b93128de] 229360a_1                                ok=True was=True branched=True at=1/17 tok=95681 err=
+    [b4v7m_appworld_c8_rev_a0_k0_eb4ff4b9] 692c77d_3                                ok=True was=True branched=True at=1/14 tok=128165 err=
+    [b4v7m_appworld_c8_rev_a0_k0_497868e5] ce359b5_3                                ok=False was=True branched=True at=1/10 tok=83708 err=
+    [b4v7m_appworld_c8_rev_a0_k0_b97f3bd8] 76f2c72_2                                ok=True was=False branched=True at=12/18 tok=69409 err=
+    [b4v7m_appworld_c8_rev_a0_k0_458a6767] 22cc237_3                                ok=False was=False branched=True at=2/11 tok=20147 err=
+    [b4v7m_appworld_c8_rev_a0_k0_f7592a1b] 2a163ab_2                                ok=True was=True branched=True at=1/26 tok=148962 err=
+    [b4v7m_appworld_c8_rev_a0_k0_8bb7db35] 2a163ab_3                                ok=True was=False branched=True at=9/13 tok=199123 err=
+    [b4v7m_appworld_c8_rev_a0_k0_943bfcc7] ce359b5_1                                ok=False was=True branched=True at=1/15 tok=150965 err=
+    [b4v7m_appworld_c8_rev_a0_k0_0f6fa14d] 692c77d_2                                ok=True was=True branched=True at=1/12 tok=147822 err=
+    [b4v7m_appworld_c8_rev_a0_k0_3c7aaae0] 22cc237_2                                ok=False was=False branched=True at=1/7 tok=119263 err=
+    [b4v7m_appworld_c8_rev_a0_k0_2820e3f1] 34d9492_3                                ok=True was=True branched=True at=13/26 tok=155309 err=
+    [b4v7m_appworld_c8_rev_a0_k0_899e818a] b0a8eae_2                                ok=False was=False branched=True at=1/12 tok=97458 err=
+  [b4 appworld] round 3 c8: cover=0.876 shift={'n': 64, 'before': 36411.703, 'after': 44986.766, 'as_predicted': 30, 'opposite': 34, 'p': 0.7338, 'shifted': False} outcome={'W': 10, 'L': 9, 'n': 64, 'p': 0.5} -> INCONCLUSIVE: behaviour did NOT change as predicted, gain too small to tell from noise
+    [c8] effects: repeat_ratio: 0.037 -> 0.025 (higher in 10, lower in 18 of 64 branches)
+    [c8] review: {'decision': 'reject', 'benefit': 'other', 'reason': 'The hypothesis was inconclusive, with only a +1 net success change consistent with run-to-run noise. The lower repeat_ratio is a measured change, but no value from that change is established, and no cost reduction is shown; adopting would add complexity without a clear benefit.', 'claim': {'behaviour': 'repeat_ratio', 'direction': 'down'}, 'votes': {'reject': 3}} -> rejected
+  [b4 appworld] round 3 c9 agent_loop/budget_end_recovery: `llm_calls` up obs={'mean_success': 15.947, 'mean_fail': 14.309, 'mixed_tasks': 26, 'agree': 22, 'disagree': 4, 'score': 0.692} when=`no_call_replies >= 1` {'runs': 13, 'n_runs': 150, 'in_failed': 0.127, 'in_success': 0.063}
+    [b4v7m_appworld_c9_a0_k0_c6feb312] 7d7fbf6_1                                ok=False was=True branched=True at=14/26 tok=42353 err=
+    [b4v7m_appworld_c9_a0_k0_34f8b929] 22cc237_1                                ok=False was=False branched=True at=6/10 tok=24376 err=
+    [b4v7m_appworld_c9_a0_k0_d730e07a] 7d7fbf6_1                                ok=False was=False branched=True at=15/18 tok=50540 err=
+    [b4v7m_appworld_c9_a0_k0_70983f82] afc0fce_1                                ok=False was=True branched=True at=6/33 tok=20079 err=
+    [b4v7m_appworld_c9_a0_k0_0122f344] 22cc237_3                                ok=False was=True branched=True at=17/24 tok=149087 err=
+    [b4v7m_appworld_c9_a0_k0_8958b94e] 22cc237_2                                ok=False was=False branched=True at=18/21 tok=85324 err=
+    [b4v7m_appworld_c9_a0_k0_fa01b21e] afc0fce_3                                ok=False was=True branched=True at=9/17 tok=54248 err=
+    [b4v7m_appworld_c9_a0_k0_982a6aaa] afc0fce_3                                ok=False was=False branched=True at=5/6 tok=14988 err=
+    [b4v7m_appworld_c9_a0_k0_83021ea3] b0a8eae_3                                ok=False was=False branched=True at=5/17 tok=15923 err=
+    [b4v7m_appworld_c9_a0_k0_62011a58] 29caf6f_3                                ok=False was=False branched=True at=13/22 tok=45540 err=
+    [b4v7m_appworld_c9_rev_a0_k0_0122f344] 22cc237_3                                ok=False was=True branched=True at=17/24 tok=199214 err=
+    [b4v7m_appworld_c9_rev_a0_k0_982a6aaa] afc0fce_3                                ok=False was=False branched=True at=5/6 tok=14995 err=
+    [b4v7m_appworld_c9_rev_a0_k0_70983f82] afc0fce_1                                ok=False was=True branched=True at=6/33 tok=385862 err=
+    [b4v7m_appworld_c9_rev_a0_k0_fa01b21e] afc0fce_3                                ok=True was=True branched=True at=9/17 tok=102965 err=
+    [b4v7m_appworld_c9_rev_a0_k0_d730e07a] 7d7fbf6_1                                ok=False was=False branched=True at=15/18 tok=50541 err=
+    [b4v7m_appworld_c9_rev_a0_k0_83021ea3] b0a8eae_3                                ok=False was=False branched=True at=5/17 tok=30586 err=
+    [b4v7m_appworld_c9_rev_a0_k0_34f8b929] 22cc237_1                                ok=True was=False branched=True at=6/10 tok=206085 err=
+    [b4v7m_appworld_c9_rev_a0_k0_c6feb312] 7d7fbf6_1                                ok=False was=True branched=True at=14/26 tok=82157 err=
+    [b4v7m_appworld_c9_rev_a0_k0_62011a58] 29caf6f_3                                ok=False was=False branched=True at=13/22 tok=49940 err=
+    [b4v7m_appworld_c9_rev_a0_k0_8958b94e] 22cc237_2                                ok=False was=False branched=True at=18/21 tok=79556 err=
+  [b4 appworld] round 3 c9: cover=0.069 shift={'n': 10, 'before': 19.4, 'after': 18.9, 'as_predicted': 2, 'opposite': 7, 'p': 0.9805, 'shifted': False} outcome={'W': 1, 'L': 3, 'n': 10, 'p': 0.9375} -> INEFFECTIVE: the code did not cause the behaviour (after one revision); the hypothesis itself is untested
+  [b4 appworld] round 3: [('c7', 'agent_loop', 'INEFFECTIVE'), ('c8', 'tool_policy', 'INCONCLUSIVE'), ('c9', 'agent_loop', 'INEFFECTIVE')] -> no candidate admitted
+[budget] b4[appworld] round 4 spent=$15.921650 of MAX_USD=$26.00 remaining=$10.078350 (38.8%) calls=511694
+  [b4 appworld] round 4 c10 agent_loop/recover_after_error_turn: `llm_calls` up obs={'mean_success': 15.947, 'mean_fail': 14.309, 'mixed_tasks': 26, 'agree': 22, 'disagree': 4, 'score': 0.692} when=`is_error == 1` {'runs': 113, 'n_runs': 150, 'in_failed': 0.636, 'in_success': 0.821}
+    [c10] attempt 0: the edit works but is too narrow: it changed 3 of 145 saved runs, while its precondition `is_error == 1` holds at 185 of 2289 executed calls, in 113 of 150 save
+    [c10] attempt 1: the edit works but is too narrow: it changed 3 of 145 saved runs, while its precondition `is_error == 1` holds at 185 of 2289 executed calls, in 113 of 150 save
+    [c10] attempt 2: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [b4v7m_appworld_c10_a3_k0_c6feb312] 7d7fbf6_1                                ok=False was=True branched=True at=14/26 tok=55845 err=
+    [b4v7m_appworld_c10_a3_k0_0122f344] 22cc237_3                                ok=True was=True branched=True at=17/24 tok=322703 err=
+    [b4v7m_appworld_c10_a3_k0_62011a58] 29caf6f_3                                ok=False was=False branched=True at=13/22 tok=96861 err=
+    [b4v7m_appworld_c10_a3_k0_d730e07a] 7d7fbf6_1                                ok=True was=False branched=True at=15/18 tok=129860 err=
+    [b4v7m_appworld_c10_a3_k0_8958b94e] 22cc237_2                                ok=False was=False branched=True at=18/21 tok=79612 err=
+    [c10] attempt 0: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c10] attempt 1: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c10] attempt 2: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+    [c10] attempt 3: the edit changed nothing in any of 145 saved runs replayed under it: its condition never held, or its action left every model request and every executed action 
+  [b4 appworld] round 4 c10: cover=0.034 shift={'n': 5, 'before': 22.2, 'after': 23.0, 'as_predicted': 3, 'opposite': 2, 'p': 0.5, 'shifted': False} outcome={'W': 1, 'L': 1, 'n': 5, 'p': 0.75} -> INEFFECTIVE: the code did not cause the behaviour and its revision was not built; the hypothesis itself is untested
+  [b4 appworld] round 4 c11 context_mgmt/surface_error_recovery_s: `obs_chars` up obs={'mean_success': 45067.842, 'mean_fail': 32837.073, 'mixed_tasks': 26, 'agree': 16, 'disagree': 10, 'score': 0.231} when=`is_error == 1` {'runs': 113, 'n_runs': 150, 'in_failed': 0.636, 'in_success': 0.821}
+    [c11] attempt 0: the edit works but is too narrow: it changed 16 of 145 saved runs, while its precondition `is_error == 1` holds at 185 of 2289 executed calls, in 113 of 150 sav
+    [c11] attempt 1: the edit works but is too narrow: it changed 1 of 145 saved runs, while its precondition `is_error == 1` holds at 185 of 2289 executed calls, in 113 of 150 save
+    [c11] attempt 2: validation failed (import / registry / offline toy run):
+Traceback (most recent call last):
+  File "<string>", line 16, in <module>
+AssertionError: AttributeErr
+    [b4v7m_appworld_c11_a0_k0_c6feb312] 7d7fbf6_1                                ok=False was=True branched=True at=13/26 tok=42387 err=
+    [b4v7m_appworld_c11_a0_k0_83021ea3] b0a8eae_3                                ok=False was=False branched=True at=15/17 tok=249440 err=
+    [b4v7m_appworld_c11_a0_k0_d862aea1] 7d7fbf6_2                                ok=True was=False branched=True at=10/11 tok=125041 err=
+    [b4v7m_appworld_c11_a0_k0_3d56d20e] 34d9492_3                                ok=False was=False branched=True at=14/22 tok=262774 err=
+    [b4v7m_appworld_c11_a0_k0_62011a58] 29caf6f_3                                ok=True was=False branched=True at=16/22 tok=182521 err=
+    [b4v7m_appworld_c11_a0_k0_c89e0722] 7d7fbf6_2                                ok=False was=False branched=True at=12/13 tok=43396 err=
+    [b4v7m_appworld_c11_a0_k0_41589a7d] 34d9492_1                                ok=False was=False branched=True at=12/14 tok=84144 err=
+    [b4v7m_appworld_c11_a0_k0_458a6767] 22cc237_3                                ok=False was=False branched=True at=9/11 tok=70484 err=
+    [b4v7m_appworld_c11_a0_k0_8958b94e] 22cc237_2                                ok=False was=False branched=True at=13/21 tok=260637 err=
+    [b4v7m_appworld_c11_a0_k0_764f6920] 76f2c72_3                                ok=True was=False branched=True at=12/14 tok=80421 err=
+    [b4v7m_appworld_c11_a0_k0_6c56d25f] b0a8eae_1                                ok=False was=False branched=True at=12/21 tok=482540 err=
+    [b4v7m_appworld_c11_a0_k0_3d2da95b] 76f2c72_1                                ok=True was=False branched=True at=12/22 tok=91359 err=
+    [b4v7m_appworld_c11_a0_k0_899e818a] b0a8eae_2                                ok=False was=False branched=True at=10/12 tok=98403 err=
+    [b4v7m_appworld_c11_a0_k0_c96c6736] 34d9492_3                                ok=True was=True branched=True at=18/33 tok=192106 err=
+    [b4v7m_appworld_c11_a0_k0_0ecea46c] 34d9492_2                                ok=False was=False branched=True at=13/14 tok=76961 err=
+    [b4v7m_appworld_c11_a0_k0_16ca51d5] 76f2c72_3                                ok=True was=True branched=True at=10/19 tok=74994 err=
+    [b4v7m_appworld_c11_a0_k1_c6feb312] 7d7fbf6_1                                ok=False was=True branched=True at=13/26 tok=60797 err=
+    [b4v7m_appworld_c11_a0_k1_83021ea3] b0a8eae_3                                ok=False was=False branched=True at=15/17 tok=154462 err=
+    [b4v7m_appworld_c11_a0_k1_d862aea1] 7d7fbf6_2                                ok=True was=False branched=True at=10/11 tok=143392 err=
+    [b4v7m_appworld_c11_a0_k1_3d56d20e] 34d9492_3                                ok=False was=False branched=True at=14/22 tok=174451 err=
+    [b4v7m_appworld_c11_a0_k1_62011a58] 29caf6f_3                                ok=False was=False branched=True at=16/22 tok=231595 err=
+    [b4v7m_appworld_c11_a0_k1_c89e0722] 7d7fbf6_2                                ok=True was=False branched=True at=12/13 tok=159959 err=
+    [b4v7m_appworld_c11_a0_k1_41589a7d] 34d9492_1                                ok=True was=False branched=True at=12/14 tok=234540 err=
+    [b4v7m_appworld_c11_a0_k1_458a6767] 22cc237_3                                ok=False was=False branched=True at=9/11 tok=95545 err=
+    [b4v7m_appworld_c11_a0_k1_8958b94e] 22cc237_2                                ok=False was=False branched=True at=13/21 tok=151249 err=
+    [b4v7m_appworld_c11_a0_k1_764f6920] 76f2c72_3                                ok=True was=False branched=True at=12/14 tok=57285 err=
+    [b4v7m_appworld_c11_a0_k1_6c56d25f] b0a8eae_1                                ok=False was=False branched=True at=12/21 tok=219763 err=
+    [b4v7m_appworld_c11_a0_k1_3d2da95b] 76f2c72_1                                ok=False was=False branched=True at=12/22 tok=93922 err=
+    [b4v7m_appworld_c11_a0_k1_899e818a] b0a8eae_2                                ok=False was=False branched=True at=10/12 tok=119496 err=
+    [b4v7m_appworld_c11_a0_k1_c96c6736] 34d9492_3                                ok=True was=True branched=True at=18/33 tok=160023 err=
+    [b4v7m_appworld_c11_a0_k1_0ecea46c] 34d9492_2                                ok=False was=False branched=True at=13/14 tok=103513 err=
+    [b4v7m_appworld_c11_a0_k1_16ca51d5] 76f2c72_3                                ok=False was=True branched=True at=10/19 tok=50243 err=
+  [b4 appworld] round 4 c11: cover=0.11 shift={'n': 32, 'before': 28074.688, 'after': 38511.188, 'as_predicted': 24, 'opposite': 8, 'p': 0.0035, 'shifted': True} outcome={'W': 8, 'L': 3, 'n': 32, 'p': 0.1133} -> SUPPORTED on training runs (behaviour changed as predicted)
+    [c11] effects: steps: 18.0 -> 27.344 (higher in 28, lower in 4 of 32 branches); step_frac: 0.45 -> 0.684 (higher in 28, lower in 4 of 32 branches); loop_frac: 0.45 -> 0.684 (higher in 28, lower in 4 of 32 branches); llm_calls: 18.25 -> 29.562 (higher in 28, lower in 3 of 32 branches); n_actions: 18.0 -> 27.344 (higher in 28, lower in 4 of 32 branches); distinct_actions: 15.438 -> 20.75 (higher in 24, lower in 7 of 32 branches); repeat_ratio: 0.145 -> 0.243 (higher in 27, lower in 4 of 32 branches); n_errors: 3.25 -> 5.375 (higher in 26, lower in 0 of 32 branches); obs_chars: 28074.688 -> 38511.188 (higher in 24, lower in 8 of 32 branches); tokens: 74631.875 -> 144620.094 (higher in 25, lower in 7 of 32 branches)
+    [c11] review: {'decision': 'adopt', 'benefit': 'success', 'reason': 'The edit produced a net gain of five successes across 32 branches, with eight recoveries versus three regressions, and its context behavior changed as hypothesized. The gain is not statistically reliable on this sample, but the measured increase in tokens and steps is an acceptable cost for a potential success benefit; held-out evaluation should determine whether the gain replicates.', 'votes': {'adopt': 3}} -> admitted
+  [b4 appworld] round 4 c12 tool_policy/targeted_truncation_retr: `obs_chars` up obs={'mean_success': 45067.842, 'mean_fail': 32837.073, 'mixed_tasks': 26, 'agree': 16, 'disagree': 10, 'score': 0.231} when=`result_chars > 6000` {'runs': 138, 'n_runs': 150, 'in_failed': 0.836, 'in_success': 0.968}
+    [b4v7m_appworld_c12_a0_k0_e1c2ef44] b7a9ee9_1                                ok=True was=True branched=True at=1/12 tok=68203 err=
+    [b4v7m_appworld_c12_a0_k0_058ee073] d0b1f43_1                                ok=True was=True branched=True at=1/14 tok=147385 err=
+    [b4v7m_appworld_c12_a0_k0_6060c3ec] d0b1f43_2                                ok=False was=True branched=False at=1/22 tok=2293 err=LLMError: failed after 5 retries: HTTP 503: {"error":{"messa
+    [b4v7m_appworld_c12_a0_k0_8b250886] b0a8eae_1                                ok=False was=False branched=True at=1/7 tok=420132 err=
+    [b4v7m_appworld_c12_a0_k0_70983f82] afc0fce_1                                ok=False was=True branched=True at=1/33 tok=165313 err=
+    [b4v7m_appworld_c12_a0_k0_f82537e6] 76f2c72_2                                ok=True was=True branched=True at=8/19 tok=94354 err=
+    [b4v7m_appworld_c12_a0_k0_c5fc512d] b0a8eae_3                                ok=False was=False branched=True at=1/7 tok=158937 err=
+    [b4v7m_appworld_c12_a0_k0_0122f344] 22cc237_3                                ok=True was=True branched=True at=2/24 tok=289019 err=
+    [b4v7m_appworld_c12_a0_k0_c376a617] 27e1026_1                                ok=True was=True branched=True at=1/11 tok=71815 err=
+    [b4v7m_appworld_c12_a0_k0_62c3eebf] 82e2fac_1                                ok=True was=True branched=True at=1/13 tok=71382 err=
+    [b4v7m_appworld_c12_a0_k0_cb53c932] 22cc237_3                                ok=False was=False branched=True at=2/19 tok=17860 err=
+    [b4v7m_appworld_c12_a0_k0_bd481a4d] 7d7fbf6_1                                ok=True was=False branched=True at=14/22 tok=168437 err=
+    [b4v7m_appworld_c12_a0_k0_1c9bd587] 692c77d_1                                ok=True was=True branched=True at=1/13 tok=142155 err=
+    [b4v7m_appworld_c12_a0_k0_3c7aaae0] 22cc237_2                                ok=False was=False branched=True at=1/7 tok=23240 err=
+    [b4v7m_appworld_c12_a0_k0_ad5c6be0] 27e1026_1                                ok=True was=True branched=True at=1/10 tok=79377 err=
+    [b4v7m_appworld_c12_a0_k0_51bca48a] 6104387_1                                ok=False was=False branched=True at=1/11 tok=116988 err=
+    [b4v7m_appworld_c12_a0_k0_02e855cd] 2a163ab_2                                ok=True was=True branched=True at=1/13 tok=46089 err=
+    [b4v7m_appworld_c12_a0_k0_89037047] ce359b5_3                                ok=True was=True branched=True at=1/13 tok=104144 err=
+    [b4v7m_appworld_c12_a0_k0_b27947bb] 2a163ab_2                                ok=True was=True branched=True at=1/11 tok=55708 err=
+    [b4v7m_appworld_c12_a0_k0_943bfcc7] ce359b5_1                                ok=False was=True branched=True at=1/15 tok=41256 err=
+    [b4v7m_appworld_c12_a0_k0_796b376c] 29caf6f_1                                ok=False was=True branched=True at=2/23 tok=19325 err=
+    [b4v7m_appworld_c12_a0_k0_26575a77] 2a163ab_1                                ok=True was=True branched=True at=1/13 tok=73088 err=
+    [b4v7m_appworld_c12_a0_k0_75b02a50] b0a8eae_2                                ok=False was=False branched=True at=1/18 tok=365963 err=
+    [b4v7m_appworld_c12_a0_k0_6c56d25f] b0a8eae_1                                ok=False was=False branched=True at=1/21 tok=278066 err=
+    [b4v7m_appworld_c12_a0_k0_7578ede1] 22cc237_2                                ok=False was=True branched=True at=1/16 tok=128301 err=
+    [b4v7m_appworld_c12_a0_k0_715ff12a] 6104387_1                                ok=True was=True branched=True at=1/19 tok=171067 err=
