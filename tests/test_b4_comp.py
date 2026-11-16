@@ -232,6 +232,8 @@ def test_edit_kinds_and_quota():
         assert "not one of the kinds" in str(e)
     c = M.validate_hyp({**h, "edit_type": "harness tool"}, [])
     assert c["slot"] == "agent_loop" and c["edit_type"] == "harness tool"
+    c = M.validate_hyp({**h, "edit_type": "phases", "behaviour": "n(get_document) / max(1, n_actions)"}, [])
+    assert c["behaviour"] == "n('get_document') / max(1, n_actions)" and M.quote_tools("min(steps, 3)") == "min(steps, 3)"
 
 
 def test_new_run_features():

@@ -953,7 +953,8 @@ def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path,
                         quota=", ".join(kind_quota(ledger, r)), close_after=CLOSE_AFTER,
                         closed=closed_view(ledger))
     if feedback:
-        prompt += "\n\nYour previous answer could not be used:\n" + feedback + "\nAnswer again, complete."
+        prompt += ("\n\nYour previous answer could not be used:\n" + feedback
+                   + ("" if "were accepted" in feedback else "\nAnswer again, complete."))
     (ws / f"r{r}_hyp_prompt{'_retry' if feedback else ''}.txt").write_text(prompt, encoding="utf-8")
     d = {}
     for attempt in range(2):
@@ -995,6 +996,11 @@ def closed_view(ledger: list[dict]) -> str:
             + "\n")
 
 
+def quote_tools(expr: str) -> str:
+    """n(search) -> n('search'): a tool name written without quotes is still a tool count."""
+    return re.sub(r"\bn\(\s*([A-Za-z_][\w.-]*)\s*\)", r"n('\1')", expr)
+
+
 def norm_kind(k) -> str:
     """The listed kind an `edit_type` names ('' when none): exact, then the one it contains or is contained in."""
     k = re.sub(r"[^a-z ]", " ", str(k or "").lower()).strip()
@@ -1033,7 +1039,7 @@ def validate_hyp(h: dict, ledger: list[dict]) -> dict:
     direction = str(h.get("direction") or "").strip().lower()
     if direction not in ("up", "down"):
         raise ValueError("direction must be up or down")
-    beh = str(h.get("behaviour") or "").strip()
+    beh = quote_tools(str(h.get("behaviour") or "").strip())
     compile_metric(beh)
     for k in ("hypothesis", "mechanism"):
         if len(str(h.get(k) or "").strip()) < 20:
@@ -1583,10 +1589,13 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         (ws / "graph.json").write_text(json.dumps({"round": r, **graph}, indent=1, default=str))
         ctx["graph"] = GR.view(graph) if CGRAPH else ""
         # stage 0: hypotheses against the saved runs (free); one re-ask when too few are usable
-        hyps, why = [], ""
+        hyps, why, d0 = [], "", {}
         for ask in range(2):
             d = propose(client, bench, ctx, ledger, r, ws, feedback=why)
-            hyps, bad = [], []
+            d0 = d0 or d
+            if not ask:
+                hyps = []
+            bad = []
             for h in (d.get("candidates") or [])[:N_HYP + 2]:
                 try:
                     c = validate_hyp(h, ledger)
@@ -1596,16 +1605,25 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                     hyps.append(c)
                 except Exception as e:
                     bad.append({"name": str((h or {}).get("name"))[:40] if isinstance(h, dict) else "?",
+                                "edit_type": str((h or {}).get("edit_type"))[:40] if isinstance(h, dict) else "",
                                 "behaviour": str((h or {}).get("behaviour"))[:120] if isinstance(h, dict) else "",
                                 "when": str((h or {}).get("when"))[:120] if isinstance(h, dict) else "",
                                 "reason": str(e)[:400]})
             if bad:
                 rd.setdefault("invalid", []).extend(bad)
-            if len(hyps) >= N_CAND:
+            if not bad and len(hyps) >= N_CAND:
                 break
-            why = "\n".join(f"- {b['name']}: rejected ({b['reason']})" for b in bad) \
-                or "- no usable candidates"
+            # one repair: a rejected candidate is sent back with its reason (its kind would otherwise be lost)
+            why = ("\n".join(f"- {b['name']} ({b.get('edit_type') or 'kind ?'}): rejected ({b['reason']})" for b in bad)
+                   or "- no usable candidates")
+            if hyps:
+                why += ("\nThe other candidates were accepted: answer with corrected versions of the rejected ones "
+                        "only (same kind each; a different precondition or behaviour expression where that was the "
+                        "reason), in the same JSON form.")
+        d = d0 if hyps and not d.get("analysis") else d
         rd["analysis"] = str(d.get("analysis", ""))[:600]
+        quota = kind_quota(ledger, r)  # a repaired candidate keeps the place of its assigned kind
+        hyps.sort(key=lambda h: quota.index(h["edit_type"]) if h["edit_type"] in quota else len(quota))
         ranked = select(hyps)
         rows, tried, per_slot, revised = [], set(), Counter(), False
         state = harness_state(cur, fmap, [e for e in ledger if e.get("status") == "merged"])
