@@ -31,3 +31,7 @@
 - `pytest` cho test offline: `python -m pytest -q tests/`.
 - `coverage==7.17.0` cho `scripts/copy_fidelity.py` (đo tỷ lệ dòng copy từ repo gốc trên các dòng được thực thi): `pip install coverage==7.17.0`.
 - `scripts/summarize.py` in ký tự Unicode, nên trên console Windows cần đặt `PYTHONIOENCODING=utf-8`.
+
+## Mức suy nghĩ của model qua 9router
+
+Với model Codex (`cx/...`), 9router chọn mức suy nghĩ từ `reasoning_effort` trong request, rồi tới **hậu tố tên model** (`cx/gpt-6-luna-low`, `-medium`, `-high`, ...), rồi tới mặc định (luna: `medium`). Dự án ghim bằng tên model trong `.env`: `LLM_MODEL=cx/gpt-6-luna-low`. Không so kết quả giữa các mức khác nhau; xem `docs/luna_results.md` §20.4.
