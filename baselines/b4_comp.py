@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import ast
 import json
+import math
 import os
 import random
 import re
@@ -80,6 +81,11 @@ MAX_LITERAL = 400                                   # longest string constant in
 SLOTS = ("tool_policy", "context_mgmt", "verifier", "agent_loop")  # memory (cross-episode) cannot be forked
 CLOSE_AFTER = int(os.environ.get("B4_CLOSE_AFTER", "2"))  # failed attempts after which a behaviour target is closed
 DIVERSE = os.environ.get("B4_DIVERSE", "1") == "1"   # a round's code goes to different kinds of edit, one structural
+LEARN = os.environ.get("B4_LEARN", "0") == "1"       # branch first on tasks the harness solves on some rolls only
+SENTINEL = os.environ.get("B4_SENTINEL", "0") == "1"  # regression gate on tasks the harness solves on every roll
+N_SENT = int(os.environ.get("B4_N_SENT", "8"))       # such runs branched right after the probe
+SENT_Q0 = float(os.environ.get("B4_SENT_Q0", "0.1"))  # loss rate on them that two runs of one harness can show
+SENT_ALPHA, SENT_MIN_L = 0.05, 2                     # binomial test of their losses against SENT_Q0
 
 # ---------------------------------------------------------------- behaviour metrics
 FEATURES = {
@@ -1338,6 +1344,31 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
     raise Reject("NOT BUILT" if "changed nothing" not in why else "DEAD CODE", why[:400])
 
 
+def strata(cur: list[dict]) -> dict:
+    """Per task, (solved, rolls) of the current harness's saved runs. The outcome statistics only: no task content."""
+    c = defaultdict(lambda: [0, 0])
+    for x in cur:
+        c[x["task_id"]][0] += bool(x.get("success"))
+        c[x["task_id"]][1] += 1
+    return c
+
+
+def learn_rank(st: dict, x: dict) -> int:
+    """0: solved on some rolls and not others (an edit can flip it either way, so a branch is most informative),
+    1: never solved or a single roll, 2: solved on every roll (a branch can only lose)."""
+    s, n = st.get(x["task_id"], (0, 1))
+    return 1 if n < 2 or s == 0 else (2 if s == n else 0)
+
+
+def sentinel_view(recs: list[dict], st: dict) -> dict:
+    """Losses on branches of tasks solved on every roll, tested against the loss rate SENT_Q0 that a harness
+    shows against itself. A gain elsewhere does not buy a regression on what already works."""
+    b = [x for x in V.distinct(recs) if learn_rank(st, x) == 2]
+    lo = sum(1 for x in b if x["src_success"] and not x["success"])
+    p = sum(math.comb(len(b), i) * SENT_Q0 ** i * (1 - SENT_Q0) ** (len(b) - i) for i in range(lo, len(b) + 1))
+    return {"n": len(b), "L": lo, "p": round(p, 4), "bad": lo >= SENT_MIN_L and p <= SENT_ALPHA}
+
+
 def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path, out: Path, linter, cfg, rng, fin,
           feats, r: int, facts: str = "", fb: str = "", suffix: str = "", history: str = "") -> dict:
     """Stages 1-3 for one candidate. Returns its ledger row (and private fields `_root`, `_recs`, `_touched`)."""
@@ -1362,6 +1393,13 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
             row["when_touched"] = f"{dmap['touched']} runs changed / {cand['when_obs']['runs']} where the precondition holds"
         order = list(touched)
         rng.shuffle(order)
+        st = strata(cur)
+        if LEARN:  # stable: the shuffle breaks ties
+            order.sort(key=lambda x: learn_rank(st, x))
+        if SENTINEL:  # the first screen branches include runs that can only regress, so a harmful edit stops early
+            sen = [x for x in order[N_PROBE:] if learn_rank(st, x) == 2][:N_SENT]
+            ids = {id(x) for x in sen}
+            order = order[:N_PROBE] + sen + [x for x in order[N_PROBE:] if id(x) not in ids]
         tag = f"{B.TAG}_{bench}_{root.name}"
         label = {"method": "b4", "phase": "screen", "round": r, "cand": cand["id"]}
         recs = D.run_diff(bench, split, order[:N_PROBE], root, inc_root, client, tag, out, ref_cache(bench, inc_root),
@@ -1390,13 +1428,19 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
         recs += D.run_diff(bench, split, srcs, root, inc_root, client, tag, out, ref_cache(bench, inc_root), k=k,
                            workers=cfg["workers"], label=label)
         t = V.tally(recs)
-        if t["L"] - t["W"] >= 3:  # clearly harmful: stop paying
+        if t["L"] - t["W"] >= 3 or (SENTINEL and sentinel_view(recs, st)["bad"]):  # clearly harmful: stop paying
             break
     sh, t = behaviour_shift(code, cand["direction"], recs, feats), V.tally(recs)
+    if SENTINEL:
+        row["sentinel"] = sentinel_view(recs, st)
     gain = dmap["coverage"] * (t["W"] - t["L"]) / max(1, t["n"])
     row.update(shift=sh, outcome=t, gain=round(gain, 4), _recs=recs, effects=effects(recs, feats))
     how = "behaviour changed as predicted" if sh["shifted"] else "behaviour did NOT change as predicted"
-    if V.reliable(t):
+    sv = row.get("sentinel") or {}
+    if sv.get("bad"):
+        row.update(verdict=f"HARMFUL ON SOLVED TASKS: {sv['L']} of {sv['n']} branches of tasks solved on every roll "
+                           f"failed (p={sv['p']} against a loss rate of {SENT_Q0}); {how}")
+    elif V.reliable(t):
         row.update(verdict=f"SUPPORTED on training runs ({how})")
     elif t["L"] > t["W"]:
         row.update(verdict=f"HARMFUL: {how}, more losses than wins" if not sh["shifted"] else
@@ -1562,7 +1606,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                       "k_test": K_TEST, "alpha": V.ALPHA, "margin": V.MARGIN, "cgraph": CGRAPH,
                       "impl_tries": IMPL_TRIES, "merge_alpha": MERGE_ALPHA, "multi_merge": MULTI_MERGE,
                       "early_stop": EARLY_STOP, "when": WHEN, "when_min_share": WHEN_MIN_SHARE,
-                      "when_disc": WHEN_DISC, "reach_min": REACH_MIN, "reach_tries": REACH_TRIES}}
+                      "when_disc": WHEN_DISC, "reach_min": REACH_MIN, "reach_tries": REACH_TRIES,
+                      "learn": LEARN, "sentinel": SENTINEL, "n_sent": N_SENT, "sent_q0": SENT_Q0}}
     stall, n_c = 0, 0
     for r in range(1, cfg["rounds"] + 1):
         C.budget_check(f"b4[{bench}] round {r}")
@@ -1652,7 +1697,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                         ctx["facts"],
                         history=GR.attempts(graph, cand["behaviour"], cand["direction"]) if CGRAPH else "")
             rows.append(row)
-            if row.get("effects") and row["outcome"]["L"] - row["outcome"]["W"] < V.MARGIN:  # not clearly harmful
+            if row.get("effects") and row["outcome"]["L"] - row["outcome"]["W"] < V.MARGIN and \
+                    not (row.get("sentinel") or {}).get("bad"):  # not clearly harmful
                 apply_review(row, review_vote(client, bench, row, state, can_revise=not revised), feats)
             print(f"  [b4 {bench}] round {r} {cand['id']}: cover={row.get('coverage')} shift={row.get('shift')} "
                   f"outcome={ {k: (row.get('outcome') or {}).get(k) for k in ('W', 'L', 'n', 'p')} } "
@@ -1670,7 +1716,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
                 row2 = trial(client, bench, tr_split, c2, inc_root, cur, ws, out, linter, cfg, rng, fin, feats, r,
                              ctx["facts"], fb=fb)
                 rows.append(row2)
-                if row2.get("effects") and row2["outcome"]["L"] - row2["outcome"]["W"] < V.MARGIN:
+                if row2.get("effects") and row2["outcome"]["L"] - row2["outcome"]["W"] < V.MARGIN and \
+                        not (row2.get("sentinel") or {}).get("bad"):
                     apply_review(row2, review_vote(client, bench, row2, state), feats)
                 print(f"  [b4 {bench}] round {r} {c2['id']}: shift={row2.get('shift')} outcome={row2.get('outcome')} "
                       f"-> {row2['verdict']} | effects: {effects_view(row2.get('effects'))} | review: "
