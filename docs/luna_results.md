@@ -692,3 +692,54 @@ Ba bản sửa pipeline (quote_tools, gửi lại ý bị loại để sửa, ho
 - Nhưng **kết quả không đổi**: bản sửa duy nhất được gộp lại là ý "không nhận câu trả lời lấp lửng" như §21, test 33% = `b4v7m`, ngang đối chứng cùng chi phí.
 - Các loại lớn chưa thắng. Công cụ gộp không được agent dùng; gọi thêm model và chia giai đoạn đổi đúng hành vi nhưng không tăng độ đúng.
 - Công cụ harness chưa được thử lần nào, vì ba lỗi pipeline nói trên.
+
+## 23. Thử nhánh trước trên bài "lúc được lúc không" + cổng chặn hồi quy, 3 vòng — BCP và AppWorld, seed 0 (`b4v7q`)
+
+Mức `low`, giao thức MEDIUM như §21–22. Code: commit c3503ba, có ba bản sửa pipeline mà `b4v7p` thiếu (nên so với §22 có lẫn yếu tố). Hai thay đổi mới, chỉ dùng thống kê kết quả của 3 lần chạy đã lưu, không dùng ID hay nội dung bài:
+- **Mục 1 — thử trước bài học được (`B4_LEARN=1`).** Khi rẽ nhánh, xếp trước các bài harness hiện tại giải được ở một số lần (không phải 0/3, không phải 3/3). Đây là nơi một thay đổi dễ làm lật kết quả nhất, nên 16 nhánh thăm dò đầu tiên có nhiều thông tin hơn.
+- **Mục 3 — cổng chặn hồi quy (`B4_SENTINEL=1`).** Ngay sau thăm dò, chạy thêm tối đa 8 nhánh trên các bài harness giải được cả 3/3. Nếu số nhánh hỏng ≥ 2 và vượt rõ tỉ lệ hỏng ngẫu nhiên 10% (kiểm định nhị thức, p ≤ 0.05), dừng sàng lọc và không cho gộp, kể cả khi hội đồng đồng ý.
+
+Mô phỏng lại trên các lượt cũ trước khi chạy: với các ý tốt, thăm dò đạt thắng − thua ≥ 2 ở 71% lần (thứ tự ngẫu nhiên: 50%). Cổng chặn không loại nhầm ý nào từng được gộp.
+
+**BCP:**
+
+| Harness | Test | Bước/bài | Token/bài | So từng bài với `b4v7q` (b4v7q thắng/thua) |
+|---|---|---|---|---|
+| H0 | 20% | 5.7 | 26k | 10/1 (p=0.01) |
+| **B4 `b4v7q`** | **29%** | 15.7 | 269k | – |
+| Đối chứng N=11 | 32% | 16.1 | 237k | 4/7 (p=0.55) |
+| B4 `b4v7m` (§21) | 33% | 14.3 | 238k | 5/9 (p=0.42) |
+| B4 `b4v7p` (§22) | 33% | 16.0 | 280k | 5/9 (p=0.42) |
+| Đối chứng N=14 | 35% | 17.9 | 287k | 5/11 (p=0.21) |
+
+Ước lượng nhánh trên test: 28.5%, khớp điểm thật 29% (chạm 70/100 bài, 140 nhánh: 17 thắng, 0 thua; theo bài +13/−0).
+
+| Vòng | Ứng viên | Kết quả |
+|---|---|---|
+| 1 | c1 khởi động lại khi tìm kiếm bị kẹt | 2/0, hội đồng nhận, val 1/11 → không qua |
+| 1 | c2, c4 | không đổi gì khi chạy lại |
+| 1 | **c3 `verifier/reject_unsupported_hedge`** | **10/0, p=0.001, gộp** (train 0.247, val 0.433) |
+| 1 | c5 chỉ mục bằng chứng | không đổi hành vi |
+| 2 | c8 kiểm tra độ liên quan của kết quả | đổi đúng hành vi, 12/6, p=0.12, hội đồng bỏ |
+| 2 | c6, c7, c9 | không đổi hành vi / không đổi gì |
+| 3 | c11 mở ngay tài liệu đầu | bác bỏ: số lần mở tài liệu 0.6 → 45, 5/7; cổng chặn 0/8 hỏng |
+| 3 | c10, c12 | không đổi hành vi |
+
+**AppWorld** (H0 47.5%): 3 vòng, 11 ứng viên, **không gộp gì**, nên test giữ nguyên 47.5% (= `b4v7m`).
+
+| Vòng | Ứng viên | Kết quả |
+|---|---|---|
+| 1 | **c1** (agent_loop) | **cổng chặn loại**: 4/8 nhánh trên bài 3/3 bị hỏng (p=0.005); tổng 6/7. Dừng ở 34 nhánh thay vì 64 |
+| 1 | c2 | không đổi hành vi, 0/11 |
+| 1 | c3 ghi chú bằng chứng | chưa rõ, 17/15 |
+| 2 | c4 | chưa rõ, 16/12 |
+| 2 | c5 đọc gộp kết quả đã mở | 16/7, p=0.047, **hội đồng bỏ** vì hành vi đo được không đổi như dự đoán |
+| 2 | c7 (tool_policy) | 14/7, p=0.09, hội đồng bỏ vì cùng lý do; cổng chặn 2/11 hỏng (không đủ để chặn) |
+| 2 | c6 | không đổi gì kể cả sau khi viết lại |
+| 3 | c8 | gây hại, 12/17 |
+| 3 | c9, c10, c11 | không đổi hành vi / không đổi gì / chưa rõ 15/15 |
+
+**Đọc kết quả:**
+- **Mục 3 có tác dụng thật nhưng nhỏ.** Trên AppWorld, cổng chặn bắt được c1 (đổi đúng hành vi nhưng làm hỏng một nửa số bài vốn luôn đúng) và dừng sớm, tiết kiệm 30 nhánh. Không loại nhầm ý nào. Trên BCP cổng không bao giờ phải chặn: các ý xấu ở BCP (c11) hỏng trên bài lúc được lúc không, không phải trên bài 3/3.
+- **Mục 1 không đổi được kết quả.** BCP vẫn gộp đúng ý duy nhất như §21–22; điểm test 29% thấp hơn `b4v7p` 33% nhưng so từng bài 5/9 (p=0.42) là trong dao động, vì cùng một bản sửa. Không có ý mới nào lọt qua nhờ thăm dò tốt hơn.
+- **Chỗ nghẽn bây giờ nằm ở hội đồng, không phải ở sàng lọc.** Trên AppWorld, c5 (16/7, p<0.05) và c7 (14/7) đều thắng nhiều hơn thua nhưng bị hội đồng bỏ vì chỉ số hành vi đã dự đoán không đổi. Tức là bản sửa có lợi theo một cách khác với giả thuyết. Muốn đi tiếp có thể cho các ý như vậy vào bước val thay vì bỏ ngay, rồi để val quyết định.
