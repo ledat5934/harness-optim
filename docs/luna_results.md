@@ -775,3 +775,84 @@ Phân loại lượt sai: 78 chốt sớm mà chưa thấy đáp án; 45 trả l
 - BCP, tìm kiếm kém: thấy gián tiếp. Đã thử mở tài liệu, kiểm tra độ liên quan; chưa ý nào được gộp.
 - AppWorld, lật trang, thiếu `answer`: không thấy. Mọi hành động đều là `execute_python`, nên `n(tool)` không phân biệt được nội dung code. Trong 3 sổ ghi AppWorld, chưa ý nào nhắc đến lật trang hay `answer`.
 - AppWorld, chốt sau lỗi: thấy `n_errors`. Có hơn 20 ý xử lý lỗi chung chung, không ý nào nhắm đúng "chốt ngay sau lỗi".
+
+## 25. Cụm lỗi thay cho chỉ số đếm — AppWorld, 3 vòng, seed 0 (`b4v7r`)
+
+Code giống hệt `b4v7q` (§23), chỉ thêm `B4_CLUSTER=1` (`baselines/b4_cluster.py`).
+
+### 25.1 Tính năng
+
+- **Gắn nhãn mọi lượt sai.** Sau mỗi vòng, một model đọc từng lượt sai trên train (6 lượt mỗi lần gọi). Bản tóm tắt nó đọc giữ tham số hành động tới 500 ký tự (bản cũ cắt ở 120) và không cho biết kết quả. Với mỗi lượt, model viết một câu "sai ở đâu" (không chứa thực thể của bài), rồi xếp lượt đó vào một cụm có sẵn hoặc mở cụm mới (tên + một câu định nghĩa).
+- **Sổ cụm cộng dồn, không lọc.** Mỗi cụm có số lượt sai và số bài sai hiện tại, tổng số lượt đã xếp qua các vòng, và hai ví dụ. Bỏ bộ lọc `harness_fixable`: ý kiến của người gắn nhãn chỉ được hiển thị, proposer tự quyết. Trên 12 cụm thì một lần gọi gộp các cụm trùng nhau.
+- **Cụm là một thước đo hành vi.** Giả thuyết có thể đặt `behaviour = mode:<cụm>` (hướng giảm). Một giám khảo không biết kết quả đọc cả lượt gốc lẫn nhánh của từng cặp và trả lời lượt đó có mắc lỗi này không. Sau đó áp kiểm định dấu như với chỉ số số. Cách này đo được những lỗi mà số đếm cuối lượt không diễn tả được (agent làm gì, chứ không phải làm bao nhiêu lần).
+- Thử offline trên 55 lượt sai H0 trước khi chạy: cả 55 lượt đều được xếp. Cụm lớn nhất (22 lượt) khớp nhóm "không lật trang" của §24.
+
+### 25.2 Kết quả
+
+Vòng 1 xếp được cả 55 lượt sai train vào 5 cụm, với 10 lần gọi gắn nhãn. Không vòng nào gộp được ý, nên tập lượt sai không đổi và sổ cụm giữ nguyên qua 3 vòng.
+
+| Cụm | Lượt sai | Người gắn nhãn cho là |
+|---|---|---|
+| `documentation_and_auth_recovery` (đọc sai hoặc bỏ tài liệu API, không xử lý được lỗi xác thực) | 22 | harness sửa được |
+| `premature_incomplete_data` (quyết định dựa trên kết quả thiếu hoặc bị cắt, dừng trước khi đủ) | 16 | harness sửa được |
+| `premature_task_abandonment` (bỏ dở việc còn làm được) | 14 | harness sửa được |
+| `incorrect_relationship_filtering` (lọc quan hệ sai chiều hoặc sai tài khoản) | 2 | lỗi model/bài |
+| `incomplete_source_coverage` (chỉ xem một phần các nguồn được yêu cầu) | 1 | harness sửa được |
+
+| Vòng | Ứng viên | Thước đo hành vi | Hành vi đổi? | Thắng/thua (train) | Kết cục |
+|---|---|---|---|---|---|
+| 1 | c1 khởi động lại khi kết quả lặp | `mode:premature_task_abandonment` | **có** (0.69→0.41, 11/2, p=0.011) | **12/3, p=0.018** | hội đồng nhận; **val không xác nhận** (0/1, chỉ 6 nhánh trên 2 bài) |
+| 1 | c2 ghi chú bằng chứng | `mode:premature_incomplete_data` | không | 19/11, p=0.10 | hội đồng bỏ |
+| 1 | c3 pha kiểm tra | `mode:premature_incomplete_data` | – | – | code chết |
+| 1 | c4 giữ đầu/cuối kết quả dài | `obs_chars/n_actions` | không | 1/3 | không hiệu quả |
+| 2 | c5 chặn lặp y hệt | `repeat_ratio` | có (34/0) | 1/14 | **cổng hồi quy chặn** (5/8 bài luôn đúng hỏng) |
+| 2 | c6 gọi thêm model đọc lỗi | `distinct_actions` ↑ | không | **21/10, p=0.035** | hội đồng nhận; **val không xác nhận** (9/13 trên 84 nhánh) |
+| 2 | c7 công cụ đọc tài liệu gộp | `distinct_results` ↑ | không | 3/3 | không hiệu quả |
+| 3 | c8 tìm trong kết quả đã thấy | `mode:premature_incomplete_data` | không | 15/14 | hội đồng bỏ |
+| 3 | c9 tài liệu + đăng nhập sau lỗi | `mode:documentation_and_auth_recovery` | gần (0.34→0.23, p=0.11) | 15/9 | hội đồng bỏ |
+| 3 | c10, c11, c12 | `mode:…` ×2, `answered` | – | – | code chết |
+
+**Test: 47.5%, bằng H0 và bằng `b4v7q`**, vì không gộp gì. Chi phí thêm: 10 lần gọi gắn nhãn và 406 lần gọi giám khảo (214 cho `premature_incomplete_data`, 144 cho `documentation_and_auth_recovery`, 48 cho `premature_task_abandonment`).
+
+### 25.3 Đọc kết quả
+
+**Đọc kết quả:**
+- **Cụm được dùng thật.** 7/12 ý dùng `mode:<cụm>` làm thước đo, và mọi ý đều ghi rõ cụm mình nhắm. Ở `b4v7q`, giả thuyết chỉ dựa được vào các chỉ số đếm.
+- **Thước đo cụm đo được thay đổi mà chỉ số đếm bỏ sót.** c1 là ý đầu tiên trên AppWorld vừa đổi đúng hành vi đã dự đoán vừa thắng rõ trên train, nên lần đầu có ý đi được tới val. Ở `b4v7q`, c5 (16/7) và c7 (14/7) dừng ở hội đồng vì chỉ số dự đoán không đổi.
+- **Chỗ nghẽn chuyển sang val.** c1 chỉ chạm 2 bài val (6 nhánh), quá ít để xác nhận một bản sửa hẹp. c6 chạm rộng hơn (84 nhánh) nhưng thua nhiều hơn thắng (9/13), nên thắng 21/10 trên train là nhiễu hoặc là khớp quá với train. Muốn đánh giá đúng các ý hẹp như c1 thì cần nhiều lượt val hơn trên những bài mà điều kiện kích hoạt xảy ra.
+- **Cụm vẫn chưa gọi tên đúng lỗi lớn nhất của §24.** `premature_incomplete_data` (16 lượt) gần với "không lật trang", nhưng định nghĩa nói chung chung ("kết quả thiếu hoặc bị cắt"). Cả ba ý nhắm cụm này (c2, c3, c8) đều xử lý chuyện cắt hoặc ghi nhớ kết quả, không ý nào nhắc tới lật trang hay `answer`. Định nghĩa cụm một câu vẫn quá trừu tượng để dẫn proposer tới cơ chế cụ thể. Có thể thử bước sau: cho người gắn nhãn ghi kèm "dấu hiệu quan sát được trong hành động" (ví dụ một tham số có trong tài liệu nhưng agent không dùng).
+- **Code chết tăng ở vòng 3 (3/5).** c10 và c11 (nhắm `documentation_and_auth_recovery`) đặt điều kiện vào các công cụ tài liệu và đăng nhập riêng, trong khi agent AppWorld chỉ gọi `execute_python` (§24). Vì vậy điều kiện không bao giờ xảy ra trên 145 lượt replay. c12 thì đặt điều kiện vào lượt trả lời không có hành động, mà trường hợp này không xuất hiện trong các lượt đã lưu.
+- **Không có tác dụng phụ xấu:** cổng hồi quy vẫn chặn đúng c5, và chi phí giám khảo nhỏ so với chi phí chạy nhánh.
+
+### 25.4 Ghi chú về phần tìm kiếm (BCP)
+
+Đây là ghi chú, chưa chạy thử. Số liệu lấy từ sổ ghi của 4 lượt BCP mức `low` (`b4v7m`, `b4v7n`, `b4v7p`, `b4v7q`, tổng 43 ý) và từ §24.
+
+**Lỗi tìm kiếm trên H0 trông như thế nào (§24):** lượt sai dừng sớm (trung vị 6/25 bước), chỉ 12% có mở tài liệu, và đáp án đúng chỉ xuất hiện trong những gì agent đã thấy ở 16% lượt sai. Vậy phần lớn lượt sai chưa bao giờ chạm tới tài liệu chứa đáp án. Vấn đề nằm ở khâu tìm, không phải khâu đọc hay khâu suy luận.
+
+**Pipeline đã thử gì cho tìm kiếm (23 ý trong 43):**
+
+| Hướng | Ý (lượt/ứng viên) | Kết quả |
+|---|---|---|
+| Công cụ gộp "tìm rồi mở" | n c1, p c4, q c6, q c11 | không đổi hành vi, hoặc đổi được nhưng thua nhiều hơn thắng (q c11: 5/7) |
+| Đẩy agent mở tài liệu (thứ tự, mô tả công cụ, pha "xem xét") | p c6, p c7, q c2, q c10, q c12 | không đổi hành vi / không đổi gì / bác bỏ |
+| Ghi chú hoặc chỉ mục bằng chứng | n c3, p c1, p c2, q c5 | p c1 thắng 6/2 nhưng hội đồng không nhận; còn lại không đổi hành vi |
+| Đánh dấu hoặc lọc kết quả trùng | m c12, m c17 | m c17 thắng 7/2 nhưng hội đồng không nhận |
+| Gọi thêm model để chấm độ liên quan | p c5, q c8 | q c8 thắng 12/6 (p=0.12), hội đồng không nhận; p c5 thua 4/5 |
+| Đổi hướng khi gọi một công cụ quá lâu | m c7, m c15, m c19 | không đổi hành vi / chưa rõ |
+| Khởi động lại khi bế tắc | q c1 | thắng 2/0 trên train, val không xác nhận |
+| Cắt bớt kết quả dài, giữ phần cuối | m c4, q c9 | không đổi gì / không đổi hành vi |
+
+**Điều chưa ý nào làm: thay đổi chính câu truy vấn.** Mọi ý trên đều tác động sau khi kết quả đã về (mở thêm, ghi lại, lọc, chấm lại) hoặc lên lúc nào thì dừng. Không ý nào đụng tới việc truy vấn được viết ra sao, trong khi đó mới là chỗ quyết định tài liệu đúng có lọt vào top-5 hay không. Có ba lý do:
+1. Không có chỉ số nào nói về nội dung truy vấn. Các đặc trưng chỉ đếm số lần gọi, số kết quả khác nhau, số ký tự. Proposer không thể nêu giả thuyết kiểu "truy vấn ngắn hơn thì trúng hơn" vì không đo được.
+2. Prompt HYP cấm viết lời khuyên cho model ("không thêm hướng dẫn vào prompt"). Cách tự nhiên nhất để đổi truy vấn là bảo model viết khác, nên cách này bị chặn, và chưa ý nào tìm ra cách làm phía harness.
+3. Bản tóm tắt lượt chạy cắt tham số gọi công cụ còn 120 ký tự, nên proposer gần như không thấy truy vấn thật.
+
+**Đo được gì về truy vấn (chỉ số gộp, không in nội dung):** agent viết trung bình khoảng 2.35 cụm trong ngoặc kép mỗi truy vấn và đưa cả chuỗi vào BM25 lấy top-5. Với BM25, một truy vấn trộn nhiều đầu mối thường trả về tài liệu khớp vừa vừa với tất cả, thay vì tài liệu khớp mạnh với một đầu mối.
+
+**Nếu tự sửa, tôi sẽ làm phía harness, không phải lời khuyên:**
+- *Tách truy vấn (query fan-out).* Tiền điều kiện: lời gọi `search` có từ 2 cụm trong ngoặc kép trở lên, hoặc dài hơn N từ. Hành động: harness chạy thêm từng cụm riêng (và truy vấn gốc), gộp thứ hạng (ví dụ reciprocal rank fusion), trả về top-k đã gộp kèm docid. Agent vẫn gọi đúng một công cụ như cũ, chỉ có kết quả rộng hơn. Đây là nguyên tắc chung cho mọi công cụ tìm kiếm dạng từ khoá, không dính tới bài nào.
+- *Đo được bằng chỉ số mới:* thêm đặc trưng `distinct_docs_seen` (số docid khác nhau đã xuất hiện trong kết quả). Đặc trưng này có sẵn trong trajectory, cho phép nêu giả thuyết "agent thấy nhiều tài liệu khác nhau hơn" và đo nó trên từng cặp nhánh.
+- *Tín hiệu độ tin cậy:* §24 cho thấy 132/150 lượt sai tự chấm độ tin cậy ≤ 30, còn 29/30 lượt đúng chấm ≥ 70. Đây là tín hiệu dừng tốt nhất hiện có, nhưng pipeline không đo nó. Thêm đặc trưng `stated_confidence` thì một ý kiểu "độ tin cậy thấp và còn ngân sách → chưa nhận câu trả lời, tìm tiếp bằng truy vấn đã tách" sẽ nêu và đo được.
+
+**Pipeline có tự tìm ra được không:** với tính năng cụm lỗi (§25), người gán nhãn đọc được tham số gọi đầy đủ (tới 500 ký tự), nên có khả năng đặt ra cụm kiểu "truy vấn gộp quá nhiều đầu mối, kết quả không chứa tài liệu liên quan", và proposer có thể nhắm cụm đó bằng `mode:<cụm>` mà không cần đặc trưng đếm. Lệnh cấm lời khuyên vẫn còn, nên proposer phải tự nghĩ ra cách làm phía harness như tách truy vấn. Chưa kiểm chứng: lượt này chỉ chạy AppWorld theo yêu cầu.
