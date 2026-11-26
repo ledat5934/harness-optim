@@ -743,3 +743,35 @@ Mô phỏng lại trên các lượt cũ trước khi chạy: với các ý tố
 - **Mục 3 có tác dụng thật nhưng nhỏ.** Trên AppWorld, cổng chặn bắt được c1 (đổi đúng hành vi nhưng làm hỏng một nửa số bài vốn luôn đúng) và dừng sớm, tiết kiệm 30 nhánh. Không loại nhầm ý nào. Trên BCP cổng không bao giờ phải chặn: các ý xấu ở BCP (c11) hỏng trên bài lúc được lúc không, không phải trên bài 3/3.
 - **Mục 1 không đổi được kết quả.** BCP vẫn gộp đúng ý duy nhất như §21–22; điểm test 29% thấp hơn `b4v7p` 33% nhưng so từng bài 5/9 (p=0.42) là trong dao động, vì cùng một bản sửa. Không có ý mới nào lọt qua nhờ thăm dò tốt hơn.
 - **Chỗ nghẽn bây giờ nằm ở hội đồng, không phải ở sàng lọc.** Trên AppWorld, c5 (16/7, p<0.05) và c7 (14/7) đều thắng nhiều hơn thua nhưng bị hội đồng bỏ vì chỉ số hành vi đã dự đoán không đổi. Tức là bản sửa có lợi theo một cách khác với giả thuyết. Muốn đi tiếp có thể cho các ý như vậy vào bước val thay vì bỏ ngay, rồi để val quyết định.
+
+## 24. H0 fail ở đâu — đọc lại toàn bộ lượt chạy H0 (mức `low`, tập train + val)
+
+Chỉ dùng train + val (BCP 180 lượt, AppWorld 180 lượt); không xem test AppWorld, không in câu hỏi BCP. Chỉ có số liệu gộp. Script: `scratchpad/h0_bcp.py`, `h0_aw.py`.
+
+**BCP (30 đúng / 150 sai):**
+
+| Dấu hiệu | Lượt đúng | Lượt sai |
+|---|---|---|
+| Số bước (trung vị, ngân sách 25) | 5 | 6 (81% dừng ở ≤ 6 bước, 0 lượt hết ngân sách) |
+| Có mở tài liệu (`get_document`) | 87% | 12% |
+| Đáp án đúng từng xuất hiện trong kết quả agent đã thấy | 100% | 16% |
+| Agent tự chấm độ tin cậy ≤ 30 | 1/30 | 132/150 |
+| Câu trả lời nước đôi ("không xác định được"...) | 3% | 37% |
+
+Phân loại lượt sai: 78 chốt sớm mà chưa thấy đáp án; 45 trả lời nước đôi; 24 đã thấy đáp án nhưng chọn cái khác; 3 tìm lâu vẫn không ra.
+
+**AppWorld (116 đúng / 64 sai), phân loại lượt sai theo thứ tự ưu tiên:**
+
+| Nhóm | Lượt sai | Tín hiệu |
+|---|---|---|
+| Gọi API dạng danh sách nhưng không lật trang (`page_index`) | 23 | lượt không lật trang: 38 sai / 14 đúng; có lật trang: 26 sai / 102 đúng |
+| Câu hỏi nhưng `complete_task` không kèm `answer` | 9 | 9 sai / 0 đúng |
+| Gọi `complete_task` ngay sau một lỗi Python | 8 | 8 sai / 0 đúng |
+| Còn lại (sai logic, chọn nhầm mục, sót bước con) | 24 | – |
+
+**Pipeline có thấy những lỗi này không:**
+- BCP, trả lời nước đôi: thấy (`answer_hedged`), và đã gộp ở cả ba lượt §21–23.
+- BCP, độ tin cậy thấp: không có chỉ số nào. Trong 13 sổ ghi BCP, chưa ý nào dùng độ tin cậy.
+- BCP, tìm kiếm kém: thấy gián tiếp. Đã thử mở tài liệu, kiểm tra độ liên quan; chưa ý nào được gộp.
+- AppWorld, lật trang, thiếu `answer`: không thấy. Mọi hành động đều là `execute_python`, nên `n(tool)` không phân biệt được nội dung code. Trong 3 sổ ghi AppWorld, chưa ý nào nhắc đến lật trang hay `answer`.
+- AppWorld, chốt sau lỗi: thấy `n_errors`. Có hơn 20 ý xử lý lỗi chung chung, không ý nào nhắm đúng "chốt ngay sau lỗi".
