@@ -48,6 +48,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from baselines import b4_branch as V
+from baselines import b4_cluster as K
 from baselines import b4_diff as D
 from baselines import b4_graph as GR
 from baselines import b4_modes as G
@@ -86,6 +87,9 @@ SENTINEL = os.environ.get("B4_SENTINEL", "0") == "1"  # regression gate on tasks
 N_SENT = int(os.environ.get("B4_N_SENT", "8"))       # such runs branched right after the probe
 SENT_Q0 = float(os.environ.get("B4_SENT_Q0", "0.1"))  # loss rate on them that two runs of one harness can show
 SENT_ALPHA, SENT_MIN_L = 0.05, 2                     # binomial test of their losses against SENT_Q0
+CLUSTER = os.environ.get("B4_CLUSTER", "0") == "1"  # every failed run filed in a failure cluster; `mode:<cluster>` is a behaviour
+CL: K.Clusters | None = None                         # the registry of the running search (set in run())
+_JUDGE = {}                                          # client and bench of the mode judge (set in run())
 
 # ---------------------------------------------------------------- behaviour metrics
 FEATURES = {
@@ -119,6 +123,12 @@ def compile_metric(expr: str, names=None, calls=("n", "min", "max", "abs"), what
     """Whitelisted numeric expression over `names` (default FEATURES) and the functions `calls` -> code object.
     Raises ValueError."""
     names = FEATURES if names is None else names
+    if names is FEATURES and CLUSTER and isinstance(expr, str) and expr.strip().startswith("mode:"):
+        name = expr.strip()[5:].strip()
+        if CL is None or name not in CL.reg:
+            raise ValueError(f"{what} `{expr.strip()}` names no failure cluster; the clusters are: "
+                             + ", ".join(CL.reg if CL else ()))
+        return K.ModeMetric(name)
     if not isinstance(expr, str) or not expr.strip() or len(expr) > 200:
         raise ValueError(f"{what} must be a non-empty expression of <= 200 chars")
     try:
@@ -373,6 +383,9 @@ def observe(code, direction: str, recs: list[dict], feats: dict) -> dict:
     """Free check of part (b) of a hypothesis on saved runs. Tasks have several runs of the same harness: among the
     tasks with both outcomes, is the metric higher (direction 'up') in the successful runs? Task difficulty is held
     fixed, which a plain success-vs-failure comparison does not do. Correlational: it ranks, it does not decide."""
+    if isinstance(code, K.ModeMetric):  # judged per run on branches only: no free observational check
+        return {"mean_success": None, "mean_fail": None, "mixed_tasks": 0, "agree": 0, "disagree": 0, "score": 0.0,
+                "note": "cluster measure: filed failed runs", "filed_runs": len(CL.members(code.name))}
     sgn = 1 if direction == "up" else -1
     by = defaultdict(lambda: ([], []))
     ok, bad = [], []
@@ -400,10 +413,16 @@ def behaviour_shift(code, direction: str, recs: list[dict], feats) -> dict:
     sgn = 1 if direction == "up" else -1
     up = down = 0
     old, new = [], []
+    val = lambda p: metric(code, feats(p))  # noqa: E731
+    if isinstance(code, K.ModeMetric):  # blind judge on both runs of each pair (cached per run and cluster)
+        prs = [x for x in V.distinct(recs) if x.get("trajectory_path")]
+        CL.prejudge(_JUDGE["client"], _JUDGE["bench"], [p for x in prs for p in (x["fork_of"], x["trajectory_path"])],
+                    code.name)
+        val = lambda p: CL.judged(p, code.name)  # noqa: E731
     for x in V.distinct(recs):  # a repeat of a branch with no new model request is the same pair again
         if not x.get("trajectory_path"):
             continue
-        a, b = metric(code, feats(x["fork_of"])), metric(code, feats(x["trajectory_path"]))
+        a, b = val(x["fork_of"]), val(x["trajectory_path"])
         if a is None or b is None:
             continue
         old.append(a)
@@ -414,6 +433,14 @@ def behaviour_shift(code, direction: str, recs: list[dict], feats) -> dict:
     return {"n": len(old), "before": round(sum(old) / len(old), 3) if old else None,
             "after": round(sum(new) / len(new), 3) if new else None, "as_predicted": up, "opposite": down,
             "p": round(p, 4), "shifted": bool(up - down >= SHIFT_MARGIN and p <= SHIFT_ALPHA)}
+
+
+def beh_text(beh: str) -> str:
+    """A behaviour as shown to the models: a cluster measure carries its definition."""
+    if CLUSTER and CL is not None and str(beh).startswith("mode:") and beh[5:].strip() in CL.reg:
+        return (f"{beh} (1 if a blind judge reading the run finds this failure in it, else 0: "
+                f"{CL.define(beh[5:].strip())})")
+    return beh
 
 
 def effects(recs: list[dict], feats) -> dict:
@@ -489,7 +516,7 @@ def review(client, bench: str, row: dict, state: str, can_revise: bool = False) 
     sh, t = row.get("shift") or {}, row.get("outcome") or {}
     d = B._ask_json(client, REVIEW.format(
         slot=row["slot"], hypothesis=row["hypothesis"], mechanism=row["mechanism"], coverage=row.get("coverage"),
-        behaviour=row["behaviour"], direction=row["direction"], before=sh.get("before"), after=sh.get("after"),
+        behaviour=beh_text(row["behaviour"]), direction=row["direction"], before=sh.get("before"), after=sh.get("after"),
         as_predicted=sh.get("as_predicted"), opposite=sh.get("opposite"), n_shift=sh.get("n"), W=t.get("W"),
         L=t.get("L"), n=t.get("n"), p=t.get("p"), same=t.get("n", 0) - t.get("W", 0) - t.get("L", 0),
         net=t.get("W", 0) - t.get("L", 0), revise=REVISE if can_revise else "",
@@ -677,7 +704,7 @@ Behaviour features, mean over successful runs vs failed runs:
 {feat_table}
 How the runs look (a precondition that these numbers rule out will never hold):
 {facts}
-Failure modes (from run reviews): {modes}
+{modes}
 Reviews of single runs:
 {reports}
 Digests of failed runs:
@@ -722,6 +749,12 @@ Answer ONLY with JSON:
    "hypothesis": "<If the agent ... then it succeeds more often, because ...>",
    "behaviour": "<expression>", "direction": "up|down",{when_field}
    "mechanism": "<precondition -> action, 2-4 sentences: exactly what the component does>"}}, ...]}}"""
+
+MODE_OPTION = """
+Or `behaviour` may be a failure cluster listed under "Failure clusters" above, written `mode:<cluster name>` with
+direction down: on each branch and on the saved run it forks, a blind judge reading the run says whether it shows
+that failure (1) or not (0). Use it when the failure is in WHAT the agent does (the content of its actions or its
+answer), which the counts above do not capture."""
 
 IMPL = """You implement ONE edit of a harness component as a new variant file. The agent model is fixed.
 
@@ -955,7 +988,7 @@ def propose(client, bench: str, ctx: dict, ledger: list[dict], r: int, ws: Path,
                             step_features="\n".join(f"  {k}: {v}" for k, v in STEP_FEATURES.items()),
                             step_facts=ctx["step_facts"]) if ctx.get("step_facts") else "",
                         when_field=WHEN_FIELD if ctx.get("step_facts") else "",
-                        features="\n".join(f"  {k}: {v}" for k, v in FEATURES.items()),
+                        features="\n".join(f"  {k}: {v}" for k, v in FEATURES.items()) + (MODE_OPTION if CLUSTER else ""),
                         quota=", ".join(kind_quota(ledger, r)), close_after=CLOSE_AFTER,
                         closed=closed_view(ledger))
     if feedback:
@@ -1045,7 +1078,13 @@ def validate_hyp(h: dict, ledger: list[dict]) -> dict:
     direction = str(h.get("direction") or "").strip().lower()
     if direction not in ("up", "down"):
         raise ValueError("direction must be up or down")
-    beh = quote_tools(str(h.get("behaviour") or "").strip())
+    beh = str(h.get("behaviour") or "").strip()
+    if CLUSTER and beh.startswith("mode:"):
+        beh = "mode:" + beh[5:].strip()
+        if direction != "down":
+            raise ValueError("a cluster measure `mode:<cluster>` only goes down (fewer runs show the failure)")
+    else:
+        beh = quote_tools(beh)
     compile_metric(beh)
     for k in ("hypothesis", "mechanism"):
         if len(str(h.get(k) or "").strip()) < 20:
@@ -1101,7 +1140,7 @@ def implement(client, bench: str, cand: dict, parent: Path, dest: Path, feedback
                        for f in files if f.exists())
     proto = (C.ROOT / "h0" / "protocols.py").read_text(encoding="utf-8")
     proto = proto[proto.find("@dataclass"):proto.find("SLOTS =")]
-    prompt = IMPL.format(slot=slot, hypothesis=cand["hypothesis"], behaviour=cand["behaviour"],
+    prompt = IMPL.format(slot=slot, hypothesis=cand["hypothesis"], behaviour=beh_text(cand["behaviour"]),
                          direction=cand["direction"], mechanism=cand["mechanism"], protocols=proto, code=code,
                          when=("precondition, measured on saved runs of the current harness: "
                                + when_view(cand["when"], cand["when_obs"]) + ". The condition in your code must hold "
@@ -1396,6 +1435,9 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
         st = strata(cur)
         if LEARN:  # stable: the shuffle breaks ties
             order.sort(key=lambda x: learn_rank(st, x))
+        if isinstance(code, K.ModeMetric):  # the probe forks runs filed in the cluster: only there can it go down
+            mem = CL.members(code.name)
+            order.sort(key=lambda x: x["trajectory_path"] not in mem)
         if SENTINEL:  # the first screen branches include runs that can only regress, so a harmful edit stops early
             sen = [x for x in order[N_PROBE:] if learn_rank(st, x) == 2][:N_SENT]
             ids = {id(x) for x in sen}
@@ -1410,7 +1452,7 @@ def trial(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
             break
         if rev == 0:  # the code did not cause the behaviour: one revision, told what was measured
             fb = (f"The component ran and changed {dmap['touched']} of {dmap['n']} saved runs, but the behaviour it was "
-                  f"meant to cause did not appear: `{cand['behaviour']}` went from {sh['before']} to {sh['after']} over "
+                  f"meant to cause did not appear: `{beh_text(cand['behaviour'])}` went from {sh['before']} to {sh['after']} over "
                   f"{sh['n']} branched runs ({sh['as_predicted']} in the predicted direction, {sh['opposite']} against). "
                   f"What did move clearly on those branches: {effects_view(effects(recs, feats))}. "
                   "Change the mechanism so that the agent actually behaves differently." + prev_code(root, cand))
@@ -1601,13 +1643,18 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
     ledger: list[dict] = []
     merged_ids: list[str] = []
     registry: dict = {}
+    global CL
+    if CLUSTER:
+        CL = K.Clusters(ws, B.RESUME)
+        _JUDGE.update(client=client, bench=bench)
+        B.LLM_MODES = False  # the clusters replace the sampled hindsight labels
     log = {"version": "v7-components", "rounds": [],
            "params": {"n_hyp": N_HYP, "n_cand": N_CAND, "n_probe": N_PROBE, "n_screen": N_SCREEN, "k_val": K_VAL,
                       "k_test": K_TEST, "alpha": V.ALPHA, "margin": V.MARGIN, "cgraph": CGRAPH,
                       "impl_tries": IMPL_TRIES, "merge_alpha": MERGE_ALPHA, "multi_merge": MULTI_MERGE,
                       "early_stop": EARLY_STOP, "when": WHEN, "when_min_share": WHEN_MIN_SHARE,
                       "when_disc": WHEN_DISC, "reach_min": REACH_MIN, "reach_tries": REACH_TRIES,
-                      "learn": LEARN, "sentinel": SENTINEL, "n_sent": N_SENT, "sent_q0": SENT_Q0}}
+                      "learn": LEARN, "sentinel": SENTINEL, "n_sent": N_SENT, "sent_q0": SENT_Q0, "cluster": CLUSTER}}
     stall, n_c = 0, 0
     for r in range(1, cfg["rounds"] + 1):
         C.budget_check(f"b4[{bench}] round {r}")
@@ -1618,13 +1665,19 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
         labelled = [{"task_id": x["task_id"], "label": str(h.get("failure_label") or h.get("why") or "")[:120],
                      "why": str(h.get("why") or "")[:200], "cause": h.get("cause"), "rule_modes": x["modes"]}
                     for x in reps if not x["success"] for h in [x.get("hindsight") or {}] if h.get("cause")]
-        registry = G.discover_modes(client, bench, labelled, registry, tools, B._ask_json)
-        mode_info = G.mode_counts(registry, G.mode_tasks(registry, fails, sigs), set())
+        if CLUSTER:
+            rd["clusters"] = CL.update(client, bench, fails, r, B._ask_json)
+            modes = "Failure clusters (every failed run read and filed by an LLM):\n" + CL.view(fails)
+            rd["cluster_counts"] = CL.cum_counts()
+        else:
+            registry = G.discover_modes(client, bench, labelled, registry, tools, B._ask_json)
+            mode_info = G.mode_counts(registry, G.mode_tasks(registry, fails, sigs), set())
+            modes = "Failure modes (from run reviews): " + json.dumps(mode_info, default=str)[:2500]
         dig = list(fails)
         rng.shuffle(dig)
         fmap = {x["trajectory_path"]: feats(x["trajectory_path"]) for x in cur}
         ctx = {"tree": C.tree_text(inc_root, None), "n_runs": len(cur), "succ": f"{C.score(cur):.1%}",
-               "feat_table": feat_table(cur, fmap), "facts": run_facts(cur, fmap), "modes": json.dumps(mode_info, default=str)[:2500],
+               "feat_table": feat_table(cur, fmap), "facts": run_facts(cur, fmap), "modes": modes,
                "reports": reports_view(reps), "tools": tools,
                "digests": [C.summarize_trajectory(x["trajectory_path"], max_events=24, max_chars=300, task_chars=400)
                            for x in dig[:5]]}
