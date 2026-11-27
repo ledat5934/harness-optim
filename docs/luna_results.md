@@ -921,3 +921,79 @@ Còn thiếu:
 - Val ít lượt chạm tới các bản sửa hẹp.
 - Code chết khi điều kiện dựa vào công cụ không có.
 - Trên BCP, lỗi truy vấn gộp có cả ở lượt đúng nên chưa chắc sửa được thì tăng điểm.
+
+## 27. Gắn nhãn theo lỗi quyết định + luật bộ công cụ + 3 lượt val H0 — AppWorld, 3 vòng, seed 0 (`b4v7s`)
+
+Code so với `b4v7r` (§25):
+- **Gắn nhãn theo lỗi ở bước quyết định** (prompt §26.2, commit `97bade2`). Mỗi cụm có định nghĩa và một *signature* kiểm tra được trên lượt chạy. Giám khảo của thước đo `mode:<cụm>` đọc cả signature.
+- **Luật bộ công cụ** (commit `a8730d9`). Prompt giả thuyết và phản hồi "DEAD CODE" nêu đúng danh sách công cụ mà model được gọi trong các lượt đã lưu. Trên AppWorld chỉ có `execute_python`: tài liệu API và đăng nhập đều nằm trong code Python, không phải công cụ riêng.
+- **Thêm 2 lượt H0 trên val** (`H0_VAL_ROLLS=3`). Val có 90 lượt H0 thay vì 30, mỗi lượt rẽ 2 nhánh (`B4_K_VAL=2`), nên một bản sửa có thể chạm tới 180 nhánh val. H0 val: 21/30, 16/30, 20/30 (tổng 57/90 = 63%).
+
+### 27.1 Sổ cụm
+
+88 lượt sai train được xếp vào 6 cụm. Lần gắn nhãn đầu dùng lượt sai H0, các vòng sau thêm lượt sai của harness đã gộp. Tên cụm đều gọi đúng hành động sai, không có cụm nào kiểu "dừng sớm" như ở §25.
+
+| Cụm | Lượt sai | Signature (tóm tắt) |
+|---|---|---|
+| `act_on_truncated_results` | 38 | kết quả công cụ có dấu bị cắt hoặc bỏ bớt, sau đó agent hành động mà không lấy lại bản đầy đủ |
+| `uses_partial_lookup_results` | 18 | lời gọi tra cứu có giới hạn trang, agent dùng như tập đầy đủ mà không gọi trang sau |
+| `misuses_documented_arguments` | 15 | tài liệu ghi một tên hoặc dạng tham số, lời gọi sau dùng cái khác và không sửa |
+| `drops_auth_token` | 12 | đăng nhập trả token, lời gọi cần quyền sau đó thiếu token và bị lỗi xác thực |
+| `unsupported_sufficiency_decision` | 4 | (thêm ở vòng 2) chọn ứng viên mà bằng chứng của chính agent cho thấy chưa đạt ngưỡng |
+| `missing_result_deduplication` | 1 | gộp kết quả nhiều truy vấn mà không bỏ bản ghi trùng |
+
+### 27.2 Kết quả từng ý
+
+| Vòng | Ý | Thước đo | Hành vi đổi? | Train thắng/thua | Val thắng/thua (nhánh) | Kết cục |
+|---|---|---|---|---|---|---|
+| 1 | c1 khởi động lại khi kẹt | `stale_streak` ↓ | ngược (4 đúng / 12 ngược) | 9/9 | – | cổng hồi quy chặn (5/8 bài luôn đúng hỏng) |
+| 1 | c2 chỉ mục bằng chứng | `stale_streak` ↓ | ngược | 19/11, p=0.10 | – | hội đồng bỏ |
+| 1 | **c3 bản tóm bằng chứng trong ngữ cảnh** | `distinct_results` ↑ | không rõ (p=0.14) | **22/6, p=0.002** | **19/11 (170)** | **GỘP** (gộp train+val 41/17, p=0.001) |
+| 2 | c4 tìm trong kết quả | `repeat_ratio` ↓ | không | 2/5 | – | không hiệu quả |
+| 2 | c5 sửa tham số sau lỗi | `n_errors` ↓ | – | – | – | code chết |
+| 2 | c6 kiểm tra sau lỗi | `mode:misuses_documented_arguments` ↓ | ngược (0.25→0.39) | 14/6, p=0.058 | **5/19 (150)** | hội đồng nhận, **val bác** |
+| 2 | c7 chặn kết luận thiếu căn cứ | `mode:unsupported_sufficiency_decision` ↓ | – | – | – | code chết |
+| 2 | c8 sửa lời gọi Python | `n_errors` ↓ | – | 0/0 (chạm 1 lượt) | – | quá hẹp |
+| 3 | c9 tra bằng chứng | `distinct_results` ↑ | **có** (p=0.029) | 8/8 | – | cổng hồi quy chặn |
+| 3 | c10 thăm dò gộp nhiều trang | `mode:uses_partial_lookup_results` ↓ | không | 15/12 | – | nhiễu, hội đồng bỏ |
+| 3 | c11 công cụ soi kết quả bị cắt | `mode:act_on_truncated_results` ↓ | – | – | – | code chết |
+| 3 | c12 tra bằng chứng (bản 2) | `mode:uses_partial_lookup_results` ↓ | không | 17/8, p=0.054 | **6/14 (168)** | hội đồng nhận, **val bác** |
+
+**c3 làm gì** (`context_mgmt/c3_retain_evidence_context`, 116 dòng, không chứa thực thể của bài):
+- Mỗi bước, ngay sau câu hỏi, nó chèn một khối "Retained evidence digest". Khối này gồm tối đa 20 kết quả công cụ khác nhau gần nhất (bỏ bản trùng theo hash), mỗi kết quả tối đa 480 ký tự.
+- Mỗi kết quả được gắn nhãn `[error]`, `[incomplete]` hoặc `[pagination]` nếu chứa các từ tương ứng (error/failed, truncated/partial, next page/page N/cursor…).
+- Phần còn lại giống H0: cửa sổ 30 lượt, kết quả bị cắt ở 6000 ký tự.
+- H0 hầu như không phải bỏ lượt nào (trung vị khoảng 15 bước, dưới mức 30). Vì vậy tác dụng của c3 không đến từ việc "giữ lại thứ bị cắt" như giả thuyết nói, mà từ một **bản tóm nhắc lại các kết quả đã thấy, có đánh dấu chỗ thiếu, chỗ lỗi và chỗ còn trang sau**.
+- Các nhãn đó khớp đúng hai cụm lớn nhất (`act_on_truncated_results`, `uses_partial_lookup_results`), và cơ chế của c3 có nhắc tới "truncation markers, pagination cues". Mối liên hệ với sổ cụm là có thể, nhưng chưa chứng minh.
+
+### 27.3 Test
+
+| | Test (99 bài) | Bước | Token/bài |
+|---|---|---|---|
+| H0 (= `b4v7m`, `b4v7q`, `b4v7r`) | 47/99 = 47.5% | 14.3 | 83k |
+| **B4 `b4v7s` (H0 + c3)** | **60/99 = 60.6%** | 15.8 | 117k (+40%) |
+
+- **So từng bài với H0:** 24 bài thắng, 11 bài thua (kiểm định dấu một phía p=0.02).
+- **Gộp 3 biến thể của cùng một kịch bản** (33 kịch bản): thắng 13, thua 5 (p=0.048).
+- **Ước lượng trước bằng nhánh:** c3 chạm 95/99 lượt test, rẽ 190 nhánh, kết quả 43/23 (p=0.009), ước 57.6%. Lần chạy lại đầy đủ cho 60.6%, khớp chiều với ước lượng.
+- Đây là **lần đầu B4 vượt H0 trên AppWorld**, sau 5 lượt chạy không gộp được gì (`b4v7l`, `b4v7m`, `b4v7q`, `b4v7r` và lượt `medium` §19).
+
+**Chi phí tiến hoá:** 119M token, gấp 2.75 lần `b4v7r` (43M). Lý do là val lớn gấp 3 và cả ba ý lên tới val (c3, c6, c12) đều chạm hầu như mọi lượt (150–170 nhánh val mỗi ý). Ngoài ra còn 60 lượt H0 val thêm và 329 lần gọi giám khảo (`b4v7r`: 406).
+
+### 27.4 Đọc kết quả
+
+**Đọc kết quả:**
+- **Val lớn hơn đã làm đúng việc của nó, theo cả hai chiều.** Nó xác nhận c3 (19/11) và bác hai ý mà hội đồng đã nhận trên train với p≈0.055: c6 (5/19) và c12 (6/14). Nếu val chỉ có 30 lượt như trước, hai ý này có thể đã không bị bác rõ như vậy. Bài học: thắng trên train với p≈0.05 chưa đáng tin. Ý được gộp có p=0.002.
+- **Code chết giảm (3/12, `b4v7r` là 4/12), và không còn ý nào đặt điều kiện vào công cụ không tồn tại.** Luật bộ công cụ đã chặn được đúng lỗi của c10/c11 ở `b4v7r`. Ba ý chết còn lại:
+  - c5: mẫu lỗi tham số mà nó bắt không khớp lượt nào;
+  - c7: kiểm tra câu trả lời cuối, trong khi AppWorld kết thúc bằng một lời gọi trong code, nên có lẽ không có câu trả lời riêng để kiểm;
+  - c11: chờ dấu "bị cắt" trong kết quả, nhưng dấu đó gần như không xuất hiện khi giới hạn là 6000 ký tự.
+- **Thước đo cụm chưa tạo ra thắng lợi nào.** 5/12 ý dùng `mode:`, nhưng không ý nào làm cụm của mình giảm đúng như dự đoán. c6 còn làm cụm tăng. Ý được gộp dùng chỉ số đếm, và chỉ số đó cũng không đổi rõ. Như vậy lần gộp này lại là kiểu "có lợi theo cách khác với dự đoán", được nhận nhờ lối "benefit: success" của hội đồng chứ không nhờ cơ chế đo hành vi.
+- **Cẩn trọng khi đọc con số 60.6%:**
+  - (a) Chỉ có một seed.
+  - (b) H0 test chỉ có 1 lượt, và H0 dao động mạnh giữa các lượt (train 35/27/33 trên 50). Kiểm định từng cặp (p=0.02) đã tính tới nhiễu này phần nào, nhưng chạy thêm một lượt test cho H0 hoặc B4 sẽ chắc hơn.
+  - (c) c3 tốn thêm 40% token. Chưa có đối chứng cùng chi phí cho AppWorld.
+  - (d) Chưa tách được phần lợi đến từ bản tóm hay từ các nhãn `[pagination]`/`[incomplete]`. Một đối chứng rẻ là chạy c3 bỏ nhãn.
+- **Còn thiếu so với §26.4:**
+  - Val giờ đủ cho các ý rộng, nhưng lượt này chưa có ý hẹp nào lên tới val, nên chưa biết val 90 lượt có đủ cho chúng không.
+  - Thước đo cụm cần một ý thực sự làm cụm giảm mới chứng minh được giá trị của nó.
