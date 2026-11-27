@@ -88,6 +88,7 @@ N_SENT = int(os.environ.get("B4_N_SENT", "8"))       # such runs branched right 
 SENT_Q0 = float(os.environ.get("B4_SENT_Q0", "0.1"))  # loss rate on them that two runs of one harness can show
 SENT_ALPHA, SENT_MIN_L = 0.05, 2                     # binomial test of their losses against SENT_Q0
 CLUSTER = os.environ.get("B4_CLUSTER", "0") == "1"  # every failed run filed in a failure cluster; `mode:<cluster>` is a behaviour
+TOOLS_SEEN: set = set()  # tools the environment offered the model in the saved runs
 CL: K.Clusters | None = None                         # the registry of the running search (set in run())
 _JUDGE = {}                                          # client and bench of the mode judge (set in run())
 
@@ -736,6 +737,10 @@ numbers, + - * / ( ), min, max, abs: for example `n_actions - distinct_actions` 
 No mean(...), no second metric, no words.
 {features}
 {when_block}Rules:
+- Every tool call of the model in the saved runs goes to one of these tools: {tools}. Whatever else the agent uses (functions, APIs,
+  documentation, logins) it reaches through their arguments, so an edit that offers, hides, reorders or waits for
+  some other tool changes nothing. To give the agent a new tool, the edit must implement it (a composite or harness
+  tool); to act on what the agent does inside an argument, read that argument.
 - General principle only, of the form "precondition observable during a run -> action of the harness". Nothing
   specific to a task: no entities, answers, task text, task ids. The environment's tool names may be used.
 - The edit must act on real runs: say on which share of runs its precondition should hold.
@@ -1367,7 +1372,9 @@ def build(client, bench, split, cand, inc_root: Path, cur: list[dict], ws: Path,
                                 root / "variants" / cand["slot"] / f"{cand['vname']}.py")
                 why = (f"the edit changed nothing in any of {dmap['n']} saved runs replayed under it: its condition "
                        "never held, or its action left every model request and every executed action unchanged. "
-                       "Make the condition one that holds on ordinary runs of this harness."
+                       "Make the condition one that holds on ordinary runs of this harness. The model is offered "
+                       f"only these tools: {sorted(TOOLS_SEEN) or '?'}; anything else is reached through their "
+                       "arguments."
                        + ("\n" + tr if tr else "")
                        + (f"\nThe situation the edit is for exists: {when_view(cand['when'], cand['when_obs'])}. Your "
                           "code must act there." if cand.get("when_obs") else "")
@@ -1641,6 +1648,8 @@ def run(bench: str, shared: dict, client, cfg: dict = C.SMOKE) -> dict:
             elif e["type"] == "step":
                 tools.add(e.get("tool"))
     tools = {t for t in tools if t}
+    TOOLS_SEEN.clear()
+    TOOLS_SEEN.update(tools)
     linter = B.Linter(instructions, sorted({x["task_id"] for x in cur}) + list(tasks["val"][1]), tools)
 
     inc_root = Path(C.H0_ROOT)
