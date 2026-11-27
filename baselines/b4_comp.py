@@ -438,8 +438,9 @@ def behaviour_shift(code, direction: str, recs: list[dict], feats) -> dict:
 def beh_text(beh: str) -> str:
     """A behaviour as shown to the models: a cluster measure carries its definition."""
     if CLUSTER and CL is not None and str(beh).startswith("mode:") and beh[5:].strip() in CL.reg:
-        return (f"{beh} (1 if a blind judge reading the run finds this failure in it, else 0: "
-                f"{CL.define(beh[5:].strip())})")
+        n = beh[5:].strip()
+        return (f"{beh} (1 if a blind judge reading the run finds this mistake in it, else 0: {CL.define(n)}"
+                f" Signature: {CL.reg[n].get('signature') or '-'})")
     return beh
 
 
@@ -753,8 +754,11 @@ Answer ONLY with JSON:
 MODE_OPTION = """
 Or `behaviour` may be a failure cluster listed under "Failure clusters" above, written `mode:<cluster name>` with
 direction down: on each branch and on the saved run it forks, a blind judge reading the run says whether it shows
-that failure (1) or not (0). Use it when the failure is in WHAT the agent does (the content of its actions or its
-answer), which the counts above do not capture."""
+that mistake (1) or not (0). Use it when the failure is in WHAT the agent does (the content of its actions or its
+answer), which the counts above do not capture. Each cluster gives a signature (how the mistake shows on a run, from
+actions and results only) and examples of the decisive step (what the agent did, what showed it was a mistake, what
+was better): a mechanism can check that signature at run time and change what the harness offers, shows or does at
+that point (no advice text, as above)."""
 
 IMPL = """You implement ONE edit of a harness component as a new variant file. The agent model is fixed.
 

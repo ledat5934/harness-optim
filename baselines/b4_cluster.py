@@ -1,7 +1,10 @@
 """B4 v7 with failure clusters (B4_CLUSTER=1).
 
-Every failed training run of the current harness is read by an LLM, which says in one sentence what went wrong and
-files the run under an existing failure cluster or opens a new one (name + one-sentence definition). The registry is
+Every failed training run of the current harness is read by an LLM, which finds the decisive step (the earliest one
+after which the run could not succeed without a change of course), says what the agent did there, what visible in
+the run showed it was a mistake and what was better, and files the run by that MISTAKE (not by its consequence,
+such as stopping early) under an existing cluster or a new one (name, definition, and a signature a program could
+check on the run). The registry is
 cumulative across rounds, every cluster carries its count of failed runs and tasks, and nothing is filtered out:
 `harness_fixable` is shown as the labeller's opinion, the proposer decides. The digest the labeller reads keeps the
 arguments of the agent's actions (for code-writing agents the action IS its argument), which the short digests of
@@ -26,67 +29,86 @@ from pathlib import Path
 from baselines.proposer_io import extract_json
 from baselines import b4_branch as V
 
-BATCH = 6            # failed runs per labelling call
+BATCH = 4            # failed runs per labelling call
 MAX_CLUSTERS = 12    # above this, one consolidation call merges near-duplicates
 JUDGE_WORKERS = 8
 
-LABEL = """You keep a registry of FAILURE CLUSTERS of an AI agent. It is used to decide which change of the agent's
-scaffolding to try next, so a cluster must describe a GENERAL pattern of behaviour that recurs across tasks.
+LABEL = """You keep a registry of FAILURE CLUSTERS of an AI agent. It decides which change of the agent's
+scaffolding (its tools, what tool results show, its checks, its loop) is tried next. So a cluster names a MISTAKE
+that recurs across tasks and that a program watching the run could notice when it happens.
 
-Existing clusters (name: definition [failed runs filed so far]):
+Existing clusters (name: definition | signature [failed runs filed so far]):
 {registry}
 
-Failed runs (the grader marked each one as failed; read what the agent actually did, including the arguments and
-code of its actions):
+Failed runs (the grader marked each one as failed; steps are numbered; read what the agent actually did, including
+the arguments and code of its actions and the results it got):
 {runs}
 
-For EACH run give:
-- what_went_wrong: one sentence on the agent's mistake, in general terms (no task entities, names, values or ids)
-- cluster: the name of the existing cluster it belongs to, or a NEW snake_case name (2-4 short words, <= 40 chars). Reuse a name when
-  the meaning is the same. Runs of this batch that share a new pattern get the same new name.
-- definition: for a NEW name only, one sentence describing the observable behaviour (general, no task entities)
-- harness_fixable: for a NEW name only, false if the pattern is mainly the model's knowledge or reasoning, an
-  ambiguous task or an infrastructure failure, true if the scaffolding (tools, observations, checks, loop) could
-  reasonably prevent it
-Answer ONLY with JSON: {{"runs": [{{"i": 0, "what_went_wrong": "...", "cluster": "...", "definition": "...",
-"harness_fixable": true}}]}}"""
+Read each run like this:
+1. step: the decisive step, the earliest one after which the run could no longer succeed unless the agent changed
+   course. Every failed run ends with a wrong, partial or missing answer; that ending is NOT the mistake. Find
+   what led to it.
+2. did: what the agent did at that step, in terms of the tool interface: which tool, the form of its arguments
+   (which arguments it set or left out, how it combined conditions, what it repeated or changed), never the
+   task's entities or values.
+3. evidence: what was visible in the run at that point that shows it was a mistake: the result the agent got and
+   how it treated it (ignored it, misread it, never checked it, acted before having it).
+4. better: the next action that would have been better, again in terms of the tool interface.
+5. cluster: file the run by its MISTAKE (did + evidence), not by its consequence. Names such as "stopped too
+   early", "gave up", "incomplete answer" describe how almost every failure ends and point to no change; use
+   them only if the run really shows nothing earlier. Reuse an existing name when the mistake is the same; runs
+   of this batch that share a new mistake get the same new name (snake_case, 2-4 short words, <= 40 chars).
+   For a NEW name also give:
+   - definition: one sentence on the mistake, general (no task entities)
+   - signature: a condition a program could check on the run up to the decisive step, from the agent's actions
+     and the tool results only (the outcome is unknown to it)
+   - harness_fixable: false if the run shows no mistake of this kind that the scaffolding could notice (the model
+     lacked knowledge or reasoned wrongly from complete information, the task is ambiguous, the environment
+     failed), else true
+Write every field in general terms: no task entities, names, values or ids.
+Answer ONLY with JSON: {{"runs": [{{"i": 0, "step": 3, "did": "...", "evidence": "...", "better": "...",
+"cluster": "...", "definition": "...", "signature": "...", "harness_fixable": true}}]}}"""
 
 MERGE = """These are failure clusters of an AI agent, each with its definition and count of failed runs:
 {registry}
 Some may describe the same pattern. Merge duplicates so that at most {k} clusters remain; keep distinct patterns
 apart. Answer ONLY with JSON: {{"merge": {{"<cluster merged away>": "<cluster it goes into>"}}}} ({{}} if none)."""
 
-JUDGE = """You check whether a finished run of an AI agent shows one specific failure pattern. You are not told
-whether the run succeeded.
+JUDGE = """You check whether a finished run of an AI agent makes one specific mistake. You are not told whether the
+run succeeded, and the outcome does not matter: answer about the mistake itself, at the step where it happens.
 
-Pattern `{name}`: {definition}
+Mistake `{name}`: {definition}
+Signature (how it shows on a run): {signature}
 
-Run (digest):
+Run (digest, steps numbered):
 {digest}
 
-Answer ONLY with JSON: {{"shows": true or false, "why": "<one short sentence>"}}"""
+Answer ONLY with JSON: {{"shows": true or false, "step": <first step where it happens, or null>,
+"why": "<one short sentence>"}}"""
 
 
-def digest(path: str, max_events: int = 30, arg_chars: int = 500, obs_chars: int = 300, task_chars: int = 600) -> str:
-    """The run as the agent lived it: task, its reasoning, each action WITH its arguments, each result. The outcome
-    is not shown."""
+def digest(path: str, max_events: int = 30, head: int = 8, arg_chars: int = 500, obs_chars: int = 600,
+           task_chars: int = 600) -> str:
+    """The run as the agent lived it: task, its reasoning, each numbered action WITH its arguments, each result. The
+    outcome is not shown. A long run keeps its first `head` events (where the course is often set) and its last
+    ones."""
     ev = V.load_events(path)
     task = next((e for e in ev if e.get("type") == "task"), {})
     lines = [f"TASK: {str(task.get('instruction') or '')[:task_chars]}"]
-    body = []
+    body, n = [], 0
     for e in ev:
         t = e.get("type")
         if t == "llm" and "check" not in e and (e.get("content") or "").strip():
             body.append(f"  THINK: {str(e.get('content'))[:250]!r}")
         elif t == "step":
+            n += 1
             a = e.get("args")
             a = a if isinstance(a, str) else json.dumps(a, default=str)
-            body.append(f"  ACT {e.get('tool')}: {a[:arg_chars]}\n  RESULT: {str(e.get('observation') or '')[:obs_chars]!r}")
+            body.append(f"  [step {n}] ACT {e.get('tool')}: {a[:arg_chars]}\n  RESULT: {str(e.get('observation') or '')[:obs_chars]!r}")
         elif t in ("verifier_reject", "exception"):
             body.append(f"  {t.upper()}: {str(e.get('feedback') or e.get('error'))[:obs_chars]}")
     if len(body) > max_events:
-        lines.append(f"  ... ({len(body) - max_events} earlier events omitted)")
-        body = body[-max_events:]
+        body = body[:head] + [f"  ... ({len(body) - max_events} events omitted)"] + body[-(max_events - head):]
     return "\n".join(lines + body)
 
 
@@ -115,7 +137,8 @@ class Clusters:
     # ---------------------------------------------------------------- labelling
     def _reg_text(self, counts: dict | None = None) -> str:
         counts = counts or self.cum_counts()
-        return "\n".join(f"- {n}: {m['definition']} [{counts.get(n, 0)}]" for n, m in self.reg.items()) or "(none yet)"
+        return "\n".join(f"- {n}: {m['definition']} | {m.get('signature') or '-'} [{counts.get(n, 0)}]"
+                         for n, m in self.reg.items()) or "(none yet)"
 
     def cum_counts(self) -> dict:
         c: dict[str, int] = {}
@@ -147,14 +170,17 @@ class Clusters:
                     continue
                 if name not in self.reg:
                     dfn = str(row.get("definition") or "").strip()
-                    dfn = dfn if len(dfn) >= 10 else str(row.get("what_went_wrong") or "").strip()
+                    dfn = dfn if len(dfn) >= 10 else str(row.get("did") or row.get("what_went_wrong") or "").strip()
                     if len(dfn) < 10:
                         continue
-                    self.reg[name] = {"definition": dfn[:300],
+                    self.reg[name] = {"definition": dfn[:300], "signature": str(row.get("signature") or "")[:300],
                                       "harness_fixable": row.get("harness_fixable") is not False, "round": r}
                 x = batch[row["i"]]
-                self.assign[x["trajectory_path"]] = {"cluster": name, "what": str(row.get("what_went_wrong") or "")[:240],
-                                                     "task_id": x["task_id"], "round": r}
+                self.assign[x["trajectory_path"]] = {
+                    "cluster": name, "step": row.get("step") if isinstance(row.get("step"), int) else None,
+                    "did": str(row.get("did") or "")[:240], "evidence": str(row.get("evidence") or "")[:240],
+                    "better": str(row.get("better") or "")[:240], "what": str(row.get("what_went_wrong") or "")[:240],
+                    "task_id": x["task_id"], "round": r}
                 n_new += 1
         return n_new
 
@@ -184,7 +210,7 @@ class Clusters:
     def members(self, name: str) -> set[str]:
         return {p for p, a in self.assign.items() if a["cluster"] == name}
 
-    def view(self, fails: list[dict], max_chars: int = 4000) -> str:
+    def view(self, fails: list[dict], max_chars: int = 6000) -> str:
         """Clusters by their count among the CURRENT failed runs, with failed tasks, the total filed over the search,
         the labeller's opinion on fixability and two examples of what went wrong."""
         cur = {x["trajectory_path"]: x for x in fails if x.get("trajectory_path") in self.assign}
@@ -194,15 +220,18 @@ class Clusters:
             paths = [p for p in cur if self.assign[p]["cluster"] == n]
             ex = []
             for p in paths:
-                w = self.assign[p]["what"]
+                a = self.assign[p]
+                w = (f"did: {a['did']} | evidence: {a.get('evidence') or '-'} | better: {a.get('better') or '-'}"
+                     if a.get("did") else a.get("what", ""))
                 if w and w not in ex:
                     ex.append(w)
             rows.append((len(paths), len({cur[p]["task_id"] for p in paths}), n, m, ex[:2], tot.get(n, 0)))
         rows.sort(key=lambda t: (-t[0], -t[5], t[2]))
         out = [f"{len(cur)} of the {len(fails)} failed runs of the current harness are filed in clusters "
-               "(name: definition | failed runs now / failed tasks now / filed over the search | labeller's view):"]
+               "(name: definition | signature | failed runs now / failed tasks now / filed over the search | labeller's view;\n"
+               "each example is one run's decisive step: what the agent did, what showed it was a mistake, what was better):"]
         for k, kt, n, m, ex, t in rows:
-            out.append(f"- {n}: {m['definition']} | {k} runs / {kt} tasks / {t} | "
+            out.append(f"- {n}: {m['definition']} | signature: {m.get('signature') or '-'} | {k} runs / {kt} tasks / {t} | "
                        f"{'harness-fixable' if m['harness_fixable'] else 'model/task/environment'}"
                        + "".join(f"\n    e.g. {e}" for e in ex))
         s = "\n".join(out)
@@ -220,6 +249,7 @@ class Clusters:
         for _ in range(2):
             try:
                 rsp = client.chat([{"role": "user", "content": JUDGE.format(name=name, definition=self.define(name),
+                                                                              signature=self.reg.get(name, {}).get("signature") or "-",
                                                                               digest=digest(path))}],
                                   tag=f"b4j:{bench}:mode_judge", max_tokens=600, fallback_no_reasoning=True)
                 d = extract_json(rsp.content or "")
