@@ -856,3 +856,68 @@ Vòng 1 xếp được cả 55 lượt sai train vào 5 cụm, với 10 lần g�
 - *Tín hiệu độ tin cậy:* §24 cho thấy 132/150 lượt sai tự chấm độ tin cậy ≤ 30, còn 29/30 lượt đúng chấm ≥ 70. Đây là tín hiệu dừng tốt nhất hiện có, nhưng pipeline không đo nó. Thêm đặc trưng `stated_confidence` thì một ý kiểu "độ tin cậy thấp và còn ngân sách → chưa nhận câu trả lời, tìm tiếp bằng truy vấn đã tách" sẽ nêu và đo được.
 
 **Pipeline có tự tìm ra được không:** với tính năng cụm lỗi (§25), người gán nhãn đọc được tham số gọi đầy đủ (tới 500 ký tự), nên có khả năng đặt ra cụm kiểu "truy vấn gộp quá nhiều đầu mối, kết quả không chứa tài liệu liên quan", và proposer có thể nhắm cụm đó bằng `mode:<cụm>` mà không cần đặc trưng đếm. Lệnh cấm lời khuyên vẫn còn, nên proposer phải tự nghĩ ra cách làm phía harness như tách truy vấn. Chưa kiểm chứng: lượt này chỉ chạy AppWorld theo yêu cầu.
+
+## 26. Gắn nhãn theo "lỗi quyết định" thay vì theo hậu quả (prompt mới, chạy thử offline)
+
+### 26.1 Vì sao sửa
+
+Cụm ở §25 và nhãn ở các lượt trước phần lớn đặt tên theo **hậu quả**: `premature_task_abandonment`, `premature_incomplete_data`, `premature_search_abandonment`. Gần như lượt sai nào cũng kết thúc bằng một câu trả lời sai, thiếu hoặc dừng sớm, nên tên kiểu này đúng với mọi lượt mà không chỉ ra được nên sửa gì. Proposer nhận "dừng sớm" thì đề xuất chặn dừng hoặc mở thêm tài liệu, như đã thấy trong 23 ý tìm kiếm ở §25.4.
+
+### 26.2 Prompt mới (`baselines/b4_cluster.py`, commit `97bade2`)
+
+Với mỗi lượt sai, người gắn nhãn phải trả lời:
+1. **step:** bước quyết định, tức bước sớm nhất mà sau đó lượt chạy không thể đúng nếu agent không đổi hướng. Prompt ghi rõ: kết thúc sai không phải là lỗi, hãy tìm cái dẫn tới nó.
+2. **did:** agent đã làm gì ở bước đó, nói theo giao diện công cụ: công cụ nào, đối số có dạng gì (đặt hay bỏ đối số nào, gộp điều kiện ra sao, lặp lại gì). Không nêu thực thể của bài.
+3. **evidence:** điều gì nhìn thấy được trong lượt chạy lúc đó cho biết đây là lỗi: kết quả agent nhận được và agent xử lý nó thế nào.
+4. **better:** hành động nào tốt hơn ở bước đó.
+5. **cluster:** xếp theo **lỗi** (did + evidence), không theo hậu quả. Cụm mới phải có thêm **signature**: một điều kiện mà chương trình kiểm tra được trên lượt chạy tính tới bước quyết định, chỉ dựa vào hành động và kết quả công cụ.
+
+Các phần còn lại:
+- **Giám khảo** đo `mode:<cụm>` nay nhận cả signature và phải nêu bước xảy ra lỗi.
+- **Proposer** thấy signature và các ví dụ "did / evidence / better" của từng cụm. Prompt HYP nói rõ cơ chế có thể kiểm tra signature lúc chạy và thay đổi những gì harness đưa ra, hiển thị hoặc làm ở chỗ đó (vẫn cấm lời khuyên).
+- **Bản tóm tắt lượt chạy** nay đánh số bước, giữ 8 sự kiện đầu (chỗ hướng đi thường được chốt) cùng các sự kiện cuối, và hiện kết quả công cụ 600 ký tự thay vì 300. Mỗi lần gọi đọc 4 lượt thay vì 6.
+
+Prompt không chứa ví dụ nào lấy từ phân tích của tôi (lật trang, truy vấn gộp...). Như vậy nếu cụm tìm ra những lỗi này thì đó là do model đọc lượt chạy, không phải do tôi gợi ý.
+
+### 26.3 Chạy thử offline trên lượt sai H0 (train)
+
+| Benchmark | Cụm cũ (lớn nhất) | Cụm mới |
+|---|---|---|
+| AppWorld (55 lượt sai) | `documentation_and_auth_recovery` 22, `premature_incomplete_data` 16, `premature_task_abandonment` 14, 2 cụm nhỏ (§25) | `repeated_partial_query` 17 (lặp lại truy vấn đã trả kết quả bị cắt mà không đổi gì), `truncated_result_mutation` 16 (hành động dựa trên kết quả bị cắt), `protected_call_without_auth` 14 (gọi API cần đăng nhập mà không truyền token), `incomplete_library_enumeration` 8 (chỉ lấy trang đầu của danh sách phân trang, coi như đủ) |
+| BCP (127 lượt sai) | `premature_search_abandonment` 14 bài, `repeated_search_results` 1 (nhãn từ 16 lượt được đọc, `b4v7q`) | `overloaded_search_queries` 105 (gộp nhiều đầu mối độc lập vào một truy vấn rộng thay vì tách đầu mối đặc trưng rồi thu hẹp dần), `repeats_uninformative_search` 13, `unproductive_source_reuse` 9 |
+
+Bước quyết định có trung vị là bước 8 trên AppWorld và **bước 1** trên BCP: truy vấn đầu tiên đã chốt hướng đi.
+
+Kiểm tra giám khảo (đọc không biết kết quả) xem nó có phân biệt được hay không:
+
+| Cụm | Lượt đúng bị chấm là có lỗi | Thành viên cụm | Lượt sai khác |
+|---|---|---|---|
+| AppWorld `incomplete_library_enumeration` | 3/15 | 7/8 | 2/10 |
+| AppWorld `protected_call_without_auth` | 2/15 | 12/14 | 3/10 |
+| BCP `overloaded_search_queries` | **10/15** | 15/15 | 10/10 |
+
+**Đọc kết quả:**
+- **Prompt mới tìm ra đúng hai lỗi chính của §24 mà không cần chỉ số nào làm tay.** Trên AppWorld là lật trang và thiếu token. Trên BCP là truy vấn gộp quá nhiều đầu mối, đúng điều §25.4 nói là pipeline chưa bao giờ thấy.
+- **Trên AppWorld, cụm phân biệt tốt lượt đúng với lượt sai** (lượt đúng chỉ 2–3/15 bị chấm là có lỗi). Dùng làm thước đo hành vi được.
+- **Trên BCP, lỗi truy vấn gộp có ở cả 10/15 lượt đúng.** Đây là cách model này luôn tìm kiếm, và lượt đúng là những lần truy vấn gộp may mắn trúng. Cụm này vẫn đo được một bản sửa có làm giảm truy vấn gộp hay không. Nhưng không có bằng chứng rằng giảm nó sẽ làm tăng số câu đúng: điều đó chỉ thử nhánh mới trả lời được.
+- Một cụm chiếm 105/127 lượt là khá thô. Nếu chạy thật nhiều vòng thì có thể cần tách nhỏ hơn.
+- **Bỏ các đề xuất ở §25.4 là thêm chỉ số `distinct_docs_seen`, `stated_confidence` và tín hiệu "tài liệu đúng đã xuất hiện".** Ba cái này đặc thù cho BCP và vi phạm nguyên tắc khái quát. "Tách truy vấn" cũng không cài vào pipeline, vì đó là việc proposer phải tự nghĩ ra từ cụm `overloaded_search_queries`.
+
+### 26.4 Điểm yếu của B1–B3 và B4 đã có gì để khắc phục (cập nhật tới §26)
+
+| Điểm yếu (thấy trong log) | B4 đã có gì | Đã thấy hiệu quả chưa |
+|---|---|---|
+| **Chọn theo điểm val/train nhỏ nên bị nhiễu lừa.** B1 seed 1: val 26,7% nhưng test 19%. B3 chọn theo 4–8 bài đúng trên 30. | So từng cặp nhánh rẽ từ cùng một điểm của cùng một lượt chạy, rồi kiểm định dấu. Gộp phải qua cả train lẫn val. Ưu tiên rẽ nhánh ở bài "lúc được lúc không" (`B4_LEARN`). | Có: c1 và c6 ở `b4v7r` thắng train nhưng val không xác nhận, nên không gộp nhầm. Điểm yếu mới là val quá ít lượt chạm tới các bản sửa hẹp (§25). |
+| **B1 gần như chỉ sửa lời nhắc trong prompt.** | Cấm lời khuyên và chuỗi dài. Có 12 loại sửa cấu trúc, mỗi vòng giao một nhóm loại. | Có, nhưng phần lớn ý vẫn xoay quanh "chặn dừng sớm" (9/13 lần gộp ở các lượt v7). §26 nhắm vào chỗ này: lỗi được đặt tên theo hành động chứ không theo hậu quả. |
+| **B1 có giả thuyết dính chi tiết của bài.** | Cổng khái quát (không mã bài, không nội dung đề, không đáp án). Giả thuyết phải ở dạng "điều kiện chạy được trên trajectory → hành động" và điều kiện phải xảy ra đủ thường. | Có: chưa ý nào bị phát hiện dính thực thể. |
+| **B1 sinh code chết hoặc code crash, mất cả vòng.** | Lint, chạy lại khô trên các lượt đã lưu, báo "DEAD CODE" kèm dấu vết, cho viết lại một lần. | Một phần: vòng 3 `b4v7r` vẫn có 3/5 ý chết, vì đặt điều kiện vào công cụ không tồn tại. |
+| **B2 đứng yên 15 vòng vì giám khảo không chịu chỉ ra thủ phạm.** | Không cần thủ phạm. Mọi lượt sai đều được xếp cụm (§25), bằng chứng đến từ rẽ nhánh. | Có: lượt nào cũng ra giả thuyết. |
+| **B2 thăng hạng biến thể có hại vì không so reward.** | Kiểm định thắng/thua trên nhánh, cổng chặn làm hỏng bài đang đúng (`B4_SENTINEL`), hội đồng 3 phiếu. | Có: cổng chặn bắt được c1 ở `b4v7q` và c5 ở `b4v7r` (5/8 bài luôn đúng bị hỏng). |
+| **B3 tốn token gấp 1,6–2,2 lần.** | Chi phí là một chỉ số được đo trên từng cặp nhánh. Có thể gộp vì lý do tiết kiệm nếu không làm mất bài. | Có: v7k đạt 36% BCP với 72k token/bài (luật chặn bước cần 215k). |
+| **B3 có canary quá lỏng.** | Phải chứng minh hành vi đổi đúng như dự đoán, rồi qua hội đồng và val. | Có. Mặt trái là ý có lợi theo cách khác dự đoán bị bỏ (§23). Thước đo cụm (§25) giúp một phần. |
+| **Nhãn lỗi chung chung, không chỉ ra nên sửa gì** (cả B1–B3 lẫn B4 cũ: "dừng sớm", "tìm kém"). | §25: đọc mọi lượt sai, dùng cụm làm thước đo. §26: xếp theo lỗi ở bước quyết định, có signature. | Mới thử offline: tìm ra lật trang, thiếu token, truy vấn gộp. Chưa chạy vòng thật. |
+
+Còn thiếu:
+- Val ít lượt chạm tới các bản sửa hẹp.
+- Code chết khi điều kiện dựa vào công cụ không có.
+- Trên BCP, lỗi truy vấn gộp có cả ở lượt đúng nên chưa chắc sửa được thì tăng điểm.
