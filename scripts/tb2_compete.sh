@@ -22,12 +22,18 @@ ok=any((r:=json.loads(l))["task_id"]==sys.argv[1] and r.get("phase")=="test" and
 sys.exit(0 if ok else 1)
 PY
 }
+# All harbor versions share ~/.cache/harbor/tasks/<hash>/<task>: concurrent first downloads of one task race
+# (an arm then finds a half-written task dir). After the first harbor arm starts, wait until the task is cached.
+cache_ok() { ls /root/.cache/harbor/tasks/*/"$1"/environment/Dockerfile > /dev/null 2>&1 && \
+             ls /root/.cache/harbor/tasks/*/"$1"/tests/test.sh > /dev/null 2>&1; }
+wait_cache() { for _ in $(seq 60); do cache_ok "$1" && { sleep 3; return; }; sleep 2; done; }
 for t in $TASKS; do
   to=$(python3 -c "import tomllib;d=tomllib.load(open('data/tb2/terminal-bench/$t/task.toml','rb'));print(int(2*d['agent']['timeout_sec']+2*d['verifier']['timeout_sec']+1800))")
   echo "$(date -u +%H:%M:%S) task $t (timeout ${to}s)"
   pids=()
   for a in ${ARMS//,/ }; do
     job="${a}__${SPLIT}__$t"
+    [[ "$a" != h0 && ${#pids[@]} -gt 0 ]] && ! cache_ok "$t" && wait_cache "$t"
     case $a in
       mh_kira) done_job "$job" || { timeout "$to" scripts/tb2_metaharness.sh "$job" 1 "$t" > "$L/$job.log" 2>&1 & pids+=($!); } ;;
       mh_art)  done_job "$job" || { TB2_PYPATH="$ROOT/third_party/mh-tb2-artifact" TB2_HARBOR="$ROOT/third_party/mh-tb2-artifact/.venv/bin/harbor" TB2_AGENT=agent:AgentHarness \
