@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from collections import Counter
@@ -43,7 +44,10 @@ def load_shared(bench: str, cfg: dict = C.SMOKE, allow_stale: bool = False, h0_d
     for r in recs:
         latest[(r.get("phase"), r.get("roll", 1), r["task_id"])] = r
     h0_train = [r for (ph, _, tid), r in latest.items() if ph == "train" and tid in tr_ids]
-    h0_val = [r for (ph, _, tid), r in latest.items() if ph == "val" and tid in set(tasks["val"][1])]
+    # H0_VAL_ROLLS > 1 (B4 only): more held-out runs of the same val tasks, so that an edit whose condition holds on
+    # few runs is still confirmed on enough of them. Default 1 keeps every other method's val exactly as before.
+    vr = int(os.environ.get("H0_VAL_ROLLS", "1"))
+    h0_val = [r for (ph, ro, tid), r in latest.items() if ph == "val" and ro <= vr and tid in set(tasks["val"][1])]
     cur = C.tree_hash(C.H0_ROOT)
     stale = [r["task_id"] for r in h0_train + h0_val if r.get("h0_hash") != cur]
     if stale and allow_stale:  # debug only: the evidence is just context for reading the method's behaviour
@@ -51,7 +55,7 @@ def load_shared(bench: str, cfg: dict = C.SMOKE, allow_stale: bool = False, h0_d
               f"not for results. Re-run scripts/run_h0.py for a real run.")
     elif stale:  # the shared evidence must come from exactly the H0 the methods start from
         raise SystemExit(f"shared H0 records were produced by a different H0 (hash != {cur}): {stale[:3]}")
-    if len(h0_val) != len(tasks["val"][1]) or not h0_train:
+    if len(h0_val) != vr * len(tasks["val"][1]) or not h0_train:
         raise SystemExit(f"shared H0 runs incomplete for {bench}: train={len(h0_train)} val={len(h0_val)}")
     rolls = Counter(r["task_id"] for r in h0_train)
     short = sorted(t for t in tr_ids if rolls[t] < cfg["k"])

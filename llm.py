@@ -227,6 +227,9 @@ class LLM:
                 body["tool_choice"] = tool_choice
         if stop:
             body["stop"] = stop
+        if reasoning is None and os.environ.get("LLM_REASONING_EFFORT") and "openrouter.ai" not in self.base_url:
+            # diagnostic only (unset by default): pin the gateway's thinking level for calls that do not set one
+            body["reasoning_effort"] = os.environ["LLM_REASONING_EFFORT"]
         if reasoning is not None and "openrouter.ai" in self.base_url:
             body["reasoning"] = reasoning
         elif reasoning is not None:  # OpenAI-style gateways reject OpenRouter's `reasoning` object

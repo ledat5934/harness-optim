@@ -64,7 +64,7 @@ Trạng thái: ✅ đã implement · 🧪 implement xong, chưa chạy thật ·
 - Proposer thấy graph của lần chạy hiện tại, nhóm theo mode: "đã thử gì cho mode này, cái gì giúp, cái gì hại".
 - `B4_GRAPH=<run roots>`: graph của các lần chạy trước (seed khác, model khác) được đưa vào prompt như ý tưởng có thể chuyển giao, không phải bằng chứng. Đây là cách chuyển giao mềm hơn `B4_PRIOR`, vốn sàng lọc thẳng cơ chế cũ.
 
-### P3. Precondition hai tầng: tín hiệu + câu hỏi LLM (⏳)
+### P3. Precondition hai tầng: tín hiệu + câu hỏi LLM (🧪, `baselines/hg/runtime.py`, v5)
 
 - Tầng 1 là bộ lọc rẻ trên tín hiệu, như hiện nay.
 - Tầng 2 là một câu hỏi yes/no ngắn cho LLM, chỉ được gọi khi tầng 1 đúng. Ví dụ: "đáp án hiện tại đã được tài liệu nào xác nhận chưa?", "bước vừa rồi có tiến gần mục tiêu không?".
@@ -74,6 +74,7 @@ Trạng thái: ✅ đã implement · 🧪 implement xong, chưa chạy thật ·
   - ghi kết quả vào telemetry.
 - Lint áp cho câu hỏi giống như áp cho `text`.
 - Chi phí phải tính vào mục tiêu (bài học F6 của B3).
+- **Trạng thái (v5):** đã làm schema `llm_check`, hook `HookedLoop._check` (tối đa `MAX_CHECKS=3` lần/cơ chế/episode, 6 tin nhắn gần nhất, ghi sự kiện `mech_check`), lint áp cho câu hỏi; bật/tắt bằng `B4_LLM_CHECK`. Kèm theo hai thay đổi của v5 trong `b4_repertoire.py`: kiểm tra trước bằng replay precondition trên trajectory đã lưu (sửa 1 lần nếu dự đoán không kích hoạt), và tính điểm chỉ trên task có kích hoạt (`B4_V5`). Kết quả BCP ở `docs/luna_results.md` §12.
 
 ### P4. Mở rộng action sang các slot còn thiếu (⏳)
 
