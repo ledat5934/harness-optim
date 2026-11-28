@@ -18,7 +18,10 @@ from pathlib import Path
 ok=False
 for f in [*Path(sys.argv[1]).glob("result.json"), *Path(sys.argv[1]).glob("*/result.json")]:
     d=json.loads(f.read_text()); ok|=bool(d.get("finished_at") and d.get("n_total_trials") and "RuntimeError" not in json.dumps(d.get("stats",{})))
-sys.exit(0 if ok else 1)
+# a run that met the model gateway's quota limit (429) did not get a fair attempt
+quota=any("usage limit has been reached" in g.read_text(errors="replace") for g in Path(sys.argv[1]).rglob("*")
+          if g.is_file() and (g.suffix in (".log", ".txt") or g.name == "result.json"))
+sys.exit(0 if ok and not quota else 1)
 PY2
 }
 done_h0() { python3 - "$1" <<'PY'
@@ -33,12 +36,22 @@ PY
 # (an arm then finds a half-written task dir). After the first harbor arm starts, wait until the task is cached.
 cache_ok() { ls /root/.cache/harbor/tasks/*/"$1"/environment/Dockerfile > /dev/null 2>&1 && \
              ls /root/.cache/harbor/tasks/*/"$1"/tests/test.sh > /dev/null 2>&1; }
+# wait until the model gateway answers (its quota resets after some minutes) and pull the image once, with long backoff
+gw_ok() { ( set -a; . "$ROOT/.env"; curl -s -m 90 "$OPENROUTER_BASE_URL/chat/completions" -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  -H 'Content-Type: application/json' -d '{"model":"cx/gpt-6-luna-low","messages":[{"role":"user","content":"ok"}],"max_tokens":5}' ) \
+  | python3 -c "import json,sys;sys.exit(0 if 'choices' in json.load(sys.stdin) else 1)" 2>/dev/null; }
+wait_gw() { for _ in $(seq 120); do gw_ok && return; echo "$(date -u +%H:%M:%S) gateway busy, waiting"; sleep 120; done; }
+pull() { for _ in $(seq 40); do docker pull -q "$1" > /dev/null 2>&1 && return; echo "$(date -u +%H:%M:%S) pull refused, waiting"; sleep 300; done; }
 wait_cache() { for _ in $(seq 60); do cache_ok "$1" && { sleep 3; return; }; sleep 2; done; }
+for pass in 1 2; do  # second pass redoes arm/task pairs that met an infra failure in the first
 for t in $TASKS; do
   to=$(python3 -c "import tomllib;d=tomllib.load(open('data/tb2/terminal-bench/$t/task.toml','rb'));print(int(2*d['agent']['timeout_sec']+2*d['verifier']['timeout_sec']+1800))")
   echo "$(date -u +%H:%M:%S) task $t (timeout ${to}s)"
   img=$(python3 -c "import tomllib;print(tomllib.load(open('data/tb2/terminal-bench/$t/task.toml','rb'))['environment']['docker_image'])")
-  for i in 1 2 3 4 5; do docker pull -q "$img" > /dev/null 2>&1 && break; sleep $((60 * i)); done  # one pull, not one per arm (registry rate limit)
+  todo=0; for a in ${ARMS//,/ }; do job="${a}__${SPLIT}__$t"
+    if [ "$a" = h0 ]; then [[ "$SPLIT" == test ]] && ! done_h0 "$t" && todo=1; else done_job "$job" || todo=1; fi; done
+  [ $todo = 0 ] && { echo "$(date -u +%H:%M:%S) done $t (all arms finished before)"; continue; }
+  wait_gw; pull "$img"  # one pull, not one per arm (registry rate limit)
   pids=()
   for a in ${ARMS//,/ }; do
     job="${a}__${SPLIT}__$t"
@@ -59,5 +72,6 @@ for t in $TASKS; do
   docker rmi "$img" > /dev/null 2>&1  # only this task's image; refused while another run still uses it
   cp -f "$L"/*__"${SPLIT}__$t".log "$LOGS"/ 2>/dev/null
   echo "$(date -u +%H:%M:%S) done $t; free $(df -h / | awk 'NR==2{print $4}')"
+done
 done
 echo ALL_DONE
