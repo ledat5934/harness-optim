@@ -96,11 +96,30 @@ def _free_gb(path: str = "/var/lib/docker") -> float:
         return 1e9
 
 
+def _nontest_images() -> set[str]:
+    """Docker images of the train/val tasks of splits.json."""
+    try:
+        sp = json.loads(SPLITS_FILE.read_text())
+    except Exception:
+        return set()
+    test = set(sp.get("test", []))
+    out = set()
+    for ph in ("train", "val"):
+        for t in sp.get(ph, []):
+            if t in test:
+                continue
+            try:
+                out.add(tomllib.loads((TASK_ROOT / t / "task.toml").read_text())["environment"]["docker_image"])
+            except Exception:
+                pass
+    return out
+
+
 def _ensure_image(image: str) -> None:
     with _pull_lock:
-        if _free_gb() < MIN_FREE_GB:  # free only images this process pulled; `docker rmi` refuses ones in use,
-            for img in list(_pulled - {image}):  # and images other runs on this host pulled are left alone
-                if _docker("rmi", img, timeout=600).returncode == 0:
+        if _free_gb() < MIN_FREE_GB:  # `docker rmi` refuses images a container uses; besides the images this
+            for img in sorted((_pulled | _nontest_images()) - {image}):  # process pulled, only train/val images
+                if _docker("rmi", img, timeout=600).returncode == 0:   # (other runs here grade on test tasks)
                     _pulled.discard(img)
         if image in _pulled or _docker("image", "inspect", image, timeout=60).returncode == 0:
             _pulled.add(image)
