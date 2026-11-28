@@ -13,7 +13,7 @@ SPLIT="${1:-test}"; ARMS="${2:-mh_kira,mh_art,mr_static,mr_dyn,h0}"
 J="$ROOT/results/tb2/jobs"; LOGS="$ROOT/results/tb2/logs"; L="$J/_live_logs"; mkdir -p "$J" "$L" "$LOGS"  # live logs are gitignored; copied when a task ends
 TASKS=$(python3 -c "import json;print(' '.join(json.load(open('benchmarks/terminal_bench2/splits.json'))['$SPLIT']))")
 done_job() { find "$J/$1" -name result.json -maxdepth 2 2>/dev/null | while read -r f; do
-  python3 -c "import json,sys;d=json.load(open('$f'));sys.exit(0 if d.get('finished_at') and d.get('n_total_trials') else 1)" && echo y; done | grep -q y; }
+  python3 -c "import json,sys;d=json.load(open('$f'));ex=json.dumps(d.get('stats',{})); sys.exit(0 if d.get('finished_at') and d.get('n_total_trials') and 'RuntimeError' not in ex else 1)" && echo y; done | grep -q y; }
 done_h0() { python3 - "$1" <<'PY'
 import json,sys
 from pathlib import Path
@@ -30,10 +30,14 @@ wait_cache() { for _ in $(seq 60); do cache_ok "$1" && { sleep 3; return; }; sle
 for t in $TASKS; do
   to=$(python3 -c "import tomllib;d=tomllib.load(open('data/tb2/terminal-bench/$t/task.toml','rb'));print(int(2*d['agent']['timeout_sec']+2*d['verifier']['timeout_sec']+1800))")
   echo "$(date -u +%H:%M:%S) task $t (timeout ${to}s)"
+  img=$(python3 -c "import tomllib;print(tomllib.load(open('data/tb2/terminal-bench/$t/task.toml','rb'))['environment']['docker_image'])")
+  for i in 1 2 3 4 5; do docker pull -q "$img" > /dev/null 2>&1 && break; sleep $((60 * i)); done  # one pull, not one per arm (registry rate limit)
   pids=()
   for a in ${ARMS//,/ }; do
     job="${a}__${SPLIT}__$t"
     [[ "$a" != h0 && ${#pids[@]} -gt 0 ]] && ! cache_ok "$t" && wait_cache "$t"
+    # a harbor job dir left by an infra failure is moved aside, so the arm starts afresh
+    [[ "$a" != h0 && -d "$J/$job" ]] && ! done_job "$job" && mkdir -p "$J/_failed" && mv "$J/$job" "$J/_failed/$job.$(date +%s)"
     case $a in
       mh_kira) done_job "$job" || { timeout "$to" scripts/tb2_metaharness.sh "$job" 1 "$t" > "$L/$job.log" 2>&1 & pids+=($!); } ;;
       mh_art)  done_job "$job" || { TB2_PYPATH="$ROOT/third_party/mh-tb2-artifact" TB2_HARBOR="$ROOT/third_party/mh-tb2-artifact/.venv/bin/harbor" TB2_AGENT=agent:AgentHarness \
@@ -45,7 +49,6 @@ for t in $TASKS; do
     esac
   done
   for p in "${pids[@]}"; do wait "$p"; done
-  img=$(python3 -c "import tomllib;print(tomllib.load(open('data/tb2/terminal-bench/$t/task.toml','rb'))['environment']['docker_image'])")
   docker rmi "$img" > /dev/null 2>&1  # only this task's image; refused while another run still uses it
   cp -f "$L"/*__"${SPLIT}__$t".log "$LOGS"/ 2>/dev/null
   echo "$(date -u +%H:%M:%S) done $t; free $(df -h / | awk 'NR==2{print $4}')"
