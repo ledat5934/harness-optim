@@ -21,7 +21,11 @@ for f in [*Path(sys.argv[1]).glob("result.json"), *Path(sys.argv[1]).glob("*/res
 # a run that met the model gateway's quota limit (429) did not get a fair attempt
 quota=any("usage limit has been reached" in g.read_text(errors="replace") for g in Path(sys.argv[1]).rglob("*")
           if g.is_file() and (g.suffix in (".log", ".txt") or g.name == "result.json"))
-sys.exit(0 if ok and not quota else 1)
+# a trial that died on a gateway/server error (not on the agent's own timeout) did not get a fair attempt either
+INFRA={"InternalServerError","RateLimitError","APIConnectionError","ServiceUnavailableError","APIError","BadGatewayError"}
+gw=any(((json.loads(g.read_text()).get("exception_info") or {}).get("exception_type") in INFRA)
+       for g in Path(sys.argv[1]).glob("**/result.json") if g.parent != Path(sys.argv[1]))
+sys.exit(0 if ok and not quota and not gw else 1)
 PY2
 }
 done_h0() { python3 - "$1" <<'PY'
