@@ -15,6 +15,9 @@ Splits: benchmarks/terminal_bench2/splits.json (scripts/make_tb2_splits.py: seed
 """
 from __future__ import annotations
 
+import io
+import tarfile
+
 import json
 import os
 import re
@@ -201,6 +204,19 @@ class TB2Env:
         return StepResult(self._exec(str(cmd), to))
 
     # ---------------------------------------------------------------- grading
+    def _read(self, path: str) -> str:
+        """A file of the container via `docker cp` (no process inside it: works when the container is overloaded)."""
+        try:
+            p = subprocess.run(["docker", "cp", f"{self.name}:{path}", "-"], capture_output=True, timeout=120)
+            if p.returncode != 0:
+                return ""
+            with tarfile.open(fileobj=io.BytesIO(p.stdout)) as tf:
+                m = tf.next()
+                f = tf.extractfile(m) if m else None
+                return f.read().decode("utf-8", "replace") if f else ""
+        except (subprocess.TimeoutExpired, tarfile.TarError):
+            return ""
+
     def evaluate(self) -> tuple[bool, dict]:
         info = {"tool_counts": dict(self.counts), "finished": self.finished,
                 "agent_wall_s": round(time.time() - (self.t0 or time.time()), 1)}
@@ -227,8 +243,7 @@ class TB2Env:
         except subprocess.TimeoutExpired:
             info["verifier_timeout"] = True
         info["verifier_wall_s"] = round(time.time() - t0, 1)
-        r = _docker("exec", self.name, "sh", "-c", "cat /logs/verifier/reward.txt 2>/dev/null || "
-                    "cat /logs/verifier/reward.json 2>/dev/null", timeout=60).stdout.strip()
+        r = (self._read("/logs/verifier/reward.txt") or self._read("/logs/verifier/reward.json")).strip()
         reward = 0.0
         try:
             reward = float(r)
@@ -236,10 +251,9 @@ class TB2Env:
             try:
                 reward = float(json.loads(r).get("reward", 0))
             except Exception:
-                info["reward_parse_error"] = r[:200]
+                info["reward_parse_error"] = r[:200]  # no reward file (e.g. a wedged verifier) grades as 0
         # Only aggregate counts are kept: the hidden tests' messages never reach the trajectory or any proposer.
-        tail = _docker("exec", self.name, "sh", "-c", "tail -c 400 /logs/verifier/test-stdout.txt",
-                       timeout=60).stdout
+        tail = self._read("/logs/verifier/test-stdout.txt")[-400:]
         counts = {k: int(n) for n, k in re.findall(r"(\d+) (passed|failed|error|errors)\b", tail)}
         info.update({"reward": reward, "tests": counts})
         return reward >= 1.0, info
