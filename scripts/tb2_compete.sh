@@ -12,8 +12,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 SPLIT="${1:-test}"; ARMS="${2:-mh_kira,mh_art,mr_static,mr_dyn,h0}"
 J="$ROOT/results/tb2/jobs"; LOGS="$ROOT/results/tb2/logs"; L="$J/_live_logs"; mkdir -p "$J" "$L" "$LOGS"  # live logs are gitignored; copied when a task ends
 TASKS=$(python3 -c "import json;print(' '.join(json.load(open('benchmarks/terminal_bench2/splits.json'))['$SPLIT']))")
-done_job() { find "$J/$1" -name result.json -maxdepth 2 2>/dev/null | while read -r f; do
-  python3 -c "import json,sys;d=json.load(open('$f'));ex=json.dumps(d.get('stats',{})); sys.exit(0 if d.get('finished_at') and d.get('n_total_trials') and 'RuntimeError' not in ex else 1)" && echo y; done | grep -q y; }
+done_job() { python3 - "$J/$1" <<'PY2'  # job-level result.json: finished, has trials, no infra RuntimeError
+import json,sys
+from pathlib import Path
+ok=False
+for f in [*Path(sys.argv[1]).glob("result.json"), *Path(sys.argv[1]).glob("*/result.json")]:
+    d=json.loads(f.read_text()); ok|=bool(d.get("finished_at") and d.get("n_total_trials") and "RuntimeError" not in json.dumps(d.get("stats",{})))
+sys.exit(0 if ok else 1)
+PY2
+}
 done_h0() { python3 - "$1" <<'PY'
 import json,sys
 from pathlib import Path
