@@ -10,7 +10,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 SPLIT="${1:-test}"; ARMS="${2:-mh_kira,mh_art,mr_static,mr_dyn,h0}"
-J="$ROOT/results/tb2/jobs"; L="$ROOT/results/tb2/logs"; mkdir -p "$J" "$L"
+J="$ROOT/results/tb2/jobs"; LOGS="$ROOT/results/tb2/logs"; L="$J/_live_logs"; mkdir -p "$J" "$L" "$LOGS"  # live logs are gitignored; copied when a task ends
 TASKS=$(python3 -c "import json;print(' '.join(json.load(open('benchmarks/terminal_bench2/splits.json'))['$SPLIT']))")
 done_job() { find "$J/$1" -name result.json -maxdepth 2 2>/dev/null | while read -r f; do
   python3 -c "import json,sys;d=json.load(open('$f'));sys.exit(0 if d.get('finished_at') and d.get('n_total_trials') else 1)" && echo y; done | grep -q y; }
@@ -47,6 +47,7 @@ for t in $TASKS; do
   for p in "${pids[@]}"; do wait "$p"; done
   img=$(python3 -c "import tomllib;print(tomllib.load(open('data/tb2/terminal-bench/$t/task.toml','rb'))['environment']['docker_image'])")
   docker rmi "$img" > /dev/null 2>&1  # only this task's image; refused while another run still uses it
+  cp -f "$L"/*__"${SPLIT}__$t".log "$LOGS"/ 2>/dev/null
   echo "$(date -u +%H:%M:%S) done $t; free $(df -h / | awk 'NR==2{print $4}')"
 done
 echo ALL_DONE
