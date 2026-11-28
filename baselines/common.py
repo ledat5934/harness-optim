@@ -43,7 +43,11 @@ SMOKE = {"name": "smoke", "n_train": 5, "n_val": 3, "n_test": 3, "n_check": 2, "
 # benchmark read from benchmarks/<bench>/test100.json (scripts/make_test_subsets.py). Results go to results/medium/.
 MEDIUM = {"name": "medium", "n_train": 50, "n_val": 30, "n_test": 100, "n_check": 2, "rounds": 5, "workers": 4,
           "k": 3, "test_file": "test100.json"}
-PROTOCOLS = {"smoke": SMOKE, "medium": MEDIUM}
+# Terminal-Bench 2 small trial (comparison with Meta-Harness / ModularRSI on their benchmark): seeded splits from
+# benchmarks/terminal_bench2/splits.json (scripts/make_tb2_splits.py), episodes are minutes long -> few rolls.
+TB2SMALL = {"name": "tb2small", "n_train": 20, "n_val": 10, "n_test": 15, "n_check": 2, "rounds": 2, "workers": 3,
+            "k": 2}
+PROTOCOLS = {"smoke": SMOKE, "medium": MEDIUM, "tb2small": TB2SMALL}
 
 
 def use_protocol(cfg: dict) -> None:
@@ -69,6 +73,7 @@ SPLITS = {
     "alfworld": {"train": "train", "test": "unseen"},
     "appworld": {"train": "train", "val": "dev", "test": "test_normal"},
     "browsecomp_plus": {"train": "dev", "test": "test"},
+    "terminal_bench2": {"train": "train", "val": "val", "test": "test"},
 }
 
 
@@ -93,6 +98,8 @@ def _protocol_tasks(bench: str, cfg: dict, ad, s: dict, tr: list[str]) -> dict[s
         train, val = pool[: cfg["n_train"]], pool[cfg["n_train"]: cfg["n_train"] + cfg["n_val"]]
         test = _interleave_types(ad.list_tasks(s["test"]))[: cfg["n_test"]]
         return {"train": (s["train"], train), "val": (s["train"], val), "test": (s["test"], test)}
+    if bench == "terminal_bench2":
+        return {ph: (s[ph], ad.list_tasks(s[ph])[: cfg[f"n_{ph}"]]) for ph in ("train", "val", "test")}
     if bench == "appworld":
         train = tr[: cfg["n_train"]]
         val = ad.list_tasks(s["val"])[: cfg["n_val"]]

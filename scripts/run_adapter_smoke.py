@@ -33,7 +33,7 @@ def make_agent(name: str, max_steps: int | None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bench", required=True, choices=["alfworld", "appworld", "browsecomp_plus"])
+    ap.add_argument("--bench", required=True, choices=["alfworld", "appworld", "browsecomp_plus", "terminal_bench2"])
     ap.add_argument("--split", required=True)
     ap.add_argument("--n", type=int, default=3)
     ap.add_argument("--offset", type=int, default=0)
