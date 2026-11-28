@@ -40,7 +40,7 @@ CA_HOST = os.environ.get("TB2_CA_FILE", "/root/.ccr/ca-bundle.crt")
 CA_CT = "/usr/local/share/sandbox-proxy-ca.crt"
 CA_VARS = ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "PIP_CERT", "NODE_EXTRA_CA_CERTS",
            "GIT_SSL_CAINFO")
-MIN_FREE_GB = float(os.environ.get("TB2_MIN_FREE_GB", "3"))
+MIN_FREE_GB = float(os.environ.get("TB2_MIN_FREE_GB", "5"))
 CWD_FILE = "/tmp/.agent_cwd"
 
 GUIDANCE = """You are an autonomous agent solving a task inside a Linux container, using a bash shell.
