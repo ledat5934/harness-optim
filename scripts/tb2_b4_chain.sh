@@ -17,10 +17,9 @@ if [ ! -f "$O/logs/h0trainval.done" ]; then
   done
   touch "$O/logs/h0trainval.done"; echo PHASE_DONE h0 train/val
 fi
-# B4 needs the H0 test records of the compare driver
-while ! grep -q ALL_DONE results/tb2/compete_test.log 2>/dev/null; do sleep 120; done
+# B4 evolves on train/val now; its final test waits for the H0 test records of the compare driver
 if [ ! -f "$O/logs/b4_terminal_bench2.done" ]; then
-  B4_PROTOCOL=tb2small B4_COMP=1 B4_RESUME=1 B4_TAG="${B4_TAG:-b4tb2}" B4_SEED=0 B4_ROUNDS="${B4_ROUNDS:-2}" B4_LEARN=1 \
+  B4_TEST_WAIT=results/tb2/compete_test.log:ALL_DONE B4_PROTOCOL=tb2small B4_COMP=1 B4_RESUME=1 B4_TAG="${B4_TAG:-b4tb2}" B4_SEED=0 B4_ROUNDS="${B4_ROUNDS:-2}" B4_LEARN=1 \
     B4_SENTINEL=1 B4_CLUSTER=1 H0_VAL_ROLLS="$VR" B4_K_VAL=2 \
     python3 -W ignore scripts/run_b4_cmp.py terminal_bench2 >> "$O/logs/b4_terminal_bench2.log" 2>&1 \
     && touch "$O/logs/b4_terminal_bench2.done" && echo PHASE_DONE b4

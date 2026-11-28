@@ -20,6 +20,18 @@ importlib.reload(B)
 import llm as llm_mod
 
 shared = load_shared(bench, C.MEDIUM, allow_stale=True)
+if os.environ.get("B4_TEST_WAIT"):  # "<log file>:<marker>": the H0 test runs are still being produced elsewhere;
+    import time                      # evolution starts now, the test records are read when the final test needs them
+
+    class _LateTest(dict):
+        def get(self, k, d=None):
+            if k == "h0_test":
+                f, mark = os.environ["B4_TEST_WAIT"].rsplit(":", 1)
+                while not (os.path.exists(f) and mark in open(f, encoding="utf-8", errors="replace").read()):
+                    time.sleep(120)
+                return load_shared(bench, C.MEDIUM, allow_stale=True)["h0_test"]
+            return super().get(k, d)
+    shared = _LateTest(shared)
 print(f"shared H0 {bench}: train={len(shared['h0_train'])} val={len(shared['h0_val'])} "
       f"test={len(shared.get('h0_test') or [])}", flush=True)
 import os
