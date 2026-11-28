@@ -1,13 +1,17 @@
 """Run one B4 configuration on one benchmark, reusing an existing H0 (allow_stale), for the v3-vs-v4 comparison.
 Env: RESULTS_SUFFIX (H0 folder, e.g. luna), B4_TAG, B4_LLM_MODES, B4_GRAPH, B4_RESUME as usual; B4_BRANCH=1 runs v6,
 B4_COMP=1 runs v7 (component edits with behaviour hypotheses, baselines/b4_comp.py). B4_ROUNDS overrides the number of
-rounds of the protocol (default: MEDIUM's 5)."""
+rounds of the protocol (default: MEDIUM's 5). B4_PROTOCOL picks another protocol of baselines.common.PROTOCOLS
+(default medium)."""
 import sys
 
 from baselines import common as C
 from scripts.run_baselines import load_shared
 
 bench = sys.argv[1]
+import os
+
+C.MEDIUM = C.PROTOCOLS[os.environ.get("B4_PROTOCOL", "medium")]
 C.use_protocol(C.MEDIUM)
 import importlib
 

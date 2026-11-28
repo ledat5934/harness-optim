@@ -39,7 +39,8 @@ for t in $TASKS; do
     esac
   done
   for p in "${pids[@]}"; do wait "$p"; done
-  [[ -z "$(docker ps -q)" ]] && docker image prune -a -f > /dev/null 2>&1
+  img=$(python3 -c "import tomllib;print(tomllib.load(open('data/tb2/terminal-bench/$t/task.toml','rb'))['environment']['docker_image'])")
+  docker rmi "$img" > /dev/null 2>&1  # only this task's image; refused while another run still uses it
   echo "$(date -u +%H:%M:%S) done $t; free $(df -h / | awk 'NR==2{print $4}')"
 done
 echo ALL_DONE

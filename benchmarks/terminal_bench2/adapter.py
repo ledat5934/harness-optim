@@ -95,9 +95,10 @@ def _free_gb(path: str = "/var/lib/docker") -> float:
 
 def _ensure_image(image: str) -> None:
     with _pull_lock:
-        if _free_gb() < MIN_FREE_GB:
-            _docker("image", "prune", "-a", "-f", timeout=600)  # images not used by a running container
-            _pulled.clear()
+        if _free_gb() < MIN_FREE_GB:  # free only images this process pulled; `docker rmi` refuses ones in use,
+            for img in list(_pulled - {image}):  # and images other runs on this host pulled are left alone
+                if _docker("rmi", img, timeout=600).returncode == 0:
+                    _pulled.discard(img)
         if image in _pulled or _docker("image", "inspect", image, timeout=60).returncode == 0:
             _pulled.add(image)
             return
